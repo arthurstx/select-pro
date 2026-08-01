@@ -33,14 +33,17 @@ Siga sempre esta ordem ao montar uma rota documentada:
 
 ---
 
-## 1. Definindo Schemas
+## 1. Importando e Usando Schemas (Padrão SDD)
 
-Importe `z` de `@hono/zod-openapi` (não de `zod` diretamente):
+> [!WARNING]
+> **REGRA CRÍTICA DE MONOREPO:** Nunca crie schemas Zod de entidades, payloads de requisição (body) ou respostas (DTOs) localmente no diretório `api/`.
+> Importe **SEMPRE** os schemas do pacote compartilhado `shared` para manter a fonte de verdade entre o front e backend.
 
 ```ts
 import { z } from '@hono/zod-openapi'
+import { UserSchema, CreateUserSchema } from 'shared'
 
-// Schema de parâmetro de path
+// Schema de parâmetro de path (este sim pode ser definido localmente se for só de rota)
 const ParamsSchema = z.object({
   id: z.string().min(1).openapi({
     param: { name: 'id', in: 'path' },
@@ -53,20 +56,7 @@ const QuerySchema = z.object({
   page: z.coerce.number().optional().openapi({ example: 1 }),
 })
 
-// Schema de body (JSON)
-const CreateUserBody = z.object({
-  name: z.string().min(1).openapi({ example: 'João Silva' }),
-  email: z.string().email().openapi({ example: 'joao@email.com' }),
-})
-
-// Schema de resposta — use .openapi('NomeDaEntidade') para gerar $ref no OpenAPI
-const UserSchema = z.object({
-  id: z.string().openapi({ example: '123' }),
-  name: z.string().openapi({ example: 'João Silva' }),
-  email: z.string().openapi({ example: 'joao@email.com' }),
-}).openapi('User')
-
-// Schema de erro
+// Schema de erro (também pode vir de shared se for global)
 const ErrorSchema = z.object({
   code: z.number().openapi({ example: 400 }),
   message: z.string().openapi({ example: 'Validation Error' }),
@@ -98,7 +88,7 @@ const getUserRoute = createRoute({
     headers: HeadersSchema,  // headers (opcional)
     body: {                  // body (apenas em POST/PUT/PATCH)
       content: {
-        'application/json': { schema: CreateUserBody },
+        'application/json': { schema: CreateUserSchema }, // Importado de shared
       },
       required: true,        // force validation mesmo sem Content-Type correto
     },
@@ -223,13 +213,14 @@ app.openapiRoutes([getUserRoute, createUserRoute] as const)
 ```
 src/
 ├── index.ts              # app principal + doc
-├── routes/
-│   ├── users.ts          # rotas agrupadas por recurso
-│   └── posts.ts
-└── schemas/
-    ├── user.ts           # schemas Zod reutilizáveis
-    └── common.ts         # Error, Pagination, etc.
+└── routes/
+    ├── users.ts          # rotas agrupadas por recurso
+    └── posts.ts
 ```
+
+> [!WARNING]
+> **NOTA (SDD):** Ao contrário do padrão Hono isolado, **NÃO crie uma pasta `schemas/` local no backend**. 
+> Todos os schemas de validação Zod para domínio e request/response (body) devem viver obrigatoriamente na pasta `shared/src/schemas/` do monorepo e ser importados via `import { ... } from 'shared'`.
 
 ```ts
 // routes/users.ts

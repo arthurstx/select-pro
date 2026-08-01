@@ -1,0 +1,10 @@
+{
+  "name": "select-pro-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "front",
+    "api",
+    "shared"
+  ]
+}
