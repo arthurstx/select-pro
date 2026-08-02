@@ -16,9 +16,25 @@
 // Enums (CHECK constraints do schema)
 // ------------------------------------------------------------
 
-export type Gender = "MALE" | "FEMALE" | "NON_BINARY";
-
 export type EvaluationStatus = "RED" | "YELLOW" | "GREEN";
+
+// ------------------------------------------------------------
+// Candidato — enums definidos em FEAT-0001 (seção 8.1)
+// ------------------------------------------------------------
+
+export type Course =
+    | "eng-comp"
+    | "eng-civil"
+    | "eng-mecani"
+    | "eng-quimica"
+    | "eng-prod"
+    | "eng-automação"
+    | "eng-eletri"
+    | "arqui";
+
+export type Semester = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
+export type Gender = "mascu" | "fem" | "outro";
 
 // ------------------------------------------------------------
 // Tabelas de referência
@@ -71,13 +87,13 @@ export interface UserRow {
 export interface CandidateRow {
     id: string;
 
-    course_id: string;
-    semester_id: string;
-
+    course: Course;
+    semester: Semester;
     gender: Gender;
 
     name: string;
     email: string;
+    phone: string;
 
     created_at: string;
     updated_at: string | null;
@@ -187,11 +203,6 @@ export type EvaluationUpdate = Partial<Omit<EvaluationRow, "id">> & {
 
 export interface UserWithRole extends UserRow {
     role: RoleRow;
-}
-
-export interface CandidateWithRelations extends CandidateRow {
-    course: CourseRow;
-    semester: SemesterRow;
 }
 
 export interface GroupWithRoom extends GroupRow {

@@ -4,13 +4,18 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "test": "vitest run"
   },
   "dependencies": {
-    "hono": "^4.12.33"
+    "hono": "^4.12.33",
+    "resend": "^6.18.1",
+    "shared": "*"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.20.1",
     "@types/node": "^26.1.2",
+    "vitest": "^4.1.10",
     "wrangler": "^4.118.0"
   }
 }

@@ -65,22 +65,27 @@ CREATE TABLE users (
 
 CREATE INDEX idx_user_role ON users(role_id);
 
+-- course/semester são armazenados como valores literais (não FK), pois o
+-- contrato de FEAT-0001 (seção 8.1) os define como enum fechado no candidato
+-- confirmado, não como referência a tabela de lookup administrável.
 CREATE TABLE candidates (
   id TEXT PRIMARY KEY,
 
-  course_id   TEXT NOT NULL REFERENCES courses(id)   ON DELETE RESTRICT ON UPDATE CASCADE,
-  semester_id TEXT NOT NULL REFERENCES semesters(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  course TEXT NOT NULL CHECK (course IN (
+    'eng-comp', 'eng-civil', 'eng-mecani', 'eng-quimica',
+    'eng-prod', 'eng-automação', 'eng-eletri', 'arqui'
+  )),
+  semester INTEGER NOT NULL CHECK (semester BETWEEN 1 AND 10),
 
-  gender TEXT NOT NULL CHECK (gender IN ('MALE', 'FEMALE', 'NON_BINARY')),
+  gender TEXT NOT NULL CHECK (gender IN ('mascu', 'fem', 'outro')),
 
   name  TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
+  phone TEXT NOT NULL UNIQUE,
 
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   updated_at TEXT
 );
-
-CREATE INDEX idx_candidate_course ON candidates(course_id);
 
 CREATE TABLE groups (
   id TEXT PRIMARY KEY,
