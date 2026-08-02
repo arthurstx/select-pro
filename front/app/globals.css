@@ -1,26 +1,137 @@
 @import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
 
+/*
+ * Tokens extraídos do design system Stitch "Technical Precision" (projeto
+ * 15618719394726153851) — ver specs/0001-registrate-candidate-ui.md, seção 1.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.5rem;
+
+  --background: #f9f9f9;
+  --foreground: #1a1c1c;
+
+  --card: #ffffff;
+  --card-foreground: #1a1c1c;
+
+  --popover: #ffffff;
+  --popover-foreground: #1a1c1c;
+
+  --primary: #c8181e;
+  --primary-foreground: #ffffff;
+
+  --secondary: #0e0e0e;
+  --secondary-foreground: #ffffff;
+
+  --muted: #f2f2f2;
+  --muted-foreground: #5f5e5e;
+
+  --accent: #f2f2f2;
+  --accent-foreground: #0e0e0e;
+
+  --destructive: #ba1a1a;
+  --destructive-foreground: #ffffff;
+
+  --success: #1e7a3d;
+  --success-foreground: #ffffff;
+
+  --border: #e5e5e5;
+  --input: #d1d1d1;
+  --ring: #c8181e;
+}
+
+.dark {
+  --background: #0e0e0e;
+  --foreground: #f1f1f1;
+
+  --card: #1a1a1a;
+  --card-foreground: #f1f1f1;
+
+  --popover: #1a1a1a;
+  --popover-foreground: #f1f1f1;
+
+  --primary: #ff544c;
+  --primary-foreground: #1a1c1c;
+
+  --secondary: #2a2a2a;
+  --secondary-foreground: #f1f1f1;
+
+  --muted: #262626;
+  --muted-foreground: #a1a1a1;
+
+  --accent: #262626;
+  --accent-foreground: #f1f1f1;
+
+  --destructive: #ff6b6b;
+  --destructive-foreground: #1a1c1c;
+
+  --success: #4ade80;
+  --success-foreground: #0e0e0e;
+
+  --border: #333333;
+  --input: #3a3a3a;
+  --ring: #ff544c;
 }
 
 @theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-outfit);
+
+  --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+
+  @keyframes caret-blink {
+    0%,
+    70%,
+    100% {
+      opacity: 1;
+    }
+    20%,
+    50% {
+      opacity: 0;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  label,
+  button {
+    @apply font-heading;
+  }
 }

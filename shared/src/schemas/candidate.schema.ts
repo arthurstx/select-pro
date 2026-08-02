@@ -8,31 +8,30 @@ import type { CandidateRow, Course, Gender, Semester } from "./database.schema";
 // `satisfies` garante que os dois não divirjam silenciosamente.
 // ============================================================
 
-export const CourseSchema = z.enum([
-    "eng-comp",
-    "eng-civil",
-    "eng-mecani",
-    "eng-quimica",
-    "eng-prod",
-    "eng-automação",
-    "eng-eletri",
-    "arqui",
-]) satisfies z.ZodType<Course>;
+export const CourseSchema = z.enum(
+    ["eng-comp", "eng-civil", "eng-mecani", "eng-quimica", "eng-prod", "eng-automação", "eng-eletri", "arqui"],
+    { errorMap: () => ({ message: "Selecione um curso" }) },
+) satisfies z.ZodType<Course>;
 
-export const SemesterSchema = z.union([
-    z.literal(1),
-    z.literal(2),
-    z.literal(3),
-    z.literal(4),
-    z.literal(5),
-    z.literal(6),
-    z.literal(7),
-    z.literal(8),
-    z.literal(9),
-    z.literal(10),
-]) satisfies z.ZodType<Semester>;
+export const SemesterSchema = z.union(
+    [
+        z.literal(1),
+        z.literal(2),
+        z.literal(3),
+        z.literal(4),
+        z.literal(5),
+        z.literal(6),
+        z.literal(7),
+        z.literal(8),
+        z.literal(9),
+        z.literal(10),
+    ],
+    { errorMap: () => ({ message: "Selecione um semestre" }) },
+) satisfies z.ZodType<Semester>;
 
-export const GenderSchema = z.enum(["mascu", "fem", "outro"]) satisfies z.ZodType<Gender>;
+export const GenderSchema = z.enum(["mascu", "fem", "outro"], {
+    errorMap: () => ({ message: "Selecione um gênero" }),
+}) satisfies z.ZodType<Gender>;
 
 /** Aceita telefone BR com ou sem DDI/DDD formatado (ex: "(71) 98888-7777", "71988887777", "+55 71 8888-7777"). */
 const PHONE_REGEX = /^(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/;

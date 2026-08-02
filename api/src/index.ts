@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { logger as honoLogger } from "hono/logger";
 
@@ -8,6 +9,10 @@ import { candidatesRouter } from "./routes/candidates.routes";
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
 app.use(honoLogger());
+
+// Fluxo público sem sessão/cookies (FEAT-0001-UI, seção 2) — reflete a origin
+// da requisição em vez de credentials, não há estado de auth para proteger.
+app.use("/candidate/*", cors());
 
 app.get("/message", (c) => {
     return c.text("Hello Hono!");
