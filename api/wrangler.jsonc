@@ -55,10 +55,43 @@
 		"OTC_MAX_ATTEMPTS": "5",
 		// Placeholder até o domínio de envio ser verificado no Resend (prompt seção 6)
 		"RESEND_FROM_EMAIL": "onboarding@resend.dev"
-	}
+	},
 	/**
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
 	 */
 	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+
+	/**
+	 * Ambiente de staging (branch develop), com Worker, D1 e KV isolados da produção
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environments
+	 */
+	"env": {
+		"staging": {
+			"name": "api-staging",
+			"assets": {
+				"binding": "ASSETS",
+				"directory": "./public"
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "select-pro-staging",
+					"database_id": "8514d550-87c5-41e8-864d-5ebd762fd8c2",
+					"migrations_dir": "migrations"
+				}
+			],
+			"kv_namespaces": [
+				{
+					"binding": "PENDING_REGISTRATIONS",
+					"id": "0a7885b8f02e4425829b01b2b8a10355"
+				}
+			],
+			"vars": {
+				"OTC_EXPIRY_MINUTES": "15",
+				"OTC_MAX_ATTEMPTS": "5",
+				"RESEND_FROM_EMAIL": "onboarding@resend.dev"
+			}
+		}
+	}
 }
