@@ -59,7 +59,7 @@ export function AboutStepForm() {
           </Field>
 
           <Field data-invalid={!!form.formState.errors.motivation}>
-            <FieldLabel htmlFor="motivation">Por que você acha que deve fazer parte da CIMATEC Jr.</FieldLabel>
+            <FieldLabel htmlFor="motivation">Por que você acha que deve fazer parte da CIMATEC jr.</FieldLabel>
             <Textarea
               id="motivation"
               rows={4}
