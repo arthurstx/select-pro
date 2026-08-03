@@ -37,3 +37,7 @@ O projeto segue a abordagem **Spec-Driven Development (SDD)**, onde os contratos
 Para convenções específicas de código, consulte o arquivo `AGENTS.md` dentro de cada workspace correspondente:
 - **Frontend Rules:** `/front/AGENTS.md`
 - **Backend Skills:** `/api/AGENTS.md`
+
+## Contexto Operacional
+
+Para estado de ambientes, branches, backlog e como o contexto flui entre sessões/dispositivos diferentes, consulte `CONTEXT.md` na raiz.
