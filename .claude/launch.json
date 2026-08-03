@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=api"],
+      "port": 8787
+    },
+    {
+      "name": "front",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=front"],
+      "port": 3000
+    }
+  ]
+}
