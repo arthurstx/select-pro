@@ -1,6 +1,6 @@
 # SelectPro — Frontend
 
-Frontend web do SelectPro (CIMATEC Jr.), construído com **Next.js 16 (App Router)** e **React 19**. Faz parte do monorepo `select-pro`; contratos de API são importados do workspace [`shared`](../shared) — ver [`AGENTS.md`](../AGENTS.md) na raiz para as regras de Spec-Driven Development do projeto.
+Frontend web do SelectPro (CIMATEC jr.), construído com **Next.js 16 (App Router)** e **React 19**. Faz parte do monorepo `select-pro`; contratos de API são importados do workspace [`shared`](../shared) — ver [`AGENTS.md`](../AGENTS.md) na raiz para as regras de Spec-Driven Development do projeto.
 
 ## Stack
 
@@ -23,8 +23,8 @@ A aplicação sobe em [http://localhost:3000](http://localhost:3000).
 
 ## Variáveis de ambiente
 
-| Variável | Descrição | Default |
-| --- | --- | --- |
+| Variável              | Descrição                         | Default                 |
+| --------------------- | --------------------------------- | ----------------------- |
 | `NEXT_PUBLIC_API_URL` | Base URL da API (workspace `api`) | `http://localhost:8787` |
 
 Ver [`app/inscricao/_lib/api.ts`](app/inscricao/_lib/api.ts).
