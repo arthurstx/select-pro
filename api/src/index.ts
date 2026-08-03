@@ -1,8 +1,10 @@
 import { swaggerUI } from "@hono/swagger-ui";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { basicAuth } from "hono/basic-auth";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { logger as honoLogger } from "hono/logger";
+import type { MiddlewareHandler } from "hono/types";
 
 import { logger } from "./lib/logger";
 import { candidatesRouter } from "./routes/candidates.routes";
@@ -23,12 +25,18 @@ app.route("/candidate", candidatesRouter);
 
 // Documentação OpenAPI — gerada a partir dos schemas Zod das rotas
 // registradas via `.openapi()` (ver api/.agents/validation/SKILL.md).
+// Protegida por Basic Auth: expõe todo o schema da API (DOCS_PASSWORD via
+// `wrangler secret put`, nunca em `vars`).
+const docsAuth: MiddlewareHandler<{ Bindings: CloudflareBindings }> = (c, next) =>
+    basicAuth({ username: c.env.DOCS_USER || "admin", password: c.env.DOCS_PASSWORD })(c, next);
+app.use("/doc", docsAuth);
+app.use("/docs", docsAuth);
 app.doc("/doc", {
     openapi: "3.0.0",
     info: {
         title: "Select Pro API",
         version: "1.0.0",
-        description: "API pública do fluxo de inscrição de candidatos (FEAT-0001).",
+        description: "API pública do fluxo de inscrição de candidatos (FEAT-0001 v3.0).",
     },
 });
 app.get("/docs", swaggerUI({ url: "/doc" }));

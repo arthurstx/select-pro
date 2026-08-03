@@ -37,12 +37,6 @@
 			"migrations_dir": "migrations"
 		}
 	],
-	"kv_namespaces": [
-		{
-			"binding": "PENDING_REGISTRATIONS",
-			"id": "c7ac7d5d34704837849e6683e16728fb"
-		}
-	],
 	/**
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
@@ -50,10 +44,9 @@
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
 	"vars": {
-		// FEAT-0001 seção 9 / prompt de implementação seção 8 (decisões #1, #2)
-		"OTC_EXPIRY_MINUTES": "15",
-		"OTC_MAX_ATTEMPTS": "5",
-		"RESEND_FROM_EMAIL": "inscricoes@arthurstx.me"
+		// Usuário do Basic Auth em /docs e /doc. A senha é um secret
+		// (`wrangler secret put DOCS_PASSWORD`), nunca fica em `vars`.
+		"DOCS_USER": "admin"
 	},
 	/**
 	 * Service Bindings (communicate between multiple Workers)
@@ -80,16 +73,8 @@
 					"migrations_dir": "migrations"
 				}
 			],
-			"kv_namespaces": [
-				{
-					"binding": "PENDING_REGISTRATIONS",
-					"id": "0a7885b8f02e4425829b01b2b8a10355"
-				}
-			],
 			"vars": {
-				"OTC_EXPIRY_MINUTES": "15",
-				"OTC_MAX_ATTEMPTS": "5",
-				"RESEND_FROM_EMAIL": "onboarding@resend.dev"
+				"DOCS_USER": "admin"
 			}
 		}
 	}

@@ -1,45 +1,11 @@
 import { SELF } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 /**
- * Testes de HTTP end-to-end (rota real, D1/KV reais via miniflare). O fetch
- * global é stubado para nunca bater no Resend de verdade — capturamos o
- * corpo da requisição (que contém o OTC em texto plano, exatamente como o
- * candidato receberia por email) em vez de tentar recuperar o código a
- * partir do hash.
+ * Testes de HTTP end-to-end (rota real, D1 real via miniflare). Desde a v3.0
+ * o fluxo não chama nenhum serviço externo — não há mais stub de provedor de
+ * email a montar aqui.
  */
-const sentEmails: { to: string; code: string }[] = [];
-
-function stubResendFetch() {
-    sentEmails.length = 0;
-
-    vi.stubGlobal(
-        "fetch",
-        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-            const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-            if (!url.includes("resend.com")) {
-                throw new Error(`chamada de rede inesperada em teste: ${url}`);
-            }
-
-            const bodyText = typeof init?.body === "string" ? init.body : "{}";
-            const payload = JSON.parse(bodyText) as { to: string; text: string };
-            const match = /código de confirmação é: (\d{6})/.exec(payload.text);
-            if (match) sentEmails.push({ to: payload.to, code: match[1] });
-
-            return new Response(JSON.stringify({ id: "test-email-id" }), {
-                status: 200,
-                headers: { "content-type": "application/json" },
-            });
-        }),
-    );
-}
-
-function lastSentCode(): string {
-    const last = sentEmails.at(-1);
-    if (!last) throw new Error("nenhum email capturado no stub do Resend");
-    return last.code;
-}
-
 let counter = 0;
 function uniqueCandidateInput() {
     counter += 1;
@@ -60,45 +26,30 @@ function uniqueCandidateInput() {
     };
 }
 
-describe("POST /candidate/pre-register e /candidate/confirm-otc (HTTP)", () => {
-    beforeEach(() => {
-        stubResendFetch();
+function postRegister(body: unknown) {
+    return SELF.fetch("http://local.test/candidate/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
     });
+}
 
-    afterEach(() => {
-        vi.unstubAllGlobals();
-    });
-
-    it("fluxo feliz completo: pre-register (201) -> confirm-otc (200)", async () => {
+describe("POST /candidate/register (HTTP)", () => {
+    it("fluxo feliz: inscrição em uma única requisição (201)", async () => {
         const input = uniqueCandidateInput();
 
-        const preRegisterRes = await SELF.fetch("http://local.test/candidate/pre-register", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(input),
-        });
-        expect(preRegisterRes.status).toBe(201);
-        const preRegisterBody = await preRegisterRes.json<{ data: { pendingId: string; expiresAt: string } }>();
-        expect(preRegisterBody.data.pendingId).toMatch(/^[0-9a-f-]{36}$/);
+        const res = await postRegister(input);
 
-        const confirmRes = await SELF.fetch("http://local.test/candidate/confirm-otc", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ pendingId: preRegisterBody.data.pendingId, code: lastSentCode() }),
-        });
-        expect(confirmRes.status).toBe(200);
-        const confirmBody = await confirmRes.json<{ data: { id: string; status: string; email: string } }>();
-        expect(confirmBody.data.status).toBe("confirmed");
-        expect(confirmBody.data.email).toBe(input.email);
-        expect(confirmBody.data.id).not.toBe(preRegisterBody.data.pendingId);
+        expect(res.status).toBe(201);
+        const body = await res.json<{ data: { id: string; status: string; name: string; email: string } }>();
+        expect(body.data.id).toMatch(/^[0-9a-f-]{36}$/);
+        expect(body.data.status).toBe("registered");
+        expect(body.data.email).toBe(input.email);
+        expect(body.data.name).toBe(input.name);
     });
 
     it("E3 - email com formato inválido retorna 400 com envelope de erro", async () => {
-        const res = await SELF.fetch("http://local.test/candidate/pre-register", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ...uniqueCandidateInput(), email: "não-é-um-email" }),
-        });
+        const res = await postRegister({ ...uniqueCandidateInput(), email: "não-é-um-email" });
 
         expect(res.status).toBe(400);
         const body = await res.json<{ error: { code: string; field?: string } }>();
@@ -107,11 +58,7 @@ describe("POST /candidate/pre-register e /candidate/confirm-otc (HTTP)", () => {
     });
 
     it("E4 - telefone com formato inválido retorna 400 com envelope de erro", async () => {
-        const res = await SELF.fetch("http://local.test/candidate/pre-register", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ...uniqueCandidateInput(), phone: "123" }),
-        });
+        const res = await postRegister({ ...uniqueCandidateInput(), phone: "123" });
 
         expect(res.status).toBe(400);
         const body = await res.json<{ error: { code: string; field?: string } }>();
@@ -119,53 +66,53 @@ describe("POST /candidate/pre-register e /candidate/confirm-otc (HTTP)", () => {
         expect(body.error.field).toBe("phone");
     });
 
-    it("valida que mejAcknowledged deve ser exatamente true (FEAT-0001 v2.0, seção 8.2)", async () => {
-        const res = await SELF.fetch("http://local.test/candidate/pre-register", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ...uniqueCandidateInput(), mejAcknowledged: false }),
-        });
+    it("valida que mejAcknowledged deve ser exatamente true (FEAT-0001 v3.0, seção 8.2)", async () => {
+        const res = await postRegister({ ...uniqueCandidateInput(), mejAcknowledged: false });
 
         expect(res.status).toBe(400);
-        const body = await res.json<{ error: { code: string; field?: string } }>();
+        const body = await res.json<{ error: { field?: string } }>();
         expect(body.error.field).toBe("mejAcknowledged");
     });
 
-    it("E1 - pre-register com email já confirmado retorna 409", async () => {
-        const input = uniqueCandidateInput();
-        const preRegisterRes = await SELF.fetch("http://local.test/candidate/pre-register", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(input),
-        });
-        const { data } = await preRegisterRes.json<{ data: { pendingId: string } }>();
+    it("E6 - origem 'outros' sem descrição retorna 400 apontando referralSourceOther", async () => {
+        const res = await postRegister({ ...uniqueCandidateInput(), referralSource: "outros" });
 
-        await SELF.fetch("http://local.test/candidate/confirm-otc", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ pendingId: data.pendingId, code: lastSentCode() }),
-        });
-
-        const res = await SELF.fetch("http://local.test/candidate/pre-register", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ...uniqueCandidateInput(), email: input.email }),
-        });
-
-        expect(res.status).toBe(409);
-        const body = await res.json<{ error: { code: string } }>();
-        expect(body.error.code).toBe("EMAIL_ALREADY_REGISTERED");
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { field?: string } }>();
+        expect(body.error.field).toBe("referralSourceOther");
     });
 
-    it("E5 - confirm-otc com pendingId inexistente retorna 410", async () => {
-        const res = await SELF.fetch("http://local.test/candidate/confirm-otc", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ pendingId: crypto.randomUUID(), code: "123456" }),
+    it("aceita origem 'outros' com descrição preenchida", async () => {
+        const res = await postRegister({
+            ...uniqueCandidateInput(),
+            referralSource: "outros",
+            referralSourceOther: "Cartaz no mural do campus",
         });
 
-        expect(res.status).toBe(410);
-        const body = await res.json<{ error: { code: string } }>();
-        expect(body.error.code).toBe("OTC_NOT_FOUND");
+        expect(res.status).toBe(201);
+    });
+
+    it("E1 - segunda inscrição com o mesmo email retorna 409", async () => {
+        const input = uniqueCandidateInput();
+        expect((await postRegister(input)).status).toBe(201);
+
+        const res = await postRegister({ ...uniqueCandidateInput(), email: input.email });
+
+        expect(res.status).toBe(409);
+        const body = await res.json<{ error: { code: string; field?: string } }>();
+        expect(body.error.code).toBe("EMAIL_ALREADY_REGISTERED");
+        expect(body.error.field).toBe("email");
+    });
+
+    it("E2 - segunda inscrição com o mesmo telefone retorna 409", async () => {
+        const input = uniqueCandidateInput();
+        expect((await postRegister(input)).status).toBe(201);
+
+        const res = await postRegister({ ...uniqueCandidateInput(), phone: input.phone });
+
+        expect(res.status).toBe(409);
+        const body = await res.json<{ error: { code: string; field?: string } }>();
+        expect(body.error.code).toBe("PHONE_ALREADY_REGISTERED");
+        expect(body.error.field).toBe("phone");
     });
 });
