@@ -32,8 +32,8 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "select-pro-test",
-			"database_id": "2f94a653-69b1-4ec4-b6a3-a606b2f398d6",
+			"database_name": "D1-select-pro",
+			"database_id": "1461f908-e6c3-450d-9fc2-0ad58c1cbf38",
 			"migrations_dir": "migrations"
 		}
 	],
@@ -53,8 +53,7 @@
 		// FEAT-0001 seção 9 / prompt de implementação seção 8 (decisões #1, #2)
 		"OTC_EXPIRY_MINUTES": "15",
 		"OTC_MAX_ATTEMPTS": "5",
-		// Placeholder até o domínio de envio ser verificado no Resend (prompt seção 6)
-		"RESEND_FROM_EMAIL": "onboarding@resend.dev"
+		"RESEND_FROM_EMAIL": "inscricoes@arthurstx.me"
 	},
 	/**
 	 * Service Bindings (communicate between multiple Workers)
