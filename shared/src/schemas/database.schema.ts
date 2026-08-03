@@ -110,7 +110,7 @@ export interface CandidateRow {
 }
 
 // ------------------------------------------------------------
-// Inscrição (questionário) — 1:1 com CandidateRow (FEAT-0001 v2.0, seção 8.1).
+// Inscrição (questionário) — 1:1 com CandidateRow (FEAT-0001, seção 8.1).
 // Isolada em tabela própria para manter `candidates` como identidade +
 // demografia enxuta, permitindo um segundo processo seletivo no futuro
 // sem alterar essa tabela.
@@ -121,6 +121,11 @@ export interface CandidateApplicationRow {
     candidate_id: string;
 
     referral_source: ReferralSource;
+    /**
+     * Texto livre de "de onde conheceu" (FEAT-0001 v3.0, seção 8.1) — obrigatório
+     * quando `referral_source === "outros"` e `null` em todas as outras opções.
+     */
+    referral_source_other: string | null;
     /** Checkbox "li e entendi sobre o MEJ" — sempre `true` para chegar até aqui. */
     mej_acknowledged: boolean;
     /** "Experiências e Skills" (etapa 4 do wizard) — limite de 1000 caracteres. */

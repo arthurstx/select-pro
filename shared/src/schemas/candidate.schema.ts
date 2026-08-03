@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { CandidateApplicationRow, CandidateRow, Course, Ethnicity, Gender, ReferralSource, Semester } from "./database.schema";
+import type { Course, Ethnicity, Gender, ReferralSource, Semester } from "./database.schema";
 
 // ============================================================
 // Enums — espelham as CHECK constraints de `candidates` (ver
@@ -46,9 +46,9 @@ export const ReferralSourceSchema = z.enum(["instagram", "linkedin", "campus", "
 const PHONE_REGEX = /^(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/;
 
 // ============================================================
-// POST /candidate/pre-register (FEAT-0001 v2.0, seção 8.2)
+// POST /candidate/register (FEAT-0001 v3.0, seção 8.2)
 //
-// O wizard do front-end (FEAT-0001-UI v2.0) captura esses dados em 6 etapas,
+// O wizard do front-end (FEAT-0001-UI v3.0) captura esses dados em 6 etapas,
 // mas só envia tudo de uma vez no fim (etapa 6) — por isso o schema é
 // quebrado em um pedaço por etapa (usado com `zodResolver` em cada form) e
 // depois composto no schema de request completo, único ponto de verdade
@@ -67,9 +67,35 @@ export const PersonalDataStepSchema = z.object({
 export type PersonalDataStep = z.infer<typeof PersonalDataStepSchema>;
 
 /** Etapa 2 — Como conheceu o processo seletivo. */
-export const ReferralStepSchema = z.object({
+const ReferralStepFields = z.object({
     referralSource: ReferralSourceSchema,
+    /**
+     * Texto livre de "de onde conheceu" (FEAT-0001 v3.0, seção 8.2). Opcional no
+     * shape porque as demais origens não o enviam; a obrigatoriedade condicional
+     * (só em `outros`) vem de `requireOtherWhenOutros`.
+     */
+    referralSourceOther: z.string().trim().max(100, "Máximo de 100 caracteres").optional(),
 });
+
+/**
+ * `.superRefine()` devolve um ZodEffects, que não pode entrar num `.merge()` —
+ * por isso a regra condicional é uma função reaproveitada pelo schema da etapa
+ * isolada e pelo payload completo, em vez de fazer parte do objeto.
+ */
+const requireOtherWhenOutros = (
+    data: { referralSource: ReferralSource; referralSourceOther?: string },
+    ctx: z.RefinementCtx,
+) => {
+    if (data.referralSource === "outros" && !data.referralSourceOther) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["referralSourceOther"],
+            message: "Conte pra gente como você conheceu",
+        });
+    }
+};
+
+export const ReferralStepSchema = ReferralStepFields.superRefine(requireOtherWhenOutros);
 export type ReferralStep = z.infer<typeof ReferralStepSchema>;
 
 /**
@@ -106,89 +132,41 @@ export const AvailabilityStepSchema = z.object({
 });
 export type AvailabilityStep = z.infer<typeof AvailabilityStepSchema>;
 
-export const PreRegisterRequestSchema = PersonalDataStepSchema.merge(ReferralStepSchema)
+export const RegisterRequestSchema = PersonalDataStepSchema.merge(ReferralStepFields)
     .merge(MejStepSchema)
     .merge(AboutStepSchema)
-    .merge(AvailabilityStepSchema);
-export type PreRegisterRequest = z.infer<typeof PreRegisterRequestSchema>;
+    .merge(AvailabilityStepSchema)
+    .superRefine(requireOtherWhenOutros);
+export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 
-export const PreRegisterResponseSchema = z.object({
-    data: z.object({
-        pendingId: z.string().uuid(),
-        message: z.string(),
-        expiresAt: z.string().datetime(),
-    }),
-});
-export type PreRegisterResponse = z.infer<typeof PreRegisterResponseSchema>;
-
-// ============================================================
-// POST /candidate/confirm-otc (FEAT-0001, seção 8.2)
-// ============================================================
-
-/** Formato do OTC: 6 dígitos numéricos (FEAT-0001 seção 9, decisão #3 do prompt de implementação). */
-export const OtcCodeSchema = z
-    .string()
-    .length(6, "O código deve ter 6 dígitos")
-    .regex(/^\d{6}$/, "O código deve conter apenas números");
-
-export const ConfirmOtcRequestSchema = z.object({
-    pendingId: z.string().uuid(),
-    code: OtcCodeSchema,
-});
-export type ConfirmOtcRequest = z.infer<typeof ConfirmOtcRequestSchema>;
-
-export const ConfirmOtcResponseSchema = z.object({
+/**
+ * `createdAt` é o `created_at` da linha do D1 (`CURRENT_TIMESTAMP`), que o
+ * SQLite devolve como `"YYYY-MM-DD HH:MM:SS"` — não ISO-8601 com `T`/`Z`.
+ * Tipado como string simples de propósito: `.datetime()` prometeria um formato
+ * que o banco não entrega.
+ */
+export const RegisterResponseSchema = z.object({
     data: z.object({
         id: z.string().uuid(),
-        status: z.literal("confirmed"),
+        status: z.literal("registered"),
         name: z.string(),
         email: z.string().email(),
-        updatedAt: z.string().datetime(),
+        createdAt: z.string(),
     }),
 });
-export type ConfirmOtcResponse = z.infer<typeof ConfirmOtcResponseSchema>;
+export type RegisterResponse = z.infer<typeof RegisterResponseSchema>;
 
 // ============================================================
-// Códigos de erro — mapeiam os cenários E1-E10 de FEAT-0001 (seção 5).
-// Reaproveitados entre pre-register e confirm-otc: o mesmo código de
-// domínio (ex: EMAIL_ALREADY_REGISTERED) pode ocorrer em E1 (pre-register)
-// ou E10 (confirm-otc), diferenciados pelo endpoint e pelo `field`.
+// Códigos de erro — mapeiam os cenários E1-E6 de FEAT-0001 v3.0 (seção 5).
+// EMAIL/PHONE_ALREADY_REGISTERED cobrem dois pontos de detecção do mesmo
+// conflito: a checagem prévia (E1/E2) e a constraint `unique` do insert (E5).
 // ============================================================
 
 export const CandidateErrorCode = {
-    EMAIL_ALREADY_REGISTERED: "EMAIL_ALREADY_REGISTERED", // E1, E10
-    PHONE_ALREADY_REGISTERED: "PHONE_ALREADY_REGISTERED", // E2, E10
+    EMAIL_ALREADY_REGISTERED: "EMAIL_ALREADY_REGISTERED", // E1, E5
+    PHONE_ALREADY_REGISTERED: "PHONE_ALREADY_REGISTERED", // E2, E5
     INVALID_EMAIL: "INVALID_EMAIL", // E3
     INVALID_PHONE: "INVALID_PHONE", // E4
-    OTC_NOT_FOUND: "OTC_NOT_FOUND", // E5 (expirado ou nunca existiu)
-    INVALID_OTC: "INVALID_OTC", // E6
-    INVALID_OTC_TYPE: "INVALID_OTC_TYPE", // E7
-    TOO_MANY_ATTEMPTS: "TOO_MANY_ATTEMPTS", // E9
 } as const;
 
 export type CandidateErrorCode = (typeof CandidateErrorCode)[keyof typeof CandidateErrorCode];
-
-// ============================================================
-// Entidade transitória — vive apenas no KV (FEAT-0001, seção 8.1).
-// Não é um contrato HTTP (nunca é enviada ao/pelo cliente), mas fica em
-// `shared` porque reaproveita os tipos de candidato/domínio já definidos
-// aqui, evitando redefinir os mesmos enums no backend.
-// ============================================================
-
-export type OtcType = "confirm-email" | "reset-password";
-
-export interface PendingRegistration {
-    candidate: Pick<CandidateRow, "name" | "email" | "phone" | "course" | "semester" | "gender" | "ethnicity">;
-    /** Novo em v2.0 — respostas do questionário (etapas 2-5 do wizard, FEAT-0001-UI v2.0). */
-    application: Omit<CandidateApplicationRow, "id" | "candidate_id" | "created_at" | "updated_at">;
-    otc: {
-        /** Nunca armazenar o código em texto plano — apenas o hash. */
-        code_hash: string;
-        type: OtcType;
-        attempts: number;
-        max_attempts: number;
-        /** Deve ser idêntico ao TTL da chave no KV — única fonte de verdade sobre expiração. */
-        expires_at: string;
-    };
-    created_at: string;
-}

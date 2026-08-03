@@ -1,9 +1,4 @@
-import type {
-  ConfirmOtcRequest,
-  ConfirmOtcResponse,
-  PreRegisterRequest,
-  PreRegisterResponse,
-} from "shared";
+import type { RegisterRequest, RegisterResponse } from "shared";
 
 import { toApiError } from "./api-error";
 
@@ -23,10 +18,6 @@ async function postJson<TResponse>(path: string, body: unknown): Promise<TRespon
   return response.json() as Promise<TResponse>;
 }
 
-export function preRegisterCandidate(data: PreRegisterRequest): Promise<PreRegisterResponse> {
-  return postJson<PreRegisterResponse>("/candidate/pre-register", data);
-}
-
-export function confirmOtc(data: ConfirmOtcRequest): Promise<ConfirmOtcResponse> {
-  return postJson<ConfirmOtcResponse>("/candidate/confirm-otc", data);
+export function registerCandidate(data: RegisterRequest): Promise<RegisterResponse> {
+  return postJson<RegisterResponse>("/candidate/register", data);
 }
