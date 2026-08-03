@@ -12,14 +12,16 @@ Este arquivo guarda contexto operacional/de estado que não vive no código nem 
 
 - `master`: produção.
 - `develop`: branch de integração ativa.
-- Branches de feature nascem de `develop` (ex: `feat/wizard-inscricao-6-etapas`, já mergeada).
+- Branches de feature nascem de `develop` (ex: `feat/wizard-inscricao-6-etapas`, já mergeada; `feat/remover-otc-inscricao-passo-unico`, em PR).
 
 > ⚠️ Antes de assumir que `develop` e `master` estão sincronizados, rode `git log master..develop` e `git log develop..master` — historicamente já divergiram nas duas direções (features prontas em `develop` aguardando promoção, e commits de deploy direto em `master`).
 
 ## Ambientes / Infra (Cloudflare Worker `api/`)
 
-- `api/wrangler.jsonc` define os bindings por ambiente (D1, vars). Ao alterar `database_name`/`database_id` ou variáveis como `RESEND_FROM_EMAIL`, confirme qual ambiente (staging vs produção) está sendo afetado antes de commitar — esses valores têm mudado localmente sem commit correspondente em algumas sessões.
-- `RESEND_FROM_EMAIL`: usar o domínio verificado no Resend em produção; `onboarding@resend.dev` é apenas placeholder de desenvolvimento.
+- `api/wrangler.jsonc` define os bindings por ambiente (D1, vars). Ao alterar `database_name`/`database_id`, confirme qual ambiente (staging vs produção) está sendo afetado antes de commitar — esses valores têm mudado localmente sem commit correspondente em algumas sessões.
+- **Sem provedor de email desde FEAT-0001 v3.0:** a remoção do OTC eliminou o Resend do projeto (mailer, dependência e vars `RESEND_*`). O secret `RESEND_API_KEY` pode continuar existindo nos Workers (`api`, `api-staging`) até ser removido com `wrangler secret delete` — ele não é mais lido por nenhum código.
+- **KV `PENDING_REGISTRATIONS`:** não é mais referenciado no `wrangler.jsonc`. Os namespaces seguem existindo na conta Cloudflare (ids `c7ac7d5d…` produção e `0a7885b8…` staging) e podem ser deletados manualmente.
+- **Migrations do D1** precisam ser aplicadas por ambiente (`wrangler d1 migrations apply <DB> --remote`). A `0003-referral-source-other.sql` é a mais recente.
 
 ## Backlog conhecido (`task.md`)
 
