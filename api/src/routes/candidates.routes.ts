@@ -1,43 +1,25 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import {
     CandidateErrorCode,
-    ConfirmOtcRequestSchema,
-    ConfirmOtcResponseSchema,
     ErrorResponseSchema,
-    PreRegisterRequestSchema,
-    PreRegisterResponseSchema,
+    RegisterRequestSchema,
+    RegisterResponseSchema,
 } from "shared";
 import type { ZodError } from "zod";
 
-import {
-    EmailAlreadyRegisteredError,
-    InvalidOtcError,
-    InvalidOtcTypeError,
-    OtcNotFoundError,
-    PhoneAlreadyRegisteredError,
-    TooManyAttemptsError,
-} from "../core/errors/candidate-errors";
+import { EmailAlreadyRegisteredError, PhoneAlreadyRegisteredError } from "../core/errors/candidate-errors";
 import { httpError } from "../lib/http-error";
-import { ResendMailer } from "../lib/mailer";
 import { CandidateRepository } from "../repositories/candidates.repository";
-import { PendingRegistrationRepository } from "../repositories/pending-registration.repository";
 import { CandidateService } from "../services/candidates.service";
 
 export const candidatesRouter = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
 
 function buildService(env: CloudflareBindings): CandidateService {
-    const candidates = new CandidateRepository(env.DB);
-    const pendingRegistrations = new PendingRegistrationRepository(env.PENDING_REGISTRATIONS);
-    const mailer = new ResendMailer(env.RESEND_API_KEY, env.RESEND_FROM_EMAIL);
-
-    return new CandidateService(candidates, pendingRegistrations, mailer, {
-        otcExpiryMinutes: Number(env.OTC_EXPIRY_MINUTES),
-        otcMaxAttempts: Number(env.OTC_MAX_ATTEMPTS),
-    });
+    return new CandidateService(new CandidateRepository(env.DB));
 }
 
 /** Diferencia E3 (email inválido) de E4 (telefone inválido) a partir do primeiro issue do Zod. */
-function mapPreRegisterValidationError(error: ZodError) {
+function mapRegisterValidationError(error: ZodError) {
     const issue = error.issues[0];
     const path = issue?.path[0];
 
@@ -54,79 +36,30 @@ function mapPreRegisterValidationError(error: ZodError) {
     };
 }
 
-function mapConfirmOtcValidationError(error: ZodError) {
-    const issue = error.issues[0];
-    const path = issue?.path[0];
-    return {
-        code: "VALIDATION_ERROR",
-        message: issue?.message ?? "Dados inválidos",
-        field: typeof path === "string" ? path : undefined,
-    };
-}
-
-const preRegisterRoute = createRoute({
+const registerRoute = createRoute({
     method: "post",
-    path: "/pre-register",
+    path: "/register",
     tags: ["Candidates"],
-    summary: "Pré-cadastra um candidato",
-    description: "Valida os dados do candidato, cria um registro pendente no KV e envia um código OTC de 6 dígitos por email para confirmação.",
+    summary: "Inscreve um candidato no processo seletivo",
+    description:
+        "Valida os dados do candidato e do questionário e grava a inscrição no banco (candidato + questionário no mesmo batch). Passo único: não há confirmação por email.",
     request: {
         body: {
             required: true,
-            content: { "application/json": { schema: PreRegisterRequestSchema } },
+            content: { "application/json": { schema: RegisterRequestSchema } },
         },
     },
     responses: {
         201: {
-            description: "Pré-cadastro criado e código enviado por email",
-            content: { "application/json": { schema: PreRegisterResponseSchema } },
+            description: "Inscrição criada",
+            content: { "application/json": { schema: RegisterResponseSchema } },
         },
         400: {
-            description: "Email ou telefone inválido (E3/E4)",
+            description: "Email inválido (E3), telefone inválido (E4) ou origem 'outros' sem descrição (E6)",
             content: { "application/json": { schema: ErrorResponseSchema } },
         },
         409: {
-            description: "Email ou telefone já cadastrado por um candidato confirmado (E1/E2)",
-            content: { "application/json": { schema: ErrorResponseSchema } },
-        },
-        500: {
-            description: "Erro inesperado",
-            content: { "application/json": { schema: ErrorResponseSchema } },
-        },
-    },
-});
-
-const confirmOtcRoute = createRoute({
-    method: "post",
-    path: "/confirm-otc",
-    tags: ["Candidates"],
-    summary: "Confirma o código OTC do pré-cadastro",
-    description: "Valida o código de 6 dígitos enviado por email contra o registro pendente no KV e, se válido, efetiva o cadastro do candidato no banco.",
-    request: {
-        body: {
-            required: true,
-            content: { "application/json": { schema: ConfirmOtcRequestSchema } },
-        },
-    },
-    responses: {
-        200: {
-            description: "Cadastro confirmado",
-            content: { "application/json": { schema: ConfirmOtcResponseSchema } },
-        },
-        400: {
-            description: "Código inválido (E6) ou de tipo incorreto (E7)",
-            content: { "application/json": { schema: ErrorResponseSchema } },
-        },
-        409: {
-            description: "Email ou telefone já cadastrado por um candidato confirmado (E10)",
-            content: { "application/json": { schema: ErrorResponseSchema } },
-        },
-        410: {
-            description: "Código expirado ou pendingId inexistente (E5)",
-            content: { "application/json": { schema: ErrorResponseSchema } },
-        },
-        429: {
-            description: "Número de tentativas excedido (E9)",
+            description: "Email ou telefone já cadastrado (E1/E2/E5)",
             content: { "application/json": { schema: ErrorResponseSchema } },
         },
         500: {
@@ -137,11 +70,11 @@ const confirmOtcRoute = createRoute({
 });
 
 candidatesRouter.openapi(
-    preRegisterRoute,
+    registerRoute,
     async (c) => {
         const body = c.req.valid("json");
         const service = buildService(c.env);
-        const result = await service.preRegister(body);
+        const result = await service.register(body);
 
         if (result.isLeft()) {
             const error = result.value;
@@ -158,46 +91,7 @@ candidatesRouter.openapi(
     },
     (result, c) => {
         if (!result.success) {
-            return c.json({ error: mapPreRegisterValidationError(result.error) }, 400);
-        }
-    },
-);
-
-candidatesRouter.openapi(
-    confirmOtcRoute,
-    async (c) => {
-        const { pendingId, code } = c.req.valid("json");
-        const service = buildService(c.env);
-        const result = await service.confirmOtc(pendingId, code);
-
-        if (result.isLeft()) {
-            const error = result.value;
-            if (error instanceof OtcNotFoundError) {
-                throw httpError(410, error.code, error.message);
-            }
-            if (error instanceof InvalidOtcError) {
-                throw httpError(400, error.code, error.message, error.field);
-            }
-            if (error instanceof InvalidOtcTypeError) {
-                throw httpError(400, error.code, error.message);
-            }
-            if (error instanceof TooManyAttemptsError) {
-                throw httpError(429, error.code, error.message);
-            }
-            if (error instanceof EmailAlreadyRegisteredError) {
-                throw httpError(409, error.code, error.message, error.field);
-            }
-            if (error instanceof PhoneAlreadyRegisteredError) {
-                throw httpError(409, error.code, error.message, error.field);
-            }
-            throw httpError(500, "INTERNAL_ERROR", "Erro inesperado");
-        }
-
-        return c.json({ data: result.value }, 200);
-    },
-    (result, c) => {
-        if (!result.success) {
-            return c.json({ error: mapConfirmOtcValidationError(result.error) }, 400);
+            return c.json({ error: mapRegisterValidationError(result.error) }, 400);
         }
     },
 );

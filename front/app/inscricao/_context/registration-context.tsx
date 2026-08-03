@@ -1,56 +1,47 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { PreRegisterRequest } from "shared";
+import type { RegisterRequest } from "shared";
 
-interface PendingRegistration {
-  pendingId: string;
-  expiresAt: string;
-}
-
-interface ConfirmedCandidate {
+interface RegisteredCandidate {
   id: string;
   name: string;
   email: string;
-  updatedAt: string;
+  createdAt: string;
 }
 
-/** Chave usada no sessionStorage — só as respostas do wizard, nunca `pending`/`confirmed`. */
+/** Chave usada no sessionStorage — só as respostas do wizard, nunca `registered`. */
 const ANSWERS_STORAGE_KEY = "inscricao:wizard-answers";
 
 interface RegistrationContextValue {
-  /** Respostas acumuladas das etapas 1-5 do wizard (FEAT-0001-UI v2.0, seção 8.1). */
-  answers: Partial<PreRegisterRequest>;
+  /** Respostas acumuladas das etapas 1-5 do wizard (FEAT-0001-UI v3.0, seção 8.1). */
+  answers: Partial<RegisterRequest>;
   /** `true` assim que a leitura do sessionStorage (efeito de montagem) terminar. */
   isHydrated: boolean;
-  setStepData: (partial: Partial<PreRegisterRequest>) => void;
-  /** Limpa só as respostas do wizard (sessionStorage), sem tocar em `pending`/`confirmed`. */
+  setStepData: (partial: Partial<RegisterRequest>) => void;
+  /** Limpa só as respostas do wizard (sessionStorage), sem tocar em `registered`. */
   clearAnswers: () => void;
-  pending: PendingRegistration | null;
-  confirmed: ConfirmedCandidate | null;
-  setPending: (data: PendingRegistration) => void;
-  setConfirmed: (data: ConfirmedCandidate) => void;
+  registered: RegisteredCandidate | null;
+  setRegistered: (data: RegisteredCandidate) => void;
   reset: () => void;
 }
 
 const RegistrationContext = createContext<RegistrationContextValue | null>(null);
 
 /**
- * Duas políticas de estado distintas (FEAT-0001-UI v2.0, seção 8):
+ * Duas políticas de estado distintas (FEAT-0001-UI v3.0, seção 8):
  *
  * - `answers` (respostas do wizard): contexto + espelhado em `sessionStorage`,
  *   para sobreviver a um F5 em qualquer uma das 6 etapas. Não é dado sensível
- *   de posse/identidade — é só o que o próprio candidato acabou de digitar.
- * - `pending`/`confirmed`: **apenas em memória** (useState), nunca em storage.
- *   `pendingId` é o token de posse temporário citado em FEAT-0001 seção 13 —
- *   perder o estado no F5 é o comportamento aceito pela spec (o candidato é
- *   redirecionado para a etapa 1, mas as respostas do wizard sobrevivem).
+ *   — é só o que o próprio candidato acabou de digitar.
+ * - `registered` (resposta do `POST /candidate/register`): **apenas em memória**,
+ *   só para alimentar a tela de sucesso. Não persistir não perde nada: a
+ *   inscrição já está gravada no banco e não há área logada para recuperar.
  */
 export function RegistrationProvider({ children }: { children: React.ReactNode }) {
-  const [answers, setAnswers] = useState<Partial<PreRegisterRequest>>({});
+  const [answers, setAnswers] = useState<Partial<RegisterRequest>>({});
   const [isHydrated, setIsHydrated] = useState(false);
-  const [pending, setPendingState] = useState<PendingRegistration | null>(null);
-  const [confirmed, setConfirmedState] = useState<ConfirmedCandidate | null>(null);
+  const [registered, setRegisteredState] = useState<RegisteredCandidate | null>(null);
 
   // Hidrata do sessionStorage só depois do primeiro render (evita mismatch de
   // SSR — sessionStorage não existe no servidor). Não é estado derivado de
@@ -62,7 +53,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
     try {
       const raw = sessionStorage.getItem(ANSWERS_STORAGE_KEY);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratação única de fonte externa (sessionStorage), não estado derivado
-      if (raw) setAnswers(JSON.parse(raw) as Partial<PreRegisterRequest>);
+      if (raw) setAnswers(JSON.parse(raw) as Partial<RegisterRequest>);
     } catch {
       // sessionStorage indisponível (modo privado, etc.) — segue com o wizard em memória.
     } finally {
@@ -70,7 +61,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  const setStepData = useCallback((partial: Partial<PreRegisterRequest>) => {
+  const setStepData = useCallback((partial: Partial<RegisterRequest>) => {
     setAnswers((prev) => {
       const next = { ...prev, ...partial };
       try {
@@ -91,18 +82,13 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  const setPending = useCallback((data: PendingRegistration) => {
-    setPendingState(data);
-  }, []);
-
-  const setConfirmed = useCallback((data: ConfirmedCandidate) => {
-    setConfirmedState(data);
+  const setRegistered = useCallback((data: RegisteredCandidate) => {
+    setRegisteredState(data);
   }, []);
 
   const reset = useCallback(() => {
     setAnswers({});
-    setPendingState(null);
-    setConfirmedState(null);
+    setRegisteredState(null);
     try {
       sessionStorage.removeItem(ANSWERS_STORAGE_KEY);
     } catch {
@@ -116,13 +102,11 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
       isHydrated,
       setStepData,
       clearAnswers,
-      pending,
-      confirmed,
-      setPending,
-      setConfirmed,
+      registered,
+      setRegistered,
       reset,
     }),
-    [answers, isHydrated, setStepData, clearAnswers, pending, confirmed, setPending, setConfirmed, reset],
+    [answers, isHydrated, setStepData, clearAnswers, registered, setRegistered, reset],
   );
 
   return <RegistrationContext.Provider value={value}>{children}</RegistrationContext.Provider>;
