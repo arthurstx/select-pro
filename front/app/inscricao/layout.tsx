@@ -25,7 +25,7 @@ export default function InscricaoLayout({
         <footer className="border-border w-full border-t bg-white">
           <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 px-4 py-4 text-sm sm:flex-row">
             <span className="text-muted-foreground">
-              CIMATEC Jr © 2026 — Processo Seletivo
+              CIMATEC jr © 2026 — Processo Seletivo
             </span>
             <a
               href="#"

@@ -38,14 +38,14 @@ Esta spec **não** descreve cores, tipografia, espaçamento ou copy final — is
 
 O wizard tem **6 etapas**, todas parte da mesma operação de negócio: nenhuma etapa 1–5 chama a API; o `POST /candidate/register` é disparado uma única vez, ao final da etapa 6. Desktop e Mobile não têm diferença funcional, só layout.
 
-| #   | Tela / Etapa                     | Screen ID (Stitch)                 | Endpoint acionado                                  |
-| --- | -------------------------------- | ---------------------------------- | -------------------------------------------------- |
-| 1   | 1. Dados Pessoais                | `c2013045cd7b40a9bed3d27087977daa` | nenhum (avança para etapa 2)                       |
-| 2   | 2. Como conheceu                 | `e80029e997544a8f9f14c975c840c7e4` | nenhum (avança para etapa 3)                       |
-| 3   | 3. Movimento EJ                  | `e6966ee78bf4427a9c6e8b06918f4de8` | nenhum (avança para etapa 4)                       |
-| 4   | 4. Sobre você                    | `4babeec70a67459a858b13b189058556` | nenhum (avança para etapa 5)                       |
-| 5   | 5. Disponibilidade e Diversidade | `b582b23eba31497bbb5b968fb350ec0e` | nenhum (avança para etapa 6)                       |
-| 6   | 6. Finalização                   | `0f3e902b4afb4efa898c7af9f45f9ea6` | `POST /candidate/register`                         |
+| #   | Tela / Etapa                     | Screen ID (Stitch)                 | Endpoint acionado                                   |
+| --- | -------------------------------- | ---------------------------------- | --------------------------------------------------- |
+| 1   | 1. Dados Pessoais                | `c2013045cd7b40a9bed3d27087977daa` | nenhum (avança para etapa 2)                        |
+| 2   | 2. Como conheceu                 | `e80029e997544a8f9f14c975c840c7e4` | nenhum (avança para etapa 3)                        |
+| 3   | 3. Movimento EJ                  | `e6966ee78bf4427a9c6e8b06918f4de8` | nenhum (avança para etapa 4)                        |
+| 4   | 4. Sobre você                    | `4babeec70a67459a858b13b189058556` | nenhum (avança para etapa 5)                        |
+| 5   | 5. Disponibilidade e Diversidade | `b582b23eba31497bbb5b968fb350ec0e` | nenhum (avança para etapa 6)                        |
+| 6   | 6. Finalização                   | `0f3e902b4afb4efa898c7af9f45f9ea6` | `POST /candidate/register`                          |
 | 7   | Confirmação de Sucesso           | _(reaproveitada da v1.0)_          | nenhum (tela terminal, exibe dados da resposta 4.6) |
 
 **Removida na v3.0:** a tela "Verificação de Código" (rota `/inscricao/verificar`), que existia só para o OTC.
@@ -85,7 +85,7 @@ Cada etapa do wizard tem um botão **Avançar** (avança para a próxima etapa, 
 
 ### 4.4 Etapa 4 — Sobre você
 
-- Captura `experience` ("Fale um pouco sobre suas experiências, hard e soft skills", textarea, máx. 1000 caracteres) e `motivation` ("Por que você acha que deve fazer parte da CIMATEC Jr.", textarea, máx. 500 caracteres).
+- Captura `experience` ("Fale um pouco sobre suas experiências, hard e soft skills", textarea, máx. 1000 caracteres) e `motivation` ("Por que você acha que deve fazer parte da CIMATEC jr.", textarea, máx. 500 caracteres).
 - Exibe contador de caracteres (`0 / 1000`, `0 / 500`) em tempo real — refletindo os limites do schema compartilhado.
 
 ### 4.5 Etapa 5 — Disponibilidade e Diversidade
@@ -115,8 +115,8 @@ Cada etapa do wizard tem um botão **Avançar** (avança para a próxima etapa, 
 
 ## 5. Estados de UI por tela
 
-| Tela                   | Estados obrigatórios                                                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Tela                   | Estados obrigatórios                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Etapas 1–5 do wizard   | idle → validando (client-side) → avança (grava no estado do wizard, seção 8, e navega para a próxima etapa) — nenhuma chamada de rede |
 | Etapa 6 (Finalização)  | idle → enviando (loading, botão "Enviar Inscrição" desabilitado) → sucesso (navega) → erro (ver seção 7)                              |
 | Confirmação de Sucesso | apenas exibição — sem estado de carregamento (dados já vieram da tela anterior)                                                       |
@@ -130,7 +130,7 @@ Complementares, não substituem a validação do backend (FEAT-0001 v3.0, seçã
 | Campo                 | Etapa | Validação client-side                                                                                                                                           |
 | --------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`                | 1     | não vazio                                                                                                                                                       |
-| `email`               | 1     | formato de email; a spec de backend usa "institucional" apenas descritivamente, sem regra formal de domínio — **não bloquear** por domínio no client             |
+| `email`               | 1     | formato de email; a spec de backend usa "institucional" apenas descritivamente, sem regra formal de domínio — **não bloquear** por domínio no client            |
 | `phone`               | 1     | formato de telefone (mesmo padrão aceito pelo backend — E4)                                                                                                     |
 | `course`              | 1     | obrigatório, um dos valores do enum `Course` (FEAT-0001 v3.0, seção 8.1)                                                                                        |
 | `semester`            | 1     | obrigatório, inteiro entre 1 e 10                                                                                                                               |
@@ -142,7 +142,7 @@ Complementares, não substituem a validação do backend (FEAT-0001 v3.0, seçã
 | `motivation`          | 4     | não vazio, máximo 500 caracteres                                                                                                                                |
 | `saturdayRestriction` | 5     | obrigatório, booleano (Sim/Não)                                                                                                                                 |
 | `specialNeeds`        | 5     | obrigatório, booleano (Sim/Não)                                                                                                                                 |
-| `ethnicity`           | 5     | obrigatório, um dos valores do enum `Ethnicity` — inclui "prefiro não informar", então sempre há uma opção válida                                                |
+| `ethnicity`           | 5     | obrigatório, um dos valores do enum `Ethnicity` — inclui "prefiro não informar", então sempre há uma opção válida                                               |
 
 > O guard de navegação (que impede pular etapas por URL direta) usa as mesmas regras: a etapa 2 só conta como completa se, em `outros`, o texto complementar estiver preenchido.
 
@@ -152,14 +152,14 @@ Complementares, não substituem a validação do backend (FEAT-0001 v3.0, seçã
 
 Mapeamento dos cenários E1–E6 (FEAT-0001 v3.0, seção 5). Como o `register` só é disparado na etapa 6, **todo** erro de backend aparece ali:
 
-| Cenário (backend)                               | HTTP | Tela                  | Comportamento esperado na UI                                                                                                                                                    |
-| ----------------------------------------------- | ---- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E1 — Email já cadastrado                        | 409  | Etapa 6 (Finalização) | mensagem indicando o campo (`email`) e um link/botão que volta para a etapa 1 **sem perder os dados das demais etapas** (já estão no estado do wizard, seção 8) para o candidato corrigir |
-| E2 — Telefone já cadastrado                     | 409  | Etapa 6 (Finalização) | idem, campo `phone`                                                                                                                                                             |
-| E3 — Email inválido                             | 400  | Etapa 6 (Finalização) | idealmente barrado antes pela validação client-side da etapa 1 (seção 6); se chegar do backend, mesmo tratamento de E1                                                           |
-| E4 — Telefone inválido                          | 400  | Etapa 6 (Finalização) | idem, campo `phone`, mesmo tratamento de E2                                                                                                                                     |
-| E5 — Email/telefone em uso (detectado no insert) | 409  | Etapa 6 (Finalização) | indistinguível de E1/E2 do ponto de vista da UI (mesmo `code` e `field`) — mesmo tratamento                                                                                      |
-| E6 — "Outros" sem descrição                     | 400  | Etapa 6 (Finalização) | barrado antes pela validação da etapa 2; se chegar do backend, mensagem apontando `referralSourceOther` + CTA de volta para a etapa 2                                            |
+| Cenário (backend)                                | HTTP | Tela                  | Comportamento esperado na UI                                                                                                                                                              |
+| ------------------------------------------------ | ---- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E1 — Email já cadastrado                         | 409  | Etapa 6 (Finalização) | mensagem indicando o campo (`email`) e um link/botão que volta para a etapa 1 **sem perder os dados das demais etapas** (já estão no estado do wizard, seção 8) para o candidato corrigir |
+| E2 — Telefone já cadastrado                      | 409  | Etapa 6 (Finalização) | idem, campo `phone`                                                                                                                                                                       |
+| E3 — Email inválido                              | 400  | Etapa 6 (Finalização) | idealmente barrado antes pela validação client-side da etapa 1 (seção 6); se chegar do backend, mesmo tratamento de E1                                                                    |
+| E4 — Telefone inválido                           | 400  | Etapa 6 (Finalização) | idem, campo `phone`, mesmo tratamento de E2                                                                                                                                               |
+| E5 — Email/telefone em uso (detectado no insert) | 409  | Etapa 6 (Finalização) | indistinguível de E1/E2 do ponto de vista da UI (mesmo `code` e `field`) — mesmo tratamento                                                                                               |
+| E6 — "Outros" sem descrição                      | 400  | Etapa 6 (Finalização) | barrado antes pela validação da etapa 2; se chegar do backend, mensagem apontando `referralSourceOther` + CTA de volta para a etapa 2                                                     |
 
 **Erro de rede / timeout / 5xx genérico:** não coberto pela FEAT-0001 (é infraestrutura, não regra de negócio) — tratar com mensagem genérica de "tente novamente" na etapa 6, **sem** limpar o estado local (as respostas do wizard continuam válidas e o candidato pode reenviar).
 
