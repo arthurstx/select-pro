@@ -15,8 +15,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "SelectPro | CIMATEC Jr.",
-  description: "Inscrição no processo seletivo da CIMATEC Jr.",
+  title: "SelectPro | CIMATEC jr.",
+  description: "Inscrição no processo seletivo da CIMATEC jr.",
 };
 
 export default function RootLayout({

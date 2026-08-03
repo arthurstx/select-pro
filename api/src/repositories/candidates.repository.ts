@@ -13,10 +13,10 @@ export class CandidateRepository {
 
     /**
      * Insere o candidato e sua inscrição (questionário) numa única transação
-     * (`db.batch` — FEAT-0001 v2.0, seção 9): as duas linhas entram juntas ou
+     * (`db.batch` — FEAT-0001 v3.0, seção 9): as duas linhas entram juntas ou
      * nenhuma delas entra. Em caso de violação de UNIQUE (email/phone), deixa
      * o erro bruto do D1 subir — cabe ao service traduzi-lo via
-     * `parseD1ConstraintError` (E10, FEAT-0001 seção 5).
+     * `parseD1ConstraintError` (E5, FEAT-0001 v3.0 seção 5).
      */
     async insertWithApplication(
         candidate: NewCandidate,
@@ -42,13 +42,14 @@ export class CandidateRepository {
         const insertApplication = this.db
             .prepare(
                 `INSERT INTO candidate_applications
-                    (id, candidate_id, referral_source, mej_acknowledged, experience, motivation, saturday_restriction, special_needs)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    (id, candidate_id, referral_source, referral_source_other, mej_acknowledged, experience, motivation, saturday_restriction, special_needs)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .bind(
                 application.id,
                 candidate.id,
                 application.referral_source,
+                application.referral_source_other,
                 application.mej_acknowledged ? 1 : 0,
                 application.experience,
                 application.motivation,
