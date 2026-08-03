@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { swaggerUI } from "@hono/swagger-ui";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { logger as honoLogger } from "hono/logger";
@@ -6,7 +7,7 @@ import { logger as honoLogger } from "hono/logger";
 import { logger } from "./lib/logger";
 import { candidatesRouter } from "./routes/candidates.routes";
 
-const app = new Hono<{ Bindings: CloudflareBindings }>();
+const app = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
 
 app.use(honoLogger());
 
@@ -19,6 +20,18 @@ app.get("/message", (c) => {
 });
 
 app.route("/candidate", candidatesRouter);
+
+// Documentação OpenAPI — gerada a partir dos schemas Zod das rotas
+// registradas via `.openapi()` (ver api/.agents/validation/SKILL.md).
+app.doc("/doc", {
+    openapi: "3.0.0",
+    info: {
+        title: "Select Pro API",
+        version: "1.0.0",
+        description: "API pública do fluxo de inscrição de candidatos (FEAT-0001).",
+    },
+});
+app.get("/docs", swaggerUI({ url: "/doc" }));
 
 app.onError((err, c) => {
     if (err instanceof HTTPException) {

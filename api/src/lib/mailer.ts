@@ -24,12 +24,18 @@ export class ResendMailer implements Mailer {
     async sendOtcEmail({ to, name, code }: SendOtcEmailParams): Promise<void> {
         const resend = new Resend(this.apiKey);
 
-        const { error } = await resend.emails.send({
-            from: this.fromEmail,
-            to,
-            subject: "Confirme seu cadastro — CIMATEC Jr",
-            text: `Olá, ${name}!\n\nSeu código de confirmação é: ${code}\n\nEsse código expira em alguns minutos.`,
-        });
+        // Sem timeout aqui, um provedor de email fora do ar prende a resposta
+        // do /pre-register indefinidamente (o service já trata falha de envio
+        // como não-fatal, mas isso só ajuda se o await eventualmente resolver).
+        const { error } = await resend.emails.send(
+            {
+                from: this.fromEmail,
+                to,
+                subject: "Confirme seu cadastro — CIMATEC Jr",
+                text: `Olá, ${name}!\n\nSeu código de confirmação é: ${code}\n\nEsse código expira em alguns minutos.`,
+            },
+            { signal: AbortSignal.timeout(10_000) },
+        );
 
         // O SDK do Resend retorna `{ error }` em vez de lançar em falhas da API —
         // convertemos em throw para que o chamador (service) trate uniformemente

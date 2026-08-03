@@ -96,9 +96,9 @@ export function CandidateRegistrationForm() {
   }
 
   return (
-    <div className="w-full max-w-md sm:max-w-2xl">
-      <div className="mb-8 text-center sm:text-left">
-        <p className="text-primary font-heading text-sm font-semibold tracking-wide uppercase">
+    <div className="w-full bg-white p-2 max-sm:py-5 md:p-20 rounded-2xl border border-t-5 shadow-2xl border-red-600 max-w-md sm:max-w-2xl">
+      <div className="mb-8 text-center ">
+        <p className="text-primary font-heading text-sm md:text-xl font-semibold tracking-wide uppercase">
           SelectPro CIMATEC Jr.
         </p>
         <h1 className="font-heading mt-1 text-2xl font-semibold text-balance sm:text-3xl">
@@ -119,7 +119,12 @@ export function CandidateRegistrationForm() {
 
           <Field data-invalid={!!form.formState.errors.name}>
             <FieldLabel htmlFor="name">Nome completo</FieldLabel>
-            <Input id="name" autoComplete="name" aria-invalid={!!form.formState.errors.name} {...form.register("name")} />
+            <Input
+              id="name"
+              autoComplete="name"
+              aria-invalid={!!form.formState.errors.name}
+              {...form.register("name")}
+            />
             <FieldError errors={[form.formState.errors.name]} />
           </Field>
 
@@ -157,8 +162,14 @@ export function CandidateRegistrationForm() {
                 control={form.control}
                 name="course"
                 render={({ field }) => (
-                  <Select value={field.value || ""} onValueChange={field.onChange}>
-                    <SelectTrigger id="course" aria-invalid={!!form.formState.errors.course}>
+                  <Select
+                    value={field.value || ""}
+                    onValueChange={field.onChange}
+                  >
+                    <SelectTrigger
+                      id="course"
+                      aria-invalid={!!form.formState.errors.course}
+                    >
                       <SelectValue placeholder="Selecionar" />
                     </SelectTrigger>
                     <SelectContent>
@@ -182,9 +193,14 @@ export function CandidateRegistrationForm() {
                 render={({ field }) => (
                   <Select
                     value={field.value ? String(field.value) : ""}
-                    onValueChange={(value: string) => field.onChange(Number(value))}
+                    onValueChange={(value: string) =>
+                      field.onChange(Number(value))
+                    }
                   >
-                    <SelectTrigger id="semester" aria-invalid={!!form.formState.errors.semester}>
+                    <SelectTrigger
+                      id="semester"
+                      aria-invalid={!!form.formState.errors.semester}
+                    >
                       <SelectValue placeholder="Semestre atual" />
                     </SelectTrigger>
                     <SelectContent>
@@ -207,8 +223,14 @@ export function CandidateRegistrationForm() {
               control={form.control}
               name="gender"
               render={({ field }) => (
-                <Select value={field.value || ""} onValueChange={field.onChange}>
-                  <SelectTrigger id="gender" aria-invalid={!!form.formState.errors.gender}>
+                <Select
+                  value={field.value || ""}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger
+                    id="gender"
+                    aria-invalid={!!form.formState.errors.gender}
+                  >
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
@@ -230,8 +252,8 @@ export function CandidateRegistrationForm() {
               Enviar inscrição
             </Button>
             <FieldDescription>
-              Ao se inscrever, você concorda com o uso dos seus dados para fins do processo
-              seletivo da CIMATEC Jr.
+              Ao se inscrever, você concorda com o uso dos seus dados para fins
+              do processo seletivo da CIMATEC Jr.
             </FieldDescription>
           </Field>
         </FieldGroup>

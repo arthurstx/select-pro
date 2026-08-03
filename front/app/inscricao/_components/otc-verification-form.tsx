@@ -9,8 +9,18 @@ import { z } from "zod";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 import { Spinner } from "@/components/ui/spinner";
 
 import { ApiError } from "../_lib/api-error";
@@ -37,9 +47,11 @@ export function OtcVerificationForm() {
   if (!pending) return null;
 
   const genericError =
-    confirmOtcMutation.error instanceof ApiError && confirmOtcMutation.error.field !== "code"
+    confirmOtcMutation.error instanceof ApiError &&
+    confirmOtcMutation.error.field !== "code"
       ? confirmOtcMutation.error.message
-      : confirmOtcMutation.error && !(confirmOtcMutation.error instanceof ApiError)
+      : confirmOtcMutation.error &&
+          !(confirmOtcMutation.error instanceof ApiError)
         ? "Não foi possível verificar o código. Tente novamente."
         : null;
 
@@ -80,21 +92,26 @@ export function OtcVerificationForm() {
   return (
     <div className="w-full max-w-md">
       <div className="mb-8 text-center">
-        <h1 className="font-heading text-2xl font-semibold">Verificar Código</h1>
+        <h1 className="font-heading text-2xl font-semibold">
+          Verificar Código
+        </h1>
         <p className="text-muted-foreground mt-2 text-sm text-balance">
           Insira o código de 6 dígitos enviado para o seu e-mail institucional.
         </p>
       </div>
 
       <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-        <FieldGroup>
+        <FieldGroup className="flex ">
           {genericError && (
             <Alert variant="destructive">
               <AlertDescription>{genericError}</AlertDescription>
             </Alert>
           )}
 
-          <Field data-invalid={!!form.formState.errors.code} className="items-center">
+          <Field
+            data-invalid={!!form.formState.errors.code}
+            className="items-center"
+          >
             <FieldLabel htmlFor="code" className="sr-only">
               Código de verificação
             </FieldLabel>
@@ -123,12 +140,21 @@ export function OtcVerificationForm() {
                 </InputOTP>
               )}
             />
-            <FieldError className="text-center" errors={[form.formState.errors.code]} />
+            <FieldError
+              className="text-center"
+              errors={[form.formState.errors.code]}
+            />
           </Field>
 
           <Field>
-            <Button type="submit" size="lg" disabled={confirmOtcMutation.isPending}>
-              {confirmOtcMutation.isPending && <Spinner data-icon="inline-start" />}
+            <Button
+              type="submit"
+              size="lg"
+              disabled={confirmOtcMutation.isPending}
+            >
+              {confirmOtcMutation.isPending && (
+                <Spinner data-icon="inline-start" />
+              )}
               Verificar
             </Button>
           </Field>

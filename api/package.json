@@ -8,6 +8,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^0.19.10",
     "hono": "^4.12.33",
     "resend": "^6.18.1",
     "shared": "*"
