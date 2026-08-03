@@ -2,9 +2,11 @@
 
 ID: FEAT-0001
 Módulo: Registro de candidatos
-Versão: 1.1
-Data: 2026-08-01
+Versão: 2.0
+Data: 2026-08-03
 Status: DRAFT
+
+> **Changelog v2.0:** o front-end passou de um formulário único para um wizard de 6 etapas (ver FEAT-0001-UI v2.0). Isso trouxe um questionário novo (como conheceu o processo, confirmação de leitura sobre o MEJ, experiências/motivação, disponibilidade/diversidade) que precisa ser persistido junto do candidato. Esta versão estende o contrato de `pre-register` e o modelo de dados para cobrir esses campos, mantendo o fluxo de dois passos (pré-registro → confirmação) intacto — nenhuma mudança na mecânica de OTC.
 
 ---
 
@@ -12,8 +14,8 @@ Status: DRAFT
 
 Permitir que um candidato se cadastre no processo seletivo em dois passos:
 
-1. **Pré-registro**: candidato envia seus dados gerais (nome completo, email institucional, curso, semestre, gênero, telefone). O sistema valida os dados, guarda os dados temporariamente no KV (junto com o OTC) e envia o código por email. **O candidato ainda não existe no banco de dados nesse momento.**
-2. **Confirmação**: candidato envia o OTC recebido. O sistema valida o código, cria o candidato definitivamente no banco de dados e remove a entrada do KV.
+1. **Pré-registro**: candidato envia seus dados gerais (nome completo, email institucional, curso, semestre, gênero, telefone, cor/etnia) **e** as respostas do questionário do processo seletivo (como conheceu, confirmação sobre o MEJ, experiências/motivação, disponibilidade). O sistema valida os dados, guarda tudo temporariamente no KV (junto com o OTC) e envia o código por email. **O candidato ainda não existe no banco de dados nesse momento.**
+2. **Confirmação**: candidato envia o OTC recebido. O sistema valida o código, cria o candidato e sua inscrição (questionário) definitivamente no banco de dados, de forma atômica, e remove a entrada do KV.
 
 Essa escolha evita que um candidato "reserve" um email/telefone sem nunca confirmar — só existe registro persistente no banco após a confirmação. O KV atua como storage transitório com TTL, eliminando a necessidade de um job de limpeza para candidatos que nunca confirmam.
 
@@ -69,8 +71,8 @@ Para eu poder ser avaliado posteriormente na aplicação.
    - código é do tipo `confirm-email`
    - código informado bate com o armazenado
    - número de tentativas não excedido
-4. Sistema cria o candidato no banco de dados, gerando um **novo id** (não reaproveita o `pendingId` — ver seção 13 para o motivo de segurança).
-   - **Defesa principal contra duplicidade concorrente:** o insert deve respeitar constraints `unique` de email e telefone no banco. Como não há índice de pendentes no KV, esta é a única barreira contra dois pré-registros simultâneos com o mesmo email/telefone — não um cenário residual, é o caminho esperado de detecção nesse caso raro (ver E10).
+4. Sistema cria o candidato **e** sua inscrição (linha em `candidate_applications`, ver seção 8.1) no banco de dados **na mesma transação/batch**, gerando um **novo id** para o candidato (não reaproveita o `pendingId` — ver seção 13 para o motivo de segurança). As duas linhas entram juntas ou nenhuma delas entra — nunca um candidato sem inscrição.
+   - **Defesa principal contra duplicidade concorrente:** o insert do candidato deve respeitar constraints `unique` de email e telefone no banco. Como não há índice de pendentes no KV, esta é a única barreira contra dois pré-registros simultâneos com o mesmo email/telefone — não um cenário residual, é o caminho esperado de detecção nesse caso raro (ver E10).
    - Se o insert falhar por violação de constraint, o sistema deve inspecionar qual constraint foi violada (nome/campo retornado pelo erro do banco) para devolver uma mensagem específica (email vs. telefone), em vez de um erro genérico.
 5. Sistema remove `pending-registration:<pendingId>` do KV.
 6. Sistema retorna `200 OK` com os dados do candidato confirmado.
@@ -136,16 +138,42 @@ type Semester = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 type Gender = "mascu" | "fem" | "outro";
 
+// Padrão IBGE + opção de recusa (decisão v2.0) — mesmo nível de "enum fechado
+// validado por CHECK" que Course/Gender já recebem.
+type Ethnicity = "branca" | "preta" | "parda" | "amarela" | "indigena" | "nao-informado";
+
 interface CandidateRow {
   id: string; // gerado no momento da criação — nunca reaproveita o pendingId
 
   course: Course;
   semester: Semester;
   gender: Gender;
+  ethnicity: Ethnicity;
 
   name: string;
   email: string;
   phone: string;
+
+  created_at: string;
+  updated_at: string | null;
+}
+
+// Novo em v2.0 — respostas do questionário do processo seletivo (etapas 2-5
+// do wizard, ver FEAT-0001-UI v2.0). Relação 1:1 com CandidateRow, isolada em
+// tabela própria para manter `candidates` como identidade+demografia enxuta e
+// permitir um segundo processo seletivo no futuro sem alterar essa tabela.
+type ReferralSource = "instagram" | "linkedin" | "campus" | "indicacao" | "outros";
+
+interface CandidateApplicationRow {
+  id: string;
+  candidate_id: string; // FK unique -> candidates.id (garante o 1:1)
+
+  referral_source: ReferralSource;
+  mej_acknowledged: boolean; // checkbox "li e entendi sobre o MEJ" — sempre true para chegar até aqui
+  experience: string; // "Experiências e Skills", limite de 1000 caracteres (ver FEAT-0001-UI)
+  motivation: string; // "Motivação", limite de 500 caracteres
+  saturday_restriction: boolean; // "possui restrição para o processo seletivo no sábado?"
+  special_needs: boolean; // "possui alguma necessidade especial?"
 
   created_at: string;
   updated_at: string | null;
@@ -164,6 +192,17 @@ interface PendingRegistration {
     course: Course;
     semester: Semester;
     gender: Gender;
+    ethnicity: Ethnicity;
+  };
+  // Novo em v2.0 — mesmas colunas de CandidateApplicationRow, exceto id/candidate_id
+  // (gerados só no momento do insert, junto com o id do candidato).
+  application: {
+    referral_source: ReferralSource;
+    mej_acknowledged: boolean;
+    experience: string;
+    motivation: string;
+    saturday_restriction: boolean;
+    special_needs: boolean;
   };
   otc: {
     code_hash: string; // nunca armazenar o código em texto plano
@@ -196,9 +235,18 @@ interface PendingRegistration {
   "phone": "string",
   "course": "eng-comp",
   "semester": 1,
-  "gender": "mascu"
+  "gender": "mascu",
+  "ethnicity": "nao-informado",
+  "referralSource": "instagram",
+  "mejAcknowledged": true,
+  "experience": "string (até 1000 caracteres)",
+  "motivation": "string (até 500 caracteres)",
+  "saturdayRestriction": false,
+  "specialNeeds": false
 }
 ```
+
+> Campos novos em v2.0, um por etapa do wizard (FEAT-0001-UI v2.0, etapas 2–5): `ethnicity` (etapa 5), `referralSource` (etapa 2), `mejAcknowledged` (etapa 3, deve ser exatamente `true` — o backend rejeita `false`), `experience`/`motivation` (etapa 4), `saturdayRestriction`/`specialNeeds` (etapa 5). O front envia tudo de uma vez só no fim do wizard (etapa 6); não há chamadas intermediárias de API por etapa.
 
 **`POST /candidate/confirm-otc`**
 
@@ -259,6 +307,7 @@ interface PendingRegistration {
 | Chave primária do KV                                 | UUID v4 (`pendingId`), gerado no pré-registro, usado só como token de posse temporário — **não** vira `CandidateRow.id`                    | Evita estender a exposição do id (presente em resposta HTTP e estado do cliente durante a fase pendente) para a vida inteira do registro. O `id` final é gerado no insert                                                                             |
 | Checagem de email/telefone duplicado entre pendentes | Não implementada via KV — a única barreira é a constraint `unique` do banco, verificada na confirmação                                     | Simplicidade: 1 chave no KV em vez de 3. Aceito porque o universo de emails é institucional (baixa chance real de colisão) e o impacto de cair no caso raro é apenas um erro específico na tela de confirmação, não perda de dados. Ver E10 (seção 5) |
 | Erro de constraint na confirmação                    | O backend deve inspecionar qual constraint (email ou telefone) foi violada no erro do insert e devolver mensagem específica, não genérica  | Sem os índices do KV, este é o único ponto de detecção — a mensagem específica preserva parte da qualidade de UX que os índices dariam, sem chaves extras                                                                                             |
+| Atomicidade candidato + inscrição (v2.0)             | O insert de `candidates` e `candidate_applications` deve rodar como uma única transação/batch (`D1Database.batch`) — se qualquer um falhar, nenhum dos dois persiste | Evita o estado inconsistente "candidato existe, mas sem respostas do questionário" (ou vice-versa), que não tem representação válida no domínio                                                                                                        |
 
 ---
 

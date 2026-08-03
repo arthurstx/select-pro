@@ -35,7 +35,7 @@ const BLOCKED_STATUSES = new Set([409, 410, 429]);
 
 export function OtcVerificationForm() {
   const router = useRouter();
-  const { pending, setConfirmed, reset } = useRegistration();
+  const { pending, setConfirmed, clearAnswers, reset } = useRegistration();
   const confirmOtcMutation = useConfirmOtc();
   const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
 
@@ -63,6 +63,9 @@ export function OtcVerificationForm() {
       {
         onSuccess: (response) => {
           setConfirmed(response.data);
+          // Inscrição completa — as respostas do wizard não precisam mais
+          // ficar no sessionStorage (FEAT-0001-UI v2.0, seção 4.7).
+          clearAnswers();
           router.push("/inscricao/sucesso");
         },
         onError: (error) => {

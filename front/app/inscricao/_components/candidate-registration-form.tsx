@@ -6,12 +6,10 @@ import { Controller, useForm } from "react-hook-form";
 import {
   CourseSchema,
   GenderSchema,
-  PreRegisterRequestSchema,
-  type PreRegisterRequest,
+  PersonalDataStepSchema,
+  type PersonalDataStep,
 } from "shared";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
@@ -27,11 +25,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
 
-import { ApiError } from "../_lib/api-error";
 import { useRegistration } from "../_context/registration-context";
-import { usePreRegister } from "../_hooks/use-pre-register";
+import { WIZARD_STEPS } from "../_lib/wizard-steps";
+import { WizardNav } from "./wizard-nav";
+import { WizardShell } from "./wizard-shell";
 
 const COURSE_LABELS: Record<(typeof CourseSchema.options)[number], string> = {
   "eng-comp": "Engenharia de Computação",
@@ -52,71 +50,40 @@ const GENDER_LABELS: Record<(typeof GenderSchema.options)[number], string> = {
 
 const SEMESTERS = Array.from({ length: 10 }, (_, i) => i + 1);
 
+/** Etapa 1 — Dados Pessoais (FEAT-0001-UI v2.0, seção 4.1). */
 export function CandidateRegistrationForm() {
   const router = useRouter();
-  const { setPending } = useRegistration();
-  const preRegister = usePreRegister();
+  const { answers, setStepData } = useRegistration();
 
-  const form = useForm<PreRegisterRequest>({
-    resolver: zodResolver(PreRegisterRequestSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
+  const form = useForm<PersonalDataStep>({
+    resolver: zodResolver(PersonalDataStepSchema),
+    values: {
+      name: answers.name ?? "",
+      email: answers.email ?? "",
+      phone: answers.phone ?? "",
       // Selects do Radix precisam de um valor definido desde o primeiro
       // render (string vazia = "nada selecionado") para não alternar de
       // não-controlado para controlado — "" nunca bate com nenhum
       // SelectItem, então o placeholder continua visível até a escolha.
-      course: "" as PreRegisterRequest["course"],
-      semester: "" as unknown as PreRegisterRequest["semester"],
-      gender: "" as PreRegisterRequest["gender"],
+      course: answers.course ?? ("" as PersonalDataStep["course"]),
+      semester: answers.semester ?? ("" as unknown as PersonalDataStep["semester"]),
+      gender: answers.gender ?? ("" as PersonalDataStep["gender"]),
     },
   });
 
-  const genericError =
-    preRegister.error instanceof ApiError && !preRegister.error.field
-      ? preRegister.error.message
-      : null;
-
-  function onSubmit(data: PreRegisterRequest) {
-    preRegister.mutate(data, {
-      onSuccess: (response) => {
-        setPending(response.data);
-        router.push("/inscricao/verificar");
-      },
-      onError: (error) => {
-        if (error instanceof ApiError && error.field === "email") {
-          form.setError("email", { message: error.message });
-        }
-        if (error instanceof ApiError && error.field === "phone") {
-          form.setError("phone", { message: error.message });
-        }
-      },
-    });
+  function onSubmit(data: PersonalDataStep) {
+    setStepData(data);
+    router.push(WIZARD_STEPS[1].path);
   }
 
   return (
-    <div className="w-full bg-white p-2 max-sm:py-5 md:p-20 rounded-2xl border border-t-5 shadow-2xl border-red-600 max-w-md sm:max-w-2xl">
-      <div className="mb-8 text-center ">
-        <p className="text-primary font-heading text-sm md:text-xl font-semibold tracking-wide uppercase">
-          SelectPro CIMATEC Jr.
-        </p>
-        <h1 className="font-heading mt-1 text-2xl font-semibold text-balance sm:text-3xl">
-          Inscrição no Processo Seletivo
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Preencha os dados abaixo para iniciar sua jornada na CIMATEC Jr.
-        </p>
-      </div>
-
+    <WizardShell
+      current={1}
+      title="Inscrição no Processo Seletivo 2025.1"
+      description="Preencha os dados abaixo para iniciar sua jornada na CIMATEC Jr."
+    >
       <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
         <FieldGroup>
-          {genericError && (
-            <Alert variant="destructive">
-              <AlertDescription>{genericError}</AlertDescription>
-            </Alert>
-          )}
-
           <Field data-invalid={!!form.formState.errors.name}>
             <FieldLabel htmlFor="name">Nome completo</FieldLabel>
             <Input
@@ -246,18 +213,14 @@ export function CandidateRegistrationForm() {
             <FieldError errors={[form.formState.errors.gender]} />
           </Field>
 
-          <Field>
-            <Button type="submit" size="lg" disabled={preRegister.isPending}>
-              {preRegister.isPending && <Spinner data-icon="inline-start" />}
-              Enviar inscrição
-            </Button>
-            <FieldDescription>
-              Ao se inscrever, você concorda com o uso dos seus dados para fins
-              do processo seletivo da CIMATEC Jr.
-            </FieldDescription>
-          </Field>
+          <FieldDescription>
+            Ao se inscrever, você concorda com o uso dos seus dados para fins
+            do processo seletivo da CIMATEC Jr.
+          </FieldDescription>
         </FieldGroup>
+
+        <WizardNav submitLabel="Avançar" />
       </form>
-    </div>
+    </WizardShell>
   );
 }

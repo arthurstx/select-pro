@@ -24,6 +24,38 @@ function uniqueCandidateInput() {
         course: "eng-comp" as const,
         semester: 3 as const,
         gender: "outro" as const,
+        ethnicity: "nao-informado" as const,
+        referralSource: "instagram" as const,
+        mejAcknowledged: true as const,
+        experience: "Já participei de projetos de extensão e hackathons.",
+        motivation: "Quero aplicar o que aprendo na prática.",
+        saturdayRestriction: false,
+        specialNeeds: false,
+    };
+}
+
+/** Payload de `candidates.insertWithApplication` a partir do input de pré-registro (sem os campos gerados). */
+function candidateRowFrom(input: ReturnType<typeof uniqueCandidateInput>) {
+    return {
+        candidate: {
+            id: crypto.randomUUID(),
+            name: input.name,
+            email: input.email,
+            phone: input.phone,
+            course: input.course,
+            semester: input.semester,
+            gender: input.gender,
+            ethnicity: input.ethnicity,
+        },
+        application: {
+            id: crypto.randomUUID(),
+            referral_source: input.referralSource,
+            mej_acknowledged: input.mejAcknowledged,
+            experience: input.experience,
+            motivation: input.motivation,
+            saturday_restriction: input.saturdayRestriction,
+            special_needs: input.specialNeeds,
+        },
     };
 }
 
@@ -79,7 +111,8 @@ describe("CandidateService.preRegister", () => {
     it("E1 - bloqueia quando o email já pertence a um candidato confirmado", async () => {
         const { service, candidates } = buildService(mailer);
         const input = uniqueCandidateInput();
-        await candidates.insert({ id: crypto.randomUUID(), ...input });
+        const { candidate, application } = candidateRowFrom(input);
+        await candidates.insertWithApplication(candidate, application);
 
         const result = await service.preRegister({ ...uniqueCandidateInput(), email: input.email });
 
@@ -92,7 +125,8 @@ describe("CandidateService.preRegister", () => {
     it("E2 - bloqueia quando o telefone já pertence a um candidato confirmado", async () => {
         const { service, candidates } = buildService(mailer);
         const input = uniqueCandidateInput();
-        await candidates.insert({ id: crypto.randomUUID(), ...input });
+        const { candidate, application } = candidateRowFrom(input);
+        await candidates.insertWithApplication(candidate, application);
 
         const result = await service.preRegister({ ...uniqueCandidateInput(), phone: input.phone });
 
@@ -131,6 +165,17 @@ describe("CandidateService.confirmOtc", () => {
 
         const stored = await candidates.findByEmail(input.email);
         expect(stored?.id).toBe(result.value.id);
+        expect(stored?.ethnicity).toBe(input.ethnicity);
+
+        // A inscrição (questionário) é criada atomicamente junto do candidato (FEAT-0001 v2.0, seção 9).
+        const application = await env.DB.prepare("SELECT * FROM candidate_applications WHERE candidate_id = ?")
+            .bind(result.value.id)
+            .first<{ referral_source: string; experience: string; motivation: string; mej_acknowledged: number }>();
+        expect(application).not.toBeNull();
+        expect(application?.referral_source).toBe(input.referralSource);
+        expect(application?.experience).toBe(input.experience);
+        expect(application?.motivation).toBe(input.motivation);
+        expect(application?.mej_acknowledged).toBe(1);
 
         expect(await pendingRegistrations.get(pendingId)).toBeNull();
     });
@@ -240,5 +285,26 @@ describe("CandidateService.confirmOtc", () => {
 
         // A entrada NÃO é deletada em caso de E10 — permite corrigir e tentar de novo.
         expect(await pendingRegistrations.get(secondPendingId)).not.toBeNull();
+    });
+});
+
+describe("CandidateRepository.insertWithApplication — atomicidade (FEAT-0001 v2.0, seção 9)", () => {
+    it("uma falha no insert do candidato não deixa uma linha órfã em candidate_applications", async () => {
+        const { candidates } = buildService(new FakeMailer());
+        const input = uniqueCandidateInput();
+        const { candidate, application } = candidateRowFrom(input);
+
+        // Primeiro insert bem-sucedido.
+        await candidates.insertWithApplication(candidate, application);
+
+        // Segundo insert com o mesmo email viola UNIQUE(candidates.email) — o batch
+        // inteiro deve falhar, sem gravar a segunda linha de candidate_applications.
+        const duplicate = candidateRowFrom({ ...uniqueCandidateInput(), email: input.email });
+        await expect(candidates.insertWithApplication(duplicate.candidate, duplicate.application)).rejects.toThrow();
+
+        const count = await env.DB.prepare("SELECT COUNT(*) as count FROM candidate_applications WHERE candidate_id = ?")
+            .bind(duplicate.candidate.id)
+            .first<{ count: number }>();
+        expect(count?.count).toBe(0);
     });
 });

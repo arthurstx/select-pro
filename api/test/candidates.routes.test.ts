@@ -50,6 +50,13 @@ function uniqueCandidateInput() {
         course: "eng-comp",
         semester: 3,
         gender: "outro",
+        ethnicity: "nao-informado",
+        referralSource: "linkedin",
+        mejAcknowledged: true,
+        experience: "Já participei de projetos de extensão e hackathons.",
+        motivation: "Quero aplicar o que aprendo na prática.",
+        saturdayRestriction: false,
+        specialNeeds: false,
     };
 }
 
@@ -110,6 +117,18 @@ describe("POST /candidate/pre-register e /candidate/confirm-otc (HTTP)", () => {
         const body = await res.json<{ error: { code: string; field?: string } }>();
         expect(body.error.code).toBe("INVALID_PHONE");
         expect(body.error.field).toBe("phone");
+    });
+
+    it("valida que mejAcknowledged deve ser exatamente true (FEAT-0001 v2.0, seção 8.2)", async () => {
+        const res = await SELF.fetch("http://local.test/candidate/pre-register", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...uniqueCandidateInput(), mejAcknowledged: false }),
+        });
+
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { code: string; field?: string } }>();
+        expect(body.error.field).toBe("mejAcknowledged");
     });
 
     it("E1 - pre-register com email já confirmado retorna 409", async () => {

@@ -1,7 +1,11 @@
 task.md
 node_modules/
 .mcp.json
-package-lock.json
 .claude/settings.local.json
 .vercel
 .vscode/mcp.json
+
+# Só o lockfile da raiz é usado (npm workspaces)
+api/package-lock.json
+front/package-lock.json
+shared/package-lock.json
