@@ -36,6 +36,15 @@ export type Semester = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 export type Gender = "mascu" | "fem" | "outro";
 
+/** Padrão IBGE + opção de recusa (FEAT-0001 v2.0, seção 8.1). */
+export type Ethnicity = "branca" | "preta" | "parda" | "amarela" | "indigena" | "nao-informado";
+
+// ------------------------------------------------------------
+// Inscrição (questionário) — enums definidos em FEAT-0001 v2.0 (seção 8.1)
+// ------------------------------------------------------------
+
+export type ReferralSource = "instagram" | "linkedin" | "campus" | "indicacao" | "outros";
+
 // ------------------------------------------------------------
 // Tabelas de referência
 // ------------------------------------------------------------
@@ -90,10 +99,36 @@ export interface CandidateRow {
     course: Course;
     semester: Semester;
     gender: Gender;
+    ethnicity: Ethnicity;
 
     name: string;
     email: string;
     phone: string;
+
+    created_at: string;
+    updated_at: string | null;
+}
+
+// ------------------------------------------------------------
+// Inscrição (questionário) — 1:1 com CandidateRow (FEAT-0001 v2.0, seção 8.1).
+// Isolada em tabela própria para manter `candidates` como identidade +
+// demografia enxuta, permitindo um segundo processo seletivo no futuro
+// sem alterar essa tabela.
+// ------------------------------------------------------------
+
+export interface CandidateApplicationRow {
+    id: string;
+    candidate_id: string;
+
+    referral_source: ReferralSource;
+    /** Checkbox "li e entendi sobre o MEJ" — sempre `true` para chegar até aqui. */
+    mej_acknowledged: boolean;
+    /** "Experiências e Skills" (etapa 4 do wizard) — limite de 1000 caracteres. */
+    experience: string;
+    /** "Motivação" (etapa 4 do wizard) — limite de 500 caracteres. */
+    motivation: string;
+    saturday_restriction: boolean;
+    special_needs: boolean;
 
     created_at: string;
     updated_at: string | null;
@@ -166,6 +201,11 @@ export type NewCandidate = Omit<CandidateRow, "created_at" | "updated_at"> & {
     updated_at?: string | null;
 };
 
+export type NewCandidateApplication = Omit<CandidateApplicationRow, "created_at" | "updated_at"> & {
+    created_at?: string;
+    updated_at?: string | null;
+};
+
 export type NewGroup = Omit<GroupRow, "created_at" | "updated_at"> & {
     created_at?: string;
     updated_at?: string | null;
@@ -190,6 +230,7 @@ export type NewEvaluation = Omit<
 
 export type UserUpdate = Partial<Omit<UserRow, "id">> & { id: string };
 export type CandidateUpdate = Partial<Omit<CandidateRow, "id">> & { id: string };
+export type CandidateApplicationUpdate = Partial<Omit<CandidateApplicationRow, "id">> & { id: string };
 export type GroupUpdate = Partial<Omit<GroupRow, "id">> & { id: string };
 export type RoomUpdate = Partial<Omit<RoomRow, "id">> & { id: string };
 export type MetricUpdate = Partial<Omit<MetricRow, "id">> & { id: string };
@@ -234,6 +275,7 @@ export interface DatabaseSchema {
     metrics: MetricRow;
     users: UserRow;
     candidates: CandidateRow;
+    candidate_applications: CandidateApplicationRow;
     groups: GroupRow;
     group_evaluators: GroupEvaluatorRow;
     group_candidates: GroupCandidateRow;
