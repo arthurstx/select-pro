@@ -1,4 +1,4 @@
-import type { CandidateRow, NewCandidate, PendingRegistration, PreRegisterRequest } from "shared";
+import type { CandidateRow, NewCandidate, NewCandidateApplication, PendingRegistration, PreRegisterRequest } from "shared";
 
 import { type Either, left, right } from "../core/either";
 import {
@@ -67,6 +67,16 @@ export class CandidateService {
                 course: input.course,
                 semester: input.semester,
                 gender: input.gender,
+                ethnicity: input.ethnicity,
+            },
+            // Novo em v2.0 — respostas do questionário (etapas 2-5 do wizard).
+            application: {
+                referral_source: input.referralSource,
+                mej_acknowledged: input.mejAcknowledged,
+                experience: input.experience,
+                motivation: input.motivation,
+                saturday_restriction: input.saturdayRestriction,
+                special_needs: input.specialNeeds,
             },
             otc: {
                 code_hash: codeHash,
@@ -132,10 +142,14 @@ export class CandidateService {
             id: crypto.randomUUID(),
             ...pending.candidate,
         };
+        const newApplication: Omit<NewCandidateApplication, "candidate_id"> = {
+            id: crypto.randomUUID(),
+            ...pending.application,
+        };
 
         let row: CandidateRow;
         try {
-            row = await this.candidates.insert(newCandidate);
+            row = await this.candidates.insertWithApplication(newCandidate, newApplication);
         } catch (err) {
             const field = parseD1ConstraintError(err);
             if (field) {
