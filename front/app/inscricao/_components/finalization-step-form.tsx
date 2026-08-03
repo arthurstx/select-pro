@@ -24,7 +24,7 @@ const WHATSAPP_GROUP_URL = process.env.NEXT_PUBLIC_WHATSAPP_GROUP_URL;
  */
 export function FinalizationStepForm() {
   const router = useRouter();
-  const { answers, setRegistered, clearAnswers } = useRegistration();
+  const { answers, setRegistered } = useRegistration();
   const isHydrated = useWizardGuard(6);
   const register = useRegister();
 
@@ -59,9 +59,10 @@ export function FinalizationStepForm() {
     register.mutate(parsed.data, {
       onSuccess: (response) => {
         setRegistered(response.data);
-        // Inscrição gravada — as respostas do wizard não precisam mais ficar
-        // no sessionStorage (FEAT-0001-UI v3.0, seção 4.6).
-        clearAnswers();
+        // As respostas do wizard só são descartadas depois de chegar na tela
+        // de sucesso (é ela que chama `clearAnswers`) — limpá-las aqui,
+        // ainda sob o `useWizardGuard(6)`, dispararia o redirect do guard
+        // para a etapa 1 e o candidato nunca veria a confirmação.
         router.push("/inscricao/sucesso");
       },
     });

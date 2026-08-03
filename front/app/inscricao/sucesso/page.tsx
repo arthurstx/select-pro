@@ -8,7 +8,7 @@ import { useRegistration } from "../_context/registration-context";
 
 export default function SucessoPage() {
   const router = useRouter();
-  const { registered } = useRegistration();
+  const { registered, clearAnswers } = useRegistration();
 
   // O estado da inscrição vive só em memória (FEAT-0001-UI v3.0, seção 8.2):
   // num F5 aqui não há o que exibir e o candidato volta ao início. A inscrição
@@ -18,6 +18,14 @@ export default function SucessoPage() {
       router.replace("/inscricao");
     }
   }, [registered, router]);
+
+  // Ponto certo para descartar as respostas do wizard (FEAT-0001-UI v3.0,
+  // seção 4.6): a inscrição está gravada e esta tela é terminal — nenhuma
+  // etapa guardada por `useWizardGuard` está mais montada para reagir à
+  // limpeza redirecionando o candidato de volta ao início.
+  useEffect(() => {
+    if (registered) clearAnswers();
+  }, [registered, clearAnswers]);
 
   if (!registered) return null;
 
