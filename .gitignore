@@ -3,3 +3,4 @@ node_modules/
 .mcp.json
 package-lock.json
 .claude/settings.local.json
+.vercel
