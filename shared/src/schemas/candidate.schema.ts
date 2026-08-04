@@ -36,6 +36,11 @@ export const CourseSchema = z.enum(
  *
  * O `Record<Course, string>` obriga o compilador a cobrar a entrada nova sempre
  * que um curso for adicionado a `Course`.
+ *
+ * O mesmo vale para `GENDER_LABELS`, `ETHNICITY_LABELS` e
+ * `REFERRAL_SOURCE_LABELS` abaixo: os três nasceram dentro de componentes do
+ * wizard e vieram para cá na FEAT-0002, quando a sincronização com a planilha
+ * do Google passou a precisar exatamente dos mesmos rótulos.
  */
 export const COURSE_LABELS: Record<Course, string> = {
     "eng-computacao": "Engenharia de Computação",
@@ -68,14 +73,37 @@ export const GenderSchema = z.enum(["mascu", "fem", "outro"], {
     errorMap: () => ({ message: "Selecione um gênero" }),
 }) satisfies z.ZodType<Gender>;
 
+export const GENDER_LABELS: Record<Gender, string> = {
+    mascu: "Masculino",
+    fem: "Feminino",
+    outro: "Outro",
+};
+
 /** Padrão IBGE + opção de recusa (FEAT-0001 v2.0, seção 8.1). */
 export const EthnicitySchema = z.enum(["branca", "preta", "parda", "amarela", "indigena", "nao-informado"], {
     errorMap: () => ({ message: "Selecione uma opção" }),
 }) satisfies z.ZodType<Ethnicity>;
 
+export const ETHNICITY_LABELS: Record<Ethnicity, string> = {
+    branca: "Branca",
+    preta: "Preta",
+    parda: "Parda",
+    amarela: "Amarela",
+    indigena: "Indígena",
+    "nao-informado": "Prefiro não informar",
+};
+
 export const ReferralSourceSchema = z.enum(["instagram", "linkedin", "campus", "indicacao", "outros"], {
     errorMap: () => ({ message: "Selecione uma opção" }),
 }) satisfies z.ZodType<ReferralSource>;
+
+export const REFERRAL_SOURCE_LABELS: Record<ReferralSource, string> = {
+    instagram: "Instagram",
+    linkedin: "LinkedIn",
+    campus: "Campus (Presencial)",
+    indicacao: "Indicação",
+    outros: "Outros",
+};
 
 /** Aceita telefone BR com ou sem DDI/DDD formatado (ex: "(71) 98888-7777", "71988887777", "+55 71 8888-7777"). */
 const PHONE_REGEX = /^(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/;

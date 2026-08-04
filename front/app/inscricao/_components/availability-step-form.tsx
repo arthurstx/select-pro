@@ -3,7 +3,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
-import { AvailabilityStepSchema, EthnicitySchema, type AvailabilityStep } from "shared";
+import {
+  AvailabilityStepSchema,
+  ETHNICITY_LABELS,
+  EthnicitySchema,
+  type AvailabilityStep,
+} from "shared";
 
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
@@ -22,14 +27,8 @@ import { WIZARD_STEPS } from "../_lib/wizard-steps";
 import { WizardNav } from "./wizard-nav";
 import { WizardShell } from "./wizard-shell";
 
-const ETHNICITY_LABELS: Record<(typeof EthnicitySchema.options)[number], string> = {
-  branca: "Branca",
-  preta: "Preta",
-  parda: "Parda",
-  amarela: "Amarela",
-  indigena: "Indígena",
-  "nao-informado": "Prefiro não informar",
-};
+// ETHNICITY_LABELS vem de `shared`: o mesmo mapa é lido por qualquer
+// consumidor que precise exibir a cor/etnia (wizard, planilha, painel).
 
 function YesNoField({
   value,

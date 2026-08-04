@@ -6,8 +6,11 @@ import { HTTPException } from "hono/http-exception";
 import { logger as honoLogger } from "hono/logger";
 import type { MiddlewareHandler } from "hono/types";
 
+import { GoogleSheetsClient } from "./lib/google-sheets";
 import { logger } from "./lib/logger";
+import { CandidateRepository } from "./repositories/candidates.repository";
 import { candidatesRouter } from "./routes/candidates.routes";
+import { SheetSyncService } from "./services/sheet-sync.service";
 
 const app = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
 
@@ -95,4 +98,41 @@ app.onError((err, c) => {
     return c.json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } }, 500);
 });
 
-export default app;
+/**
+ * Sincronização das inscrições com a planilha do Google (FEAT-0002).
+ *
+ * Roda pelo Cron Trigger, fora do caminho da inscrição: uma falha aqui não
+ * afeta `POST /candidate/register` de forma alguma — só atrasa a planilha.
+ *
+ * A composição das dependências acontece aqui pelo mesmo motivo que acontece no
+ * handler das rotas (`api/.agents/architecture/SKILL.md`): é o primeiro ponto
+ * com acesso ao `env`.
+ */
+const scheduled: ExportedHandlerScheduledHandler<CloudflareBindings> = async (_event, env) => {
+    // `wrangler types` infere o literal "false" a partir do valor commitado;
+    // em runtime a var vale "true" no deploy de manutenção (ver middleware acima).
+    const maintenanceMode: string = env.MAINTENANCE_MODE;
+
+    const service = new SheetSyncService(
+        new CandidateRepository(env.DB),
+        new GoogleSheetsClient(env.GOOGLE_SERVICE_ACCOUNT_KEY, env.GOOGLE_SHEET_ID),
+        { maintenanceMode: maintenanceMode === "true" },
+    );
+
+    try {
+        await service.run();
+    } catch (err) {
+        logger.error("sheet_sync.failed", {
+            error: err instanceof Error ? err.message : String(err),
+        });
+        // Repropaga de propósito: o log acima dá o evento estruturado, e o throw
+        // faz a Cloudflare marcar a execução do cron como falha no painel. Sem
+        // ele, um erro recorrente ficaria invisível em qualquer métrica.
+        throw err;
+    }
+};
+
+export default {
+    fetch: app.fetch,
+    scheduled,
+} satisfies ExportedHandler<CloudflareBindings>;

@@ -3,7 +3,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { Controller, useForm, useWatch } from "react-hook-form";
-import { ReferralSourceSchema, ReferralStepSchema, type ReferralStep } from "shared";
+import {
+  REFERRAL_SOURCE_LABELS,
+  ReferralSourceSchema,
+  ReferralStepSchema,
+  type ReferralStep,
+} from "shared";
 
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -16,13 +21,8 @@ import { WIZARD_STEPS } from "../_lib/wizard-steps";
 import { WizardNav } from "./wizard-nav";
 import { WizardShell } from "./wizard-shell";
 
-const REFERRAL_LABELS: Record<(typeof ReferralSourceSchema.options)[number], string> = {
-  instagram: "Instagram",
-  linkedin: "LinkedIn",
-  campus: "Campus (Presencial)",
-  indicacao: "Indicação",
-  outros: "Outros",
-};
+// REFERRAL_SOURCE_LABELS vem de `shared`: o mesmo mapa é lido por qualquer
+// consumidor que precise exibir a origem (wizard, planilha, painel).
 
 const OTHER_MAX = 100;
 
@@ -84,7 +84,7 @@ export function ReferralStepForm() {
                       className="border-input has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer items-center gap-3 rounded-lg border p-4 text-sm font-normal"
                     >
                       <RadioGroupItem value={option} id={`referral-${option}`} />
-                      {REFERRAL_LABELS[option]}
+                      {REFERRAL_SOURCE_LABELS[option]}
                     </Label>
                   ))}
                 </RadioGroup>

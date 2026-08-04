@@ -6,6 +6,7 @@ import { Controller, useForm } from "react-hook-form";
 import {
   COURSE_LABELS,
   CourseSchema,
+  GENDER_LABELS,
   GenderSchema,
   PersonalDataStepSchema,
   type PersonalDataStep,
@@ -32,14 +33,9 @@ import { WIZARD_STEPS } from "../_lib/wizard-steps";
 import { WizardNav } from "./wizard-nav";
 import { WizardShell } from "./wizard-shell";
 
-// COURSE_LABELS vem de `shared`: o mesmo mapa é usado por qualquer consumidor
-// que precise exibir um curso (painel, export, email), sem duplicar a lista.
-
-const GENDER_LABELS: Record<(typeof GenderSchema.options)[number], string> = {
-  mascu: "Masculino",
-  fem: "Feminino",
-  outro: "Outro",
-};
+// COURSE_LABELS e GENDER_LABELS vêm de `shared`: os mesmos mapas são usados por
+// qualquer consumidor que precise exibir esses valores (painel, planilha,
+// export, email), sem duplicar a lista.
 
 const SEMESTERS = Array.from({ length: 10 }, (_, i) => i + 1);
 
