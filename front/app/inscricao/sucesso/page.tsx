@@ -36,11 +36,11 @@ export default function SucessoPage() {
       </div>
       <div>
         <p className="text-primary font-heading text-sm font-semibold tracking-wide uppercase">
-          CIMATEC Jr.
+          CIMATEC jr.
         </p>
         <h1 className="font-heading mt-1 text-2xl font-semibold">Inscrição concluída!</h1>
         <p className="text-muted-foreground mt-2 text-sm text-balance">
-          Sua inscrição foi registrada no sistema da CIMATEC Jr. Não é preciso fazer mais nada —
+          Sua inscrição foi registrada no sistema da CIMATEC jr. Não é preciso fazer mais nada —
           guarde a data da seleção e leve 1kg de alimento não perecível no dia.
         </p>
       </div>

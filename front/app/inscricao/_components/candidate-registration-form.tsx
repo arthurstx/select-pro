@@ -79,8 +79,8 @@ export function CandidateRegistrationForm() {
   return (
     <WizardShell
       current={1}
-      title="Inscrição no Processo Seletivo 2025.1"
-      description="Preencha os dados abaixo para iniciar sua jornada na CIMATEC Jr."
+      title="Inscrição no Processo Seletivo 2026.2"
+      description="Preencha os dados abaixo para iniciar sua jornada na CIMATEC jr."
     >
       <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
         <FieldGroup>
@@ -215,7 +215,7 @@ export function CandidateRegistrationForm() {
 
           <FieldDescription>
             Ao se inscrever, você concorda com o uso dos seus dados para fins
-            do processo seletivo da CIMATEC Jr.
+            do processo seletivo da CIMATEC jr.
           </FieldDescription>
         </FieldGroup>
 
