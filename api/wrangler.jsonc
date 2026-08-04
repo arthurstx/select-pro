@@ -3,85 +3,93 @@
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "api",
-	"main": "src/index.ts",
-	"compatibility_date": "2026-07-31",
-	"assets": {
-		"binding": "ASSETS",
-		"directory": "./public"
-	},
-	"observability": {
-		"enabled": true
-	},
-	"upload_source_maps": true,
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-	/**
-	 * Smart Placement
-	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
-	 */
-	// "placement": {  "mode": "smart" }
-	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-	 */
-	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "D1-select-pro",
-			"database_id": "1461f908-e6c3-450d-9fc2-0ad58c1cbf38",
-			"migrations_dir": "migrations"
-		}
-	],
-	/**
-	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
-	 */
-	"vars": {
-		// Usuário do Basic Auth em /docs e /doc. A senha é um secret
-		// (`wrangler secret put DOCS_PASSWORD`), nunca fica em `vars`.
-		"DOCS_USER": "admin",
-		// Quando "true", /candidate/* responde 503 e nenhuma inscrição entra.
-		// Serve para fechar a janela de escrita durante migrations de banco:
-		// deploy com "true" -> migration -> deploy com "false".
-		// Deve estar "false" em todo deploy normal.
-		"MAINTENANCE_MODE": "false"
-	},
-	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-31",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./public",
+  },
+  "observability": {
+    "enabled": true,
+  },
+  "upload_source_maps": true,
+  "compatibility_flags": ["nodejs_compat"],
+  /**
+   * Smart Placement
+   * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+   */
+  // "placement": {  "mode": "smart" }
+  /**
+   * Bindings
+   * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
+   * databases, object storage, AI inference, real-time communication and more.
+   * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+   */
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "D1-select-pro",
+      "database_id": "1461f908-e6c3-450d-9fc2-0ad58c1cbf38",
+      "migrations_dir": "migrations",
+    },
+  ],
+  /**
+   * Environment Variables
+   * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+   * Note: Use secrets to store sensitive data.
+   * https://developers.cloudflare.com/workers/configuration/secrets/
+   */
+  "vars": {
+    // Usuário do Basic Auth em /docs e /doc. A senha é um secret
+    // (`wrangler secret put DOCS_PASSWORD`), nunca fica em `vars`.
+    "DOCS_USER": "admin",
+    // Quando "true", /candidate/* responde 503 e nenhuma inscrição entra.
+    // Serve para fechar a janela de escrita durante migrations de banco:
+    // deploy com "true" -> migration -> deploy com "false".
+    // Deve estar "false" em todo deploy normal.
+    "MAINTENANCE_MODE": "false",
+    "GOOGLE_SHEET_ID": "1P1wJ4JrKv6SSbbJAKSv0RWbNgMd3lK8gknWYPZrJpxA",
+  },
+  /**
+   * Service Bindings (communicate between multiple Workers)
+   * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+   */
+  // "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
 
-	/**
-	 * Ambiente de staging (branch develop), com Worker, D1 e KV isolados da produção
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environments
-	 */
-	"env": {
-		"staging": {
-			"name": "api-staging",
-			"assets": {
-				"binding": "ASSETS",
-				"directory": "./public"
-			},
-			"d1_databases": [
-				{
-					"binding": "DB",
-					"database_name": "select-pro-staging",
-					"database_id": "8514d550-87c5-41e8-864d-5ebd762fd8c2",
-					"migrations_dir": "migrations"
-				}
-			],
-			"vars": {
-				"DOCS_USER": "admin",
-				"MAINTENANCE_MODE": "false"
-			}
-		}
-	}
+  /**
+   * Ambiente de staging (branch develop), com Worker, D1 e KV isolados da produção
+   * https://developers.cloudflare.com/workers/wrangler/configuration/#environments
+   */
+
+  "triggers": {
+    "crons": ["0 * * * *"], // Executa a cada hora, no minuto 0
+  },
+
+  "env": {
+    "staging": {
+      "name": "api-staging",
+      "assets": {
+        "binding": "ASSETS",
+        "directory": "./public",
+      },
+      "triggers": {
+        "crons": ["*/2 * * * *"], // Executa a cada hora, no minuto 0
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "select-pro-staging",
+          "database_id": "8514d550-87c5-41e8-864d-5ebd762fd8c2",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "vars": {
+        "DOCS_USER": "admin",
+        "MAINTENANCE_MODE": "false",
+        "GOOGLE_SHEET_ID": "152RZa4fQ-PPz8fU02k2PsZgyMdPvgcxS-fEC1RPOQeU",
+      },
+    },
+  },
 }

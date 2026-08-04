@@ -6,8 +6,11 @@ import { HTTPException } from "hono/http-exception";
 import { logger as honoLogger } from "hono/logger";
 import type { MiddlewareHandler } from "hono/types";
 
+import { GoogleSheetsClient } from "./lib/google-sheets";
 import { logger } from "./lib/logger";
+import { CandidateRepository } from "./repositories/candidates.repository";
 import { candidatesRouter } from "./routes/candidates.routes";
+import { SheetSyncService } from "./services/sheet-sync.service";
 
 const app = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
 
@@ -31,30 +34,30 @@ app.use("/candidate/*", cors());
  * exibe a mensagem abaixo em vez de "Algo deu errado".
  */
 app.use("/candidate/*", async (c, next) => {
-    // `wrangler types` infere o literal "false" a partir do valor commitado no
-    // wrangler.jsonc; em runtime a var vale "true" no deploy de manutenção.
-    // A anotação explícita como string é o que permite comparar os dois.
-    const maintenanceMode: string = c.env.MAINTENANCE_MODE;
+  // `wrangler types` infere o literal "false" a partir do valor commitado no
+  // wrangler.jsonc; em runtime a var vale "true" no deploy de manutenção.
+  // A anotação explícita como string é o que permite comparar os dois
+  const maintenanceMode: string = c.env.MAINTENANCE_MODE;
 
-    if (maintenanceMode !== "true") {
-        return next();
-    }
+  if (maintenanceMode !== "true") {
+    return next();
+  }
 
-    logger.warn("maintenance.blocked", { path: c.req.path });
-    return c.json(
-        {
-            error: {
-                code: "MAINTENANCE_MODE",
-                message:
-                    "As inscrições estão temporariamente indisponíveis por manutenção. Tente novamente em alguns minutos.",
-            },
-        },
-        503,
-    );
+  logger.warn("maintenance.blocked", { path: c.req.path });
+  return c.json(
+    {
+      error: {
+        code: "MAINTENANCE_MODE",
+        message:
+          "As inscrições estão temporariamente indisponíveis por manutenção. Tente novamente em alguns minutos.",
+      },
+    },
+    503,
+  );
 });
 
 app.get("/message", (c) => {
-    return c.text("Hello Hono!");
+  return c.text("Hello Hono!");
 });
 
 app.route("/candidate", candidatesRouter);
@@ -63,36 +66,86 @@ app.route("/candidate", candidatesRouter);
 // registradas via `.openapi()` (ver api/.agents/validation/SKILL.md).
 // Protegida por Basic Auth: expõe todo o schema da API (DOCS_PASSWORD via
 // `wrangler secret put`, nunca em `vars`).
-const docsAuth: MiddlewareHandler<{ Bindings: CloudflareBindings }> = (c, next) =>
-    basicAuth({ username: c.env.DOCS_USER || "admin", password: c.env.DOCS_PASSWORD })(c, next);
+const docsAuth: MiddlewareHandler<{ Bindings: CloudflareBindings }> = (
+  c,
+  next,
+) =>
+  basicAuth({
+    username: c.env.DOCS_USER || "admin",
+    password: c.env.DOCS_PASSWORD,
+  })(c, next);
 app.use("/doc", docsAuth);
 app.use("/docs", docsAuth);
 app.doc("/doc", {
-    openapi: "3.0.0",
-    info: {
-        title: "Select Pro API",
-        version: "1.0.0",
-        description: "API pública do fluxo de inscrição de candidatos (FEAT-0001 v3.0).",
-    },
+  openapi: "3.0.0",
+  info: {
+    title: "Select Pro API",
+    version: "1.0.0",
+    description:
+      "API pública do fluxo de inscrição de candidatos (FEAT-0001 v3.0).",
+  },
 });
 app.get("/docs", swaggerUI({ url: "/doc" }));
 
 app.onError((err, c) => {
-    if (err instanceof HTTPException) {
-        logger.warn("http.exception", {
-            path: c.req.path,
-            status: err.status,
-            message: err.message,
-        });
-        return err.getResponse();
-    }
-
-    logger.error("http.unhandled_error", {
-        path: c.req.path,
-        error: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
+  if (err instanceof HTTPException) {
+    logger.warn("http.exception", {
+      path: c.req.path,
+      status: err.status,
+      message: err.message,
     });
-    return c.json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } }, 500);
+    return err.getResponse();
+  }
+
+  logger.error("http.unhandled_error", {
+    path: c.req.path,
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+  return c.json(
+    { error: { code: "INTERNAL_ERROR", message: "Internal server error" } },
+    500,
+  );
 });
 
-export default app;
+/**
+ * Sincronização das inscrições com a planilha do Google (FEAT-0002).
+ *
+ * Roda pelo Cron Trigger, fora do caminho da inscrição: uma falha aqui não
+ * afeta `POST /candidate/register` de forma alguma — só atrasa a planilha.
+ *
+ * A composição das dependências acontece aqui pelo mesmo motivo que acontece no
+ * handler das rotas (`api/.agents/architecture/SKILL.md`): é o primeiro ponto
+ * com acesso ao `env`.
+ */
+const scheduled: ExportedHandlerScheduledHandler<CloudflareBindings> = async (
+  _event,
+  env,
+) => {
+  // `wrangler types` infere o literal "false" a partir do valor commitado;
+  // em runtime a var vale "true" no deploy de manutenção (ver middleware acima).
+  const maintenanceMode: string = env.MAINTENANCE_MODE;
+
+  const service = new SheetSyncService(
+    new CandidateRepository(env.DB),
+    new GoogleSheetsClient(env.GOOGLE_SERVICE_ACCOUNT_KEY, env.GOOGLE_SHEET_ID),
+    { maintenanceMode: maintenanceMode === "true" },
+  );
+
+  try {
+    await service.run();
+  } catch (err) {
+    logger.error("sheet_sync.failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    // Repropaga de propósito: o log acima dá o evento estruturado, e o throw
+    // faz a Cloudflare marcar a execução do cron como falha no painel. Sem
+    // ele, um erro recorrente ficaria invisível em qualquer métrica.
+    throw err;
+  }
+};
+
+export default {
+  fetch: app.fetch,
+  scheduled,
+} satisfies ExportedHandler<CloudflareBindings>;
