@@ -46,7 +46,12 @@
 	"vars": {
 		// Usuário do Basic Auth em /docs e /doc. A senha é um secret
 		// (`wrangler secret put DOCS_PASSWORD`), nunca fica em `vars`.
-		"DOCS_USER": "admin"
+		"DOCS_USER": "admin",
+		// Quando "true", /candidate/* responde 503 e nenhuma inscrição entra.
+		// Serve para fechar a janela de escrita durante migrations de banco:
+		// deploy com "true" -> migration -> deploy com "false".
+		// Deve estar "false" em todo deploy normal.
+		"MAINTENANCE_MODE": "false"
 	},
 	/**
 	 * Service Bindings (communicate between multiple Workers)
@@ -74,7 +79,8 @@
 				}
 			],
 			"vars": {
-				"DOCS_USER": "admin"
+				"DOCS_USER": "admin",
+				"MAINTENANCE_MODE": "false"
 			}
 		}
 	}

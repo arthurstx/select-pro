@@ -8,10 +8,45 @@ import type { Course, Ethnicity, Gender, ReferralSource, Semester } from "./data
 // `satisfies` garante que os dois não divirjam silenciosamente.
 // ============================================================
 
+/**
+ * Diferente dos outros enums deste arquivo, `course` não é espelhado por um
+ * CHECK no banco (FEAT-0001 v3.1, seção 8.1) — este schema é o único validador.
+ * Para adicionar um curso, basta incluí-lo aqui, em `Course` e em
+ * `COURSE_LABELS`; não é preciso migration.
+ */
 export const CourseSchema = z.enum(
-    ["eng-comp", "eng-civil", "eng-mecani", "eng-quimica", "eng-prod", "eng-automação", "eng-eletri", "arqui"],
+    [
+        "eng-computacao",
+        "eng-civil",
+        "eng-mecanica",
+        "eng-quimica",
+        "eng-producao",
+        "eng-automacao",
+        "eng-eletrica",
+        "arquitetura",
+    ],
     { errorMap: () => ({ message: "Selecione um curso" }) },
 ) satisfies z.ZodType<Course>;
+
+/**
+ * Nome por extenso de cada curso, para exibição. Vive aqui — e não no
+ * componente de formulário — porque todo consumidor que precise renderizar um
+ * curso (wizard, painel admin, export, email) deve ler o mesmo mapa: o slug é
+ * o que trafega e é persistido, este é o texto que o usuário lê.
+ *
+ * O `Record<Course, string>` obriga o compilador a cobrar a entrada nova sempre
+ * que um curso for adicionado a `Course`.
+ */
+export const COURSE_LABELS: Record<Course, string> = {
+    "eng-computacao": "Engenharia de Computação",
+    "eng-civil": "Engenharia Civil",
+    "eng-mecanica": "Engenharia Mecânica",
+    "eng-quimica": "Engenharia Química",
+    "eng-producao": "Engenharia de Produção",
+    "eng-automacao": "Engenharia de Automação",
+    "eng-eletrica": "Engenharia Elétrica",
+    arquitetura: "Arquitetura e Urbanismo",
+};
 
 export const SemesterSchema = z.union(
     [

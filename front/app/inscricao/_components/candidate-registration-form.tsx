@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import {
+  COURSE_LABELS,
   CourseSchema,
   GenderSchema,
   PersonalDataStepSchema,
@@ -31,16 +32,8 @@ import { WIZARD_STEPS } from "../_lib/wizard-steps";
 import { WizardNav } from "./wizard-nav";
 import { WizardShell } from "./wizard-shell";
 
-const COURSE_LABELS: Record<(typeof CourseSchema.options)[number], string> = {
-  "eng-comp": "Engenharia de Computação",
-  "eng-civil": "Engenharia Civil",
-  "eng-mecani": "Engenharia Mecânica",
-  "eng-quimica": "Engenharia Química",
-  "eng-prod": "Engenharia de Produção",
-  "eng-automação": "Engenharia de Automação",
-  "eng-eletri": "Engenharia Elétrica",
-  arqui: "Arquitetura e Urbanismo",
-};
+// COURSE_LABELS vem de `shared`: o mesmo mapa é usado por qualquer consumidor
+// que precise exibir um curso (painel, export, email), sem duplicar a lista.
 
 const GENDER_LABELS: Record<(typeof GenderSchema.options)[number], string> = {
   mascu: "Masculino",

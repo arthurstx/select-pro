@@ -17,6 +17,42 @@ app.use(honoLogger());
 // da requisição em vez de credentials, não há estado de auth para proteger.
 app.use("/candidate/*", cors());
 
+/**
+ * Modo de manutenção — fecha a janela de escrita durante migrations de banco.
+ *
+ * Migrations que reconstroem `candidates` (ver 0004) rodam em duas etapas
+ * inevitavelmente separadas no tempo: primeiro o banco, depois o deploy do
+ * Worker com os contratos novos. Sem este bloqueio, uma inscrição enviada
+ * nesse intervalo seria gravada pela versão antiga do código — com os valores
+ * antigos, e sem CHECK no banco para barrá-la.
+ *
+ * Fica depois do CORS para que o 503 chegue ao navegador como resposta da
+ * API (com os headers de origin), e não como erro de CORS — assim o front
+ * exibe a mensagem abaixo em vez de "Algo deu errado".
+ */
+app.use("/candidate/*", async (c, next) => {
+    // `wrangler types` infere o literal "false" a partir do valor commitado no
+    // wrangler.jsonc; em runtime a var vale "true" no deploy de manutenção.
+    // A anotação explícita como string é o que permite comparar os dois.
+    const maintenanceMode: string = c.env.MAINTENANCE_MODE;
+
+    if (maintenanceMode !== "true") {
+        return next();
+    }
+
+    logger.warn("maintenance.blocked", { path: c.req.path });
+    return c.json(
+        {
+            error: {
+                code: "MAINTENANCE_MODE",
+                message:
+                    "As inscrições estão temporariamente indisponíveis por manutenção. Tente novamente em alguns minutos.",
+            },
+        },
+        503,
+    );
+});
+
 app.get("/message", (c) => {
     return c.text("Hello Hono!");
 });

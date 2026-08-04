@@ -12,7 +12,7 @@ function uniqueCandidateInput() {
         name: `Candidato ${counter}`,
         email: `candidato${counter}@example.com`,
         phone: `7199999${String(counter).padStart(4, "0")}`,
-        course: "eng-comp" as const,
+        course: "eng-computacao" as const,
         semester: 3 as const,
         gender: "outro" as const,
         ethnicity: "nao-informado" as const,

@@ -2,10 +2,16 @@
 
 ID: FEAT-0001
 Módulo: Registro de candidatos
-Versão: 3.0
-Data: 2026-08-03
+Versão: 3.1
+Data: 2026-08-04
 Status: DRAFT
 
+> **Changelog v3.1 — normalização dos slugs de curso:** os valores de `Course` passaram a ser palavras inteiras e somente ASCII (`eng-comp` → `eng-computacao`, `eng-mecani` → `eng-mecanica`, `eng-prod` → `eng-producao`, `eng-eletri` → `eng-eletrica`, `arqui` → `arquitetura`, `eng-automação` → `eng-automacao`). `eng-civil` e `eng-quimica` não mudaram.
+>
+> **Motivação:** a grafia anterior misturava truncamentos arbitrários com um valor acentuado — o único não-ASCII do sistema, problemático em URL, filtro e export CSV. Junto disso, o CHECK de `course` foi removido do banco e o mapa de rótulos por extenso (`COURSE_LABELS`) saiu do componente de formulário para o pacote `shared`, de onde admin, export e email poderão consumi-lo sem duplicar. Ver os dois últimos pontos de atenção da seção 8.1.
+>
+> **Consequências:** migration `0004-normalize-course-slugs.sql` remapeia as linhas já existentes (nenhuma é apagada) e remove as tabelas de lookup `courses` e `semesters`, vazias e sem FK desde a 0001.
+>
 > **Changelog v3.0 — remoção do OTC:** o fluxo de dois passos (pré-registro → confirmação por código enviado por email) foi **eliminado**. A inscrição passa a ser um **passo único**: o candidato envia os dados do wizard e o registro é gravado direto no banco.
 >
 > **Motivação:** a etapa de confirmação por email era o ponto mais frágil do fluxo e não protegia nada que o produto realmente precisasse proteger. Modos de falha observados/previstos: o email não chega (spam, filtro do domínio institucional, atraso do provedor), o candidato desiste no meio do processo depois de já ter preenchido as 6 etapas, o candidato fecha a aba e perde o `pendingId` (que só vivia em memória). Em todos esses casos a inscrição era **perdida silenciosamente** — o candidato acreditava ter se inscrito e não estava no banco. Trocamos a verificação de posse do email por uma taxa de conversão previsível.
@@ -115,15 +121,19 @@ Para eu poder ser avaliado posteriormente na aplicação.
 
 ```ts
 // Entidade definitiva — criada no momento da inscrição
+// Slugs normalizados na v3.1: palavra inteira e somente ASCII. A grafia
+// anterior misturava truncamentos arbitrários (`eng-comp`, `eng-mecani`,
+// `eng-eletri`, `arqui`) com um valor acentuado (`eng-automação`), o único
+// não-ASCII do sistema — problemático em URL, filtro e export CSV.
 type Course =
-  | "eng-comp"
+  | "eng-computacao"
   | "eng-civil"
-  | "eng-mecani"
+  | "eng-mecanica"
   | "eng-quimica"
-  | "eng-prod"
-  | "eng-automação"
-  | "eng-eletri"
-  | "arqui";
+  | "eng-producao"
+  | "eng-automacao"
+  | "eng-eletrica"
+  | "arquitetura";
 
 type Semester = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
@@ -180,6 +190,8 @@ interface CandidateApplicationRow {
 - `referral_source_other` é **condicionalmente obrigatório**: exigido (não vazio) quando `referral_source === "outros"`, e normalizado para `null` em todas as outras opções — mesmo que o cliente envie um valor. A regra vive no schema Zod compartilhado (validação) e na normalização do service (persistência); o banco aceita a coluna como `TEXT` nullable, sem CHECK cruzado entre colunas.
 - Unicidade de `email`/`phone` é garantida via constraint `unique` no banco. A checagem prévia (passo 2 do fluxo 4.1) existe para dar uma mensagem melhor no caso comum; a constraint é quem garante a invariante.
 - O insert de `candidates` e `candidate_applications` roda como um único batch — ver seção 9.
+- **`course` não tem CHECK no banco (decisão v3.1).** O conjunto de cursos é o único enum do contrato que se espera crescer (um curso novo a cada processo seletivo). No SQLite, alterar um CHECK exige recriar a tabela inteira — e `candidates` tem três filhos, dois com `ON DELETE CASCADE`, o que torna cada rebuild uma operação de risco sobre dados de produção. Por isso o enum vive só em `CourseSchema` (`shared`), que já valida no front e na API: adicionar um curso passa a ser uma linha em `shared`, sem migration. `gender`, `ethnicity`, `semester` e os demais enums seguem com CHECK — são conjuntos fechados e estáveis.
+- Não há tabela de lookup de cursos. As tabelas `courses` e `semesters` existiram vazias e sem nenhuma FK apontando para elas desde a 0001, e foram removidas na migration 0004 — trabalhar com ID de curso exigiria manter linhas de lookup para um conjunto que já é constante no código.
 
 ### 8.2 Request Body
 
@@ -190,7 +202,7 @@ interface CandidateApplicationRow {
   "name": "string",
   "email": "string",
   "phone": "string",
-  "course": "eng-comp",
+  "course": "eng-computacao",
   "semester": 1,
   "gender": "mascu",
   "ethnicity": "nao-informado",

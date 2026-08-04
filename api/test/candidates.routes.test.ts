@@ -1,5 +1,7 @@
-import { SELF } from "cloudflare:test";
+import { env, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+
+import app from "../src/index";
 
 /**
  * Testes de HTTP end-to-end (rota real, D1 real via miniflare). Desde a v3.0
@@ -13,7 +15,7 @@ function uniqueCandidateInput() {
         name: `Candidato Route ${counter}`,
         email: `candidato-route-${counter}@example.com`,
         phone: `7188888${String(counter).padStart(4, "0")}`,
-        course: "eng-comp",
+        course: "eng-computacao",
         semester: 3,
         gender: "outro",
         ethnicity: "nao-informado",
@@ -114,5 +116,37 @@ describe("POST /candidate/register (HTTP)", () => {
         const body = await res.json<{ error: { code: string; field?: string } }>();
         expect(body.error.code).toBe("PHONE_ALREADY_REGISTERED");
         expect(body.error.field).toBe("phone");
+    });
+});
+
+/**
+ * O middleware lê `MAINTENANCE_MODE` do env, então aqui o app é chamado
+ * direto (`app.fetch`) com um env customizado — `SELF` sempre usa o env fixo
+ * do wrangler.jsonc, onde a var é "false".
+ */
+describe("Modo de manutenção", () => {
+    function postRegisterWith(maintenanceMode: string) {
+        const request = new Request("http://local.test/candidate/register", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(uniqueCandidateInput()),
+        });
+
+        return app.fetch(request, { ...env, MAINTENANCE_MODE: maintenanceMode });
+    }
+
+    it('bloqueia inscrição com 503 quando MAINTENANCE_MODE = "true"', async () => {
+        const res = await postRegisterWith("true");
+
+        expect(res.status).toBe(503);
+        const body = await res.json<{ error: { code: string; message: string } }>();
+        expect(body.error.code).toBe("MAINTENANCE_MODE");
+        expect(body.error.message).toMatch(/manutenção/i);
+    });
+
+    it('deixa passar normalmente quando MAINTENANCE_MODE = "false"', async () => {
+        const res = await postRegisterWith("false");
+
+        expect(res.status).toBe(201);
     });
 });

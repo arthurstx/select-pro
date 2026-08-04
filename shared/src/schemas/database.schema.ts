@@ -22,15 +22,22 @@ export type EvaluationStatus = "RED" | "YELLOW" | "GREEN";
 // Candidato — enums definidos em FEAT-0001 (seção 8.1)
 // ------------------------------------------------------------
 
+/**
+ * Slugs normalizados na v3.1 (FEAT-0001, seção 8.1): palavra inteira e somente
+ * ASCII. Diferente dos demais enums, `course` **não** tem CHECK no banco — é o
+ * único conjunto que se espera crescer, e alterar um CHECK no SQLite exige
+ * recriar `candidates` inteira (que tem três filhos, dois em CASCADE). Este
+ * tipo e `CourseSchema` são, juntos, a única fonte de verdade.
+ */
 export type Course =
-    | "eng-comp"
+    | "eng-computacao"
     | "eng-civil"
-    | "eng-mecani"
+    | "eng-mecanica"
     | "eng-quimica"
-    | "eng-prod"
-    | "eng-automação"
-    | "eng-eletri"
-    | "arqui";
+    | "eng-producao"
+    | "eng-automacao"
+    | "eng-eletrica"
+    | "arquitetura";
 
 export type Semester = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
@@ -54,15 +61,10 @@ export interface RoleRow {
     value: string;
 }
 
-export interface CourseRow {
-    id: string;
-    value: string;
-}
-
-export interface SemesterRow {
-    id: string;
-    value: string;
-}
+// `CourseRow`/`SemesterRow` foram removidos na v3.1 junto com as tabelas
+// `courses` e `semesters` (migration 0004): nasceram como lookup na 0001, mas
+// ficaram vazias e sem nenhuma FK apontando para elas. Curso e semestre são
+// literais validados por `CourseSchema`/`SemesterSchema`, não referências.
 
 export interface RoomRow {
     id: string;
@@ -191,8 +193,6 @@ export interface EvaluationRow {
 // ============================================================
 
 export type NewRole = RoleRow;
-export type NewCourse = CourseRow;
-export type NewSemester = SemesterRow;
 export type NewRoom = RoomRow;
 export type NewMetric = MetricRow;
 
@@ -274,8 +274,6 @@ export interface EvaluationWithRelations extends EvaluationRow {
 
 export interface DatabaseSchema {
     roles: RoleRow;
-    courses: CourseRow;
-    semesters: SemesterRow;
     rooms: RoomRow;
     metrics: MetricRow;
     users: UserRow;
