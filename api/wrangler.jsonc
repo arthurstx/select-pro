@@ -75,7 +75,7 @@
         "directory": "./public",
       },
       "triggers": {
-        "crons": ["*/2 * * * *"], // Executa a cada hora, no minuto 0
+        "crons": ["* /12 * * *"], // Executa a cada hora, no minuto 0
       },
       "d1_databases": [
         {
