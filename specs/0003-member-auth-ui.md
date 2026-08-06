@@ -4,7 +4,7 @@ ID: FEAT-0003-UI
 Módulo: Acesso à aplicação — Camada de UI
 Versão: 1.0
 Data: 2026-08-06
-Status: DRAFT
+Status: APPROVED
 Depende de: FEAT-0003 (backend) v1.2
 Design: Stitch — projeto "Design System Integration" (ID `15618719394726153851`)
 
@@ -278,7 +278,8 @@ Levantadas na leitura do HTML e dos screenshots do projeto Stitch. Nenhuma é bl
 - **A tela "Verificação de Código (Mobile)" está fora desta feature.** Ela implica um fluxo de OTC de 6 dígitos ("Enviar Código" → 6 campos de 1 dígito → "Reenviar"), incompatível com o token em link definido no backend. Um código de 6 dígitos são 10⁶ combinações contra 2²⁵⁶ do token, e só seria seguro com limite de tentativas por código — coluna e regra que o backend não tem. **Decisão tomada:** fica o link. A tela não deve ser implementada, e o botão "Enviar Código" das telas de recuperação precisa virar algo como "Enviar link de recuperação".
 - **Falta a tela de definição de nova senha** (seção 3) — bloqueante para o fluxo de recuperação funcionar. A confirmação do envio é mensagem inline, não tela, e não precisa de mockup próprio.
 - **Faltam todos os estados que não sejam o neutro.** Erro, loading, sucesso e campo inválido não existem em nenhum mockup — e é onde vive a maior parte da regra desta feature (seção 7).
-- **Tailwind v3 no output, v4 no projeto.** O Stitch gerou `cdn.tailwindcss.com` + `tailwind.config = {...}`, sintaxe v3. O `front/AGENTS.md` exige v4 e proíbe config obsoleta do v3 explicitamente. Os tokens (paleta Material 3, spacing, `fontSize`) precisam ser portados para `@theme` no CSS. O HTML do Stitch é **referência visual, não código para colar**.
+- **Reusar o design system que já existe — não portar a paleta do Stitch.** O `front/app/globals.css` já tem Tailwind v4 com tokens semânticos (`--primary: #c8181e`, `--background`, `--foreground`, `--destructive`, `--ring`…) e variante `.dark`, estabelecidos na FEAT-0001-UI. E `components/ui/` já tem `input`, `button`, `label`, `field`, `alert`, `spinner`, `checkbox`, `select`, `textarea`, `radio-group`. O `--primary` existente **é** o vermelho dos botões destas telas. As telas de auth devem consumir esses tokens e primitivos; o único valor realmente novo é o azul institucional do painel de branding (`#002B5C` no HTML do Stitch), que entra como token novo em vez de cor solta.
+- **O HTML do Stitch é referência visual, não código para colar.** Ele veio em Tailwind v3 (`cdn.tailwindcss.com` + `tailwind.config = {...}`, proibido pelo `front/AGENTS.md`) e com uma paleta Material 3 (`on-secondary-fixed`, `surface-container-lowest`) que é um sistema diferente do que o projeto usa. Copiar as classes de lá cria um segundo design system dentro do mesmo app.
 - **Fontes por `<link>` do Google Fonts.** Outfit e Inter devem entrar por `next/font`; Material Symbols precisa ser auto-hospedado ou substituído por uma biblioteca de ícones — um `<link>` para CDN de fonte custa render-blocking e uma dependência externa em cada carregamento.
 - **Dois azuis institucionais competindo.** `#002B5C` aparece hardcoded (`bg-deep-blue`, e de novo inline na tela de recuperação) enquanto o token set define `on-secondary-fixed: #001b3e` para o mesmo papel. Escolher um antes de replicar em quatro telas.
 - **A tela de recuperação tem identidade visual diferente das outras.** Login e Cadastro usam o mesmo painel esquerdo (logo em caixa translúcida, "Portal de Gestão Técnica"); a de recuperação usa padrão de pontos, "CIMATEC Jr." com ponto final e "Sistema Corporativo Restrito". No mobile a divergência é maior ainda. Consolidar.

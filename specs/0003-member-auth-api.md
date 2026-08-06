@@ -4,7 +4,7 @@ ID: FEAT-0003
 Módulo: Acesso à aplicação (membros da CIMATEC jr)
 Versão: 1.2
 Data: 2026-08-06
-Status: DRAFT
+Status: APPROVED
 
 > **Changelog v1.2 — recuperação de senha entra no escopo, e o Resend volta ao projeto.** O que era FEAT-0004 passa a fazer parte desta spec: `POST /auth/forgot-password` e `POST /auth/reset-password`, com email enviado via Resend fora do caminho crítico (`waitUntil`) e **sem fila**. Com isso o provedor de email, removido na FEAT-0001 v3.0, volta a ser dependência do projeto — mas de um fluxo cujo dono é um membro identificado, não do fluxo público de inscrição, que segue sem nenhuma dependência externa.
 >

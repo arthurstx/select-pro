@@ -53,6 +53,19 @@ export type Ethnicity = "branca" | "preta" | "parda" | "amarela" | "indigena" | 
 export type ReferralSource = "instagram" | "linkedin" | "campus" | "indicacao" | "outros";
 
 // ------------------------------------------------------------
+// Membro da CIMATEC jr — FEAT-0003 (seção 8.1)
+// ------------------------------------------------------------
+
+/**
+ * Status do membro no banco da tec (Supabase). Diferente dos demais enums
+ * deste arquivo, **não** é espelhado por CHECK em lugar nenhum: a coluna é
+ * TEXT livre na origem e `member_profiles.status` guarda o valor como veio.
+ * Documenta o conjunto esperado; quem decide elegibilidade é
+ * `isEligibleMemberStatus` (`member.schema.ts`).
+ */
+export type MemberStatus = "active" | "inactive" | "alumni" | "on_leave";
+
+// ------------------------------------------------------------
 // Tabelas de referência
 // ------------------------------------------------------------
 
@@ -87,12 +100,105 @@ export interface UserRow {
     id: string;
     role_id: string;
 
+    /** Sempre normalizado (trim + lowercase) antes de persistir — ver `EmailSchema`. */
     email: string;
     name: string;
+    /** Hash PBKDF2 no formato `pbkdf2-sha256$<iterations>$<salt>$<hash>` (FEAT-0003, seção 9). */
     password: string | null;
+
+    /**
+     * Novo em FEAT-0003 — desativação manual. `null` = ativo.
+     *
+     * Existe porque a validação contra o banco da tec acontece só no cadastro:
+     * quem sai da empresa continua com conta funcionando até alguém preencher
+     * esta coluna. É o passo operacional que paga por manter a Supabase fora
+     * do caminho crítico do login.
+     */
+    deactivated_at: string | null;
 
     created_at: string;
     updated_at: string | null;
+}
+
+/**
+ * Snapshot 1:1 do que a tec sabia sobre o membro **no momento do cadastro**.
+ *
+ * Mesmo padrão de `candidates` + `candidate_applications`: `users` fica com
+ * identidade e credencial, o resto sai de lá. Não é ressincronizado — daí o
+ * `synced_at`, que deixa explícito o quão velho o dado é.
+ */
+export interface MemberProfileRow {
+    id: string;
+    /** FK unique -> users.id (garante o 1:1). */
+    user_id: string;
+    /**
+     * Id do membro na Supabase — a única chave de correlação estável com a
+     * tec. O email pode mudar; este não.
+     */
+    member_id: number;
+
+    full_name: string;
+    phone: string;
+    birth_date: string | null;
+
+    /**
+     * `course`, `gender`, `ethnicity` e `status` guardam o valor **cru** da
+     * origem, sem CHECK e sem conversão para os enums da aplicação. São dados
+     * de um sistema que não controlamos: aplicar nossas constraints faria o
+     * cadastro falhar por um valor que o membro não pode corrigir.
+     */
+    course: string;
+    semester: number;
+    gender: string;
+    ethnicity: string;
+    status: string;
+
+    /** Cargo na empresa. Gravado por completude — **não** define papel na aplicação. */
+    manager: boolean;
+
+    synced_at: string;
+
+    created_at: string;
+    updated_at: string | null;
+}
+
+/**
+ * Uma linha por refresh token emitido. Rotação cria uma linha nova e revoga a
+ * anterior; reapresentar um token já revogado é reuso e derruba a família
+ * inteira (FEAT-0003, seção 4.3).
+ */
+export interface SessionRow {
+    /** UUID v4 — vai no claim `sid` do access token. */
+    id: string;
+    user_id: string;
+
+    /** SHA-256 (hex) do token opaco. O token em claro nunca é gravado. */
+    refresh_token_hash: string;
+    /** Agrupa a cadeia de rotações originada de um mesmo login. */
+    family_id: string;
+
+    expires_at: string;
+    /** Preenchido na rotação, no logout ou na detecção de reuso. */
+    revoked_at: string | null;
+
+    user_agent: string | null;
+
+    created_at: string;
+}
+
+/** Uma linha por pedido de recuperação de senha. Uso único, validade de 30 min. */
+export interface PasswordResetTokenRow {
+    id: string;
+    user_id: string;
+
+    /** SHA-256 (hex) do token enviado no link. */
+    token_hash: string;
+
+    expires_at: string;
+    /** Preenchido no uso e na invalidação por um pedido mais novo. */
+    used_at: string | null;
+
+    created_at: string;
 }
 
 export interface CandidateRow {
@@ -196,9 +302,25 @@ export type NewRole = RoleRow;
 export type NewRoom = RoomRow;
 export type NewMetric = MetricRow;
 
-export type NewUser = Omit<UserRow, "created_at" | "updated_at"> & {
+export type NewUser = Omit<UserRow, "deactivated_at" | "created_at" | "updated_at"> & {
+    deactivated_at?: string | null;
     created_at?: string;
     updated_at?: string | null;
+};
+
+export type NewMemberProfile = Omit<MemberProfileRow, "created_at" | "updated_at"> & {
+    created_at?: string;
+    updated_at?: string | null;
+};
+
+export type NewSession = Omit<SessionRow, "revoked_at" | "created_at"> & {
+    revoked_at?: string | null;
+    created_at?: string;
+};
+
+export type NewPasswordResetToken = Omit<PasswordResetTokenRow, "used_at" | "created_at"> & {
+    used_at?: string | null;
+    created_at?: string;
 };
 
 export type NewCandidate = Omit<CandidateRow, "created_at" | "updated_at"> & {
@@ -234,6 +356,8 @@ export type NewEvaluation = Omit<
 // ============================================================
 
 export type UserUpdate = Partial<Omit<UserRow, "id">> & { id: string };
+export type MemberProfileUpdate = Partial<Omit<MemberProfileRow, "id">> & { id: string };
+export type SessionUpdate = Partial<Omit<SessionRow, "id">> & { id: string };
 export type CandidateUpdate = Partial<Omit<CandidateRow, "id">> & { id: string };
 export type CandidateApplicationUpdate = Partial<Omit<CandidateApplicationRow, "id">> & { id: string };
 export type GroupUpdate = Partial<Omit<GroupRow, "id">> & { id: string };
@@ -277,6 +401,9 @@ export interface DatabaseSchema {
     rooms: RoomRow;
     metrics: MetricRow;
     users: UserRow;
+    member_profiles: MemberProfileRow;
+    sessions: SessionRow;
+    password_reset_tokens: PasswordResetTokenRow;
     candidates: CandidateRow;
     candidate_applications: CandidateApplicationRow;
     groups: GroupRow;
