@@ -30,3 +30,20 @@ export async function toApiError(response: Response): Promise<ApiError> {
     parsed.data.error.field,
   );
 }
+
+/**
+ * Lê apenas o `code` do envelope de erro sem consumir o corpo da Response
+ * original — quem chamou ainda precisa poder lê-lo.
+ *
+ * Retorna `null` quando o corpo não segue o envelope (ex: `429` devolvido pelo
+ * edge da Cloudflare, que não passa pelo Worker e não tem envelope nenhum).
+ */
+export async function readErrorCode(response: Response): Promise<string | null> {
+  const body = await response
+    .clone()
+    .json()
+    .catch(() => null);
+  const parsed = ErrorResponseSchema.safeParse(body);
+
+  return parsed.success ? parsed.data.error.code : null;
+}

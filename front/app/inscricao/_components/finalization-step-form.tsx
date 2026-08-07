@@ -5,12 +5,12 @@ import { RegisterRequestSchema } from "shared";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
+import { ApiError } from "@/lib/api/api-error";
 import { cn } from "@/lib/utils";
 
 import { useRegistration } from "../_context/registration-context";
 import { useRegister } from "../_hooks/use-register";
 import { useWizardGuard } from "../_hooks/use-wizard-guard";
-import { ApiError } from "../_lib/api-error";
 import { WIZARD_STEPS } from "../_lib/wizard-steps";
 import { WizardNav } from "./wizard-nav";
 import { WizardShell } from "./wizard-shell";
