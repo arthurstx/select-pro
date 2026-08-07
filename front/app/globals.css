@@ -38,6 +38,16 @@
   --border: #e5e5e5;
   --input: #d1d1d1;
   --ring: #c8181e;
+
+  /*
+   * Azul institucional do painel de branding das telas de auth
+   * (FEAT-0003-UI, seção 12). Entra como token porque o HTML do Stitch trazia
+   * dois azuis concorrentes para o mesmo papel (`#002B5C` hardcoded e
+   * `on-secondary-fixed: #001b3e`); aqui existe um só. Herdado pelo `.dark` —
+   * o painel já é escuro nas duas variantes.
+   */
+  --brand-navy: #002b5c;
+  --brand-navy-foreground: #ffffff;
 }
 
 .dark {
@@ -100,6 +110,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-foreground: var(--brand-navy-foreground);
 
   --font-sans: var(--font-inter);
   --font-heading: var(--font-outfit);
