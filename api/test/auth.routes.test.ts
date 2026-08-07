@@ -545,6 +545,39 @@ describe("Modo de manutenção em /auth/*", () => {
     });
 });
 
+describe("Documentação OpenAPI", () => {
+    it("continua sendo gerada com as rotas de /auth registradas", async () => {
+        // `@hono/zod-openapi` monta o documento sob demanda e estoura em coisas
+        // que passam despercebidas no runtime das rotas (schema não suportado,
+        // componente duplicado). Sem este teste a quebra só apareceria em /docs.
+        const response = await call(
+            new Request("http://local.test/doc", {
+                headers: { Authorization: `Basic ${btoa("admin:senha-de-teste")}` },
+            }),
+            { DOCS_USER: "admin", DOCS_PASSWORD: "senha-de-teste" },
+        );
+
+        expect(response.status).toBe(200);
+        const doc = await response.json<{
+            paths: Record<string, unknown>;
+            components?: { securitySchemes?: Record<string, unknown> };
+        }>();
+
+        expect(Object.keys(doc.paths)).toEqual(
+            expect.arrayContaining([
+                "/auth/register",
+                "/auth/login",
+                "/auth/refresh",
+                "/auth/logout",
+                "/auth/me",
+                "/auth/forgot-password",
+                "/auth/reset-password",
+            ]),
+        );
+        expect(doc.components?.securitySchemes).toHaveProperty("Bearer");
+    });
+});
+
 describe("Escopo do cookie", () => {
     it("o refresh token fica em Path=/auth e não acompanha requisições de negócio", async () => {
         const { response } = await registerViaHttp();
