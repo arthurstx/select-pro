@@ -49,8 +49,24 @@
     // Serve para fechar a janela de escrita durante migrations de banco:
     // deploy com "true" -> migration -> deploy com "false".
     // Deve estar "false" em todo deploy normal.
+    // Quando "true", /candidate/* e /auth/* respondem 503 (FEAT-0003, seção 9):
+    // uma migration que toque users/sessions precisa da mesma janela fechada.
     "MAINTENANCE_MODE": "false",
     "GOOGLE_SHEET_ID": "1P1wJ4JrKv6SSbbJAKSv0RWbNgMd3lK8gknWYPZrJpxA",
+    // ⚠️ PREENCHER ANTES DO DEPLOY — os três valores abaixo são placeholders.
+    //
+    // Banco da tec (Supabase), consultado só em POST /auth/register. A
+    // service_role key é secret (`wrangler secret put SUPABASE_SERVICE_ROLE_KEY`)
+    // e nunca pode aparecer aqui: ela ignora RLS e dá acesso total ao banco.
+    "SUPABASE_URL": "https://PREENCHER.supabase.co",
+    // Allowlist de CORS de /auth/*. Aceita lista separada por vírgula.
+    // Diferente de /candidate/*, aqui a origin NÃO pode ser refletida: com
+    // `credentials: true` isso entregaria o cookie de sessão a qualquer site.
+    // É também a base do link do email de recuperação (a primeira da lista).
+    "FRONT_ORIGIN": "https://PREENCHER.vercel.app",
+    // Remetente do email de recuperação de senha. Precisa ser um domínio
+    // verificado no Resend; a chave em si é secret (RESEND_API_KEY).
+    "RESEND_FROM_EMAIL": "acesso@PREENCHER.com.br",
   },
   /**
    * Service Bindings (communicate between multiple Workers)
@@ -89,6 +105,21 @@
         "DOCS_USER": "admin",
         "MAINTENANCE_MODE": "false",
         "GOOGLE_SHEET_ID": "152RZa4fQ-PPz8fU02k2PsZgyMdPvgcxS-fEC1RPOQeU",
+        // ⚠️ PREENCHER ANTES DO DEPLOY — placeholders (ver comentários na
+        // seção `vars` de produção).
+        //
+        // Staging pode (e deve) apontar para um projeto Supabase separado: um
+        // cadastro de teste que consulte o banco real da tec não estraga nada,
+        // mas o inverso — apontar produção para dados de teste — cria conta
+        // para quem não é membro.
+        "SUPABASE_URL": "https://PREENCHER-staging.supabase.co",
+        // Inclui o localhost do Next para desenvolvimento contra a API de
+        // staging. Vale lembrar que o cookie de refresh é `Secure`, então ele
+        // não é gravado em `http://localhost` — só o access token funciona aí.
+        "FRONT_ORIGIN": "https://PREENCHER-staging.vercel.app,http://localhost:3000",
+        // `onboarding@resend.dev` é o remetente de teste do Resend: dispensa
+        // domínio verificado, mas só entrega para o dono da conta.
+        "RESEND_FROM_EMAIL": "onboarding@resend.dev",
       },
     },
   },

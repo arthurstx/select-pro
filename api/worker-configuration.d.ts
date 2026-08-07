@@ -7,8 +7,14 @@ interface __BaseEnv_CloudflareBindings {
 	DOCS_USER: "admin";
 	MAINTENANCE_MODE: "false";
 	GOOGLE_SHEET_ID: "152RZa4fQ-PPz8fU02k2PsZgyMdPvgcxS" | "1P1wJ4JrKv6SSbbJAKSv0RWbNgMd3lK8gknWYPZrJpxA";
+	SUPABASE_URL: string;
+	FRONT_ORIGIN: string;
+	RESEND_FROM_EMAIL: string;
 	DOCS_PASSWORD: string;
 	GOOGLE_SERVICE_ACCOUNT_KEY: string;
+	JWT_SECRET: string;
+	SUPABASE_SERVICE_ROLE_KEY: string;
+	RESEND_API_KEY: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
@@ -20,8 +26,14 @@ declare namespace Cloudflare {
 		DOCS_USER: "admin";
 		MAINTENANCE_MODE: "false";
 		GOOGLE_SHEET_ID: "152RZa4fQ-PPz8fU02k2PsZgyMdPvgcxS";
+		SUPABASE_URL: string;
+		FRONT_ORIGIN: string;
+		RESEND_FROM_EMAIL: string;
 		DOCS_PASSWORD: string;
 		GOOGLE_SERVICE_ACCOUNT_KEY: string;
+		JWT_SECRET: string;
+		SUPABASE_SERVICE_ROLE_KEY: string;
+		RESEND_API_KEY: string;
 	}
 	interface Env extends __BaseEnv_CloudflareBindings {}
 }

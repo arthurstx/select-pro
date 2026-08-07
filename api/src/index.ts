@@ -8,7 +8,9 @@ import type { MiddlewareHandler } from "hono/types";
 
 import { GoogleSheetsClient } from "./lib/google-sheets";
 import { logger } from "./lib/logger";
+import { AuthRepository } from "./repositories/auth.repository";
 import { CandidateRepository } from "./repositories/candidates.repository";
+import { authRouter } from "./routes/auth.routes";
 import { candidatesRouter } from "./routes/candidates.routes";
 import { SheetSyncService } from "./services/sheet-sync.service";
 
@@ -19,6 +21,31 @@ app.use(honoLogger());
 // Fluxo público sem sessão/cookies (FEAT-0001-UI, seção 2) — reflete a origin
 // da requisição em vez de credentials, não há estado de auth para proteger.
 app.use("/candidate/*", cors());
+
+/**
+ * CORS de `/auth/*` — separado do de `/candidate/*`, e não por organização.
+ *
+ * O `cors()` acima **reflete** a origin de quem chama. Isso é correto para um
+ * fluxo público sem credenciais, e é inaceitável aqui: `credentials: true` com
+ * origin refletida entrega o cookie de sessão a qualquer site que peça. Este
+ * middleware usa allowlist explícita, vinda da var `FRONT_ORIGIN`
+ * (FEAT-0003, seção 9).
+ *
+ * Instanciado dentro do handler porque `cors()` precisa do valor de `c.env`,
+ * que só existe por requisição — mesmo motivo do `docsAuth` mais abaixo.
+ */
+app.use("/auth/*", (c, next) =>
+  cors({
+    // Aceita lista separada por vírgula (produção + previews da Vercel). O
+    // middleware devolve no `Access-Control-Allow-Origin` apenas a origin que
+    // casar, nunca a lista inteira.
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
 
 /**
  * Modo de manutenção — fecha a janela de escrita durante migrations de banco.
@@ -33,34 +60,59 @@ app.use("/candidate/*", cors());
  * API (com os headers de origin), e não como erro de CORS — assim o front
  * exibe a mensagem abaixo em vez de "Algo deu errado".
  */
-app.use("/candidate/*", async (c, next) => {
-  // `wrangler types` infere o literal "false" a partir do valor commitado no
-  // wrangler.jsonc; em runtime a var vale "true" no deploy de manutenção.
-  // A anotação explícita como string é o que permite comparar os dois
-  const maintenanceMode: string = c.env.MAINTENANCE_MODE;
+function maintenanceGuard(
+  message: string,
+): MiddlewareHandler<{ Bindings: CloudflareBindings }> {
+  return async (c, next) => {
+    // `wrangler types` infere o literal "false" a partir do valor commitado no
+    // wrangler.jsonc; em runtime a var vale "true" no deploy de manutenção.
+    // A anotação explícita como string é o que permite comparar os dois
+    const maintenanceMode: string = c.env.MAINTENANCE_MODE;
 
-  if (maintenanceMode !== "true") {
-    return next();
-  }
+    if (maintenanceMode !== "true") {
+      return next();
+    }
 
-  logger.warn("maintenance.blocked", { path: c.req.path });
-  return c.json(
-    {
-      error: {
-        code: "MAINTENANCE_MODE",
-        message:
-          "As inscrições estão temporariamente indisponíveis por manutenção. Tente novamente em alguns minutos.",
-      },
-    },
-    503,
-  );
-});
+    logger.warn("maintenance.blocked", { path: c.req.path });
+    return c.json({ error: { code: "MAINTENANCE_MODE", message } }, 503);
+  };
+}
+
+app.use(
+  "/candidate/*",
+  maintenanceGuard(
+    "As inscrições estão temporariamente indisponíveis por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+/**
+ * O mesmo bloqueio cobre `/auth/*` (FEAT-0003, seção 9).
+ *
+ * Uma migration que toque `users`, `sessions` ou `member_profiles` precisa da
+ * mesma janela fechada que `/candidate/*` já tinha — e cadastro, login e
+ * refresh escrevem nas três. A mensagem é própria porque quem está tentando
+ * entrar na aplicação não está se inscrevendo em processo seletivo nenhum.
+ */
+app.use(
+  "/auth/*",
+  maintenanceGuard(
+    "O acesso está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
 
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
 
 app.route("/candidate", candidatesRouter);
+app.route("/auth", authRouter);
+
+// Declara o esquema Bearer para as rotas protegidas (`security: [{ Bearer: [] }]`).
+app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
+  type: "http",
+  scheme: "bearer",
+  bearerFormat: "JWT",
+});
 
 // Documentação OpenAPI — gerada a partir dos schemas Zod das rotas
 // registradas via `.openapi()` (ver api/.agents/validation/SKILL.md).
@@ -109,10 +161,11 @@ app.onError((err, c) => {
 });
 
 /**
- * Sincronização das inscrições com a planilha do Google (FEAT-0002).
+ * Trabalho periódico do Worker, pelo Cron Trigger que já roda de hora em hora.
  *
- * Roda pelo Cron Trigger, fora do caminho da inscrição: uma falha aqui não
- * afeta `POST /candidate/register` de forma alguma — só atrasa a planilha.
+ * Duas tarefas independentes: sincronizar as inscrições com a planilha
+ * (FEAT-0002) e limpar sessões e tokens vencidos (FEAT-0003, seção 9). Nenhuma
+ * das duas está no caminho de uma requisição de usuário.
  *
  * A composição das dependências acontece aqui pelo mesmo motivo que acontece no
  * handler das rotas (`api/.agents/architecture/SKILL.md`): é o primeiro ponto
@@ -132,16 +185,39 @@ const scheduled: ExportedHandlerScheduledHandler<CloudflareBindings> = async (
     { maintenanceMode: maintenanceMode === "true" },
   );
 
+  // As duas rodam sempre, mesmo que a primeira falhe: são tarefas sem relação
+  // entre si, e deixar a planilha fora do ar impedir a limpeza do banco faria
+  // um problema virar dois.
+  const failures: unknown[] = [];
+
   try {
     await service.run();
   } catch (err) {
     logger.error("sheet_sync.failed", {
       error: err instanceof Error ? err.message : String(err),
     });
-    // Repropaga de propósito: o log acima dá o evento estruturado, e o throw
-    // faz a Cloudflare marcar a execução do cron como falha no painel. Sem
-    // ele, um erro recorrente ficaria invisível em qualquer métrica.
-    throw err;
+    failures.push(err);
+  }
+
+  try {
+    // A rotação de refresh token grava uma linha por renovação: uma sessão
+    // ativa por 7 dias deixa centenas de linhas para trás. Sem esta limpeza,
+    // `sessions` cresce sem teto contra o limite de linhas do D1 no plano Free.
+    await new AuthRepository(env.DB).pruneExpired();
+    logger.info("auth.prune.success", {});
+  } catch (err) {
+    logger.error("auth.prune.failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    failures.push(err);
+  }
+
+  // Repropaga de propósito: os logs acima dão os eventos estruturados, e o
+  // throw faz a Cloudflare marcar a execução do cron como falha no painel. Sem
+  // ele, um erro recorrente ficaria invisível em qualquer métrica.
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) {
+    throw new AggregateError(failures, "Falhas no cron do Worker");
   }
 };
 
