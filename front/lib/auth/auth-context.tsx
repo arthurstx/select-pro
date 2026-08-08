@@ -13,18 +13,13 @@ import {
   setAccessToken,
 } from "./session";
 
-/**
- * `loading` é o estado do boot (seção 4.5) e **não é opcional**: enquanto o
- * `/auth/refresh` não responde, nenhuma rota protegida decide nada — nem
- * renderiza, nem redireciona. Sem ele, todo reload da área logada pisca a tela
- * de login antes de reconstruir a sessão.
- */
+/** Estado do boot: enquanto `/auth/refresh` não responde, nenhuma rota protegida decide nada. */
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
-  /** Só existe depois de um `GET /auth/me` — o login/cadastro não devolvem perfil. */
+  /** Só existe depois de um `GET /auth/me` — login/cadastro não devolvem perfil. */
   profile: MemberProfileSummary | null;
   signIn: (payload: LoginDTO) => Promise<void>;
   signUp: (payload: RegisterMemberDTO) => Promise<void>;
@@ -39,12 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<MemberProfileSummary | null>(null);
 
-  // Reidratação no boot (seção 4.5): o access token morreu no reload, mas o
-  // cookie de refresh sobreviveu. Ele é quem reconstrói a sessão.
-  //
-  // Em desenvolvimento o Strict Mode roda este efeito duas vezes — e as duas
-  // execuções caem no mesmo `refreshSession()` em curso, resultando em UMA
-  // chamada de rede. É o single-flight da seção 8.3 valendo na prática.
+  // Reidratação no boot: o access token morreu no reload, o cookie de refresh sobreviveu.
   useEffect(() => {
     let cancelled = false;
 
@@ -65,8 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(memberProfile);
         setStatus("authenticated");
       } catch {
-        // Renovou mas não conseguiu ler o usuário: segue como visitante em vez
-        // de fingir uma sessão pela metade.
+        // Renovou mas não conseguiu ler o usuário: segue como visitante.
         if (cancelled) return;
         clearAccessToken();
         setStatus("unauthenticated");
@@ -80,7 +69,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Sessão encerrada por decisão do backend (seção 7.5).
   useEffect(
     () =>
       onSessionEnd(() => {

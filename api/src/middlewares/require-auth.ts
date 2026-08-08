@@ -4,12 +4,6 @@ import { AccessTokenExpiredError, InvalidAccessTokenError } from "../core/errors
 import { type AccessTokenClaims, verifyAccessToken } from "../lib/access-token";
 import { httpError } from "../lib/http-error";
 
-/**
- * Variáveis que o middleware publica no contexto para os handlers protegidos.
- *
- * Exportado porque toda rota atrás de `requireAuth` precisa deste generic para
- * que `c.get("auth")` tenha tipo.
- */
 export type AuthVariables = {
     auth: AccessTokenClaims;
 };
@@ -20,16 +14,8 @@ export type AuthEnv = {
 };
 
 /**
- * Exige um access token válido em `Authorization: Bearer <token>` (FEAT-0003,
- * seção 4.5).
- *
- * O access token é aceito **apenas** por este header. Ele não vem por cookie e
- * não vem por query string: o cookie é do refresh token, e um token em query
- * string acaba em log de servidor, histórico de navegador e `Referer`.
- *
- * Esta spec entrega o papel no claim `role` e para por aí — quem decide o que
- * cada papel pode fazer é a primeira spec de negócio que precisar disso
- * (FEAT-0003, seção 7). Não há checagem de papel aqui de propósito.
+ * Exige access token válido em `Authorization: Bearer <token>` (não cookie,
+ * não query string). Não checa `role` — isso fica para quem precisar dele.
  */
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     const header = c.req.header("Authorization");
@@ -42,10 +28,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     const result = await verifyAccessToken(header.slice("Bearer ".length).trim(), c.env.JWT_SECRET);
 
     if (!result.ok) {
-        // Os dois códigos precisam ser distintos: `TOKEN_EXPIRED` diz ao front
-        // "renove e repita a requisição", `INVALID_TOKEN` diz "a sessão acabou,
-        // vá para o login". Um 401 genérico faria o front tratar a expiração de
-        // rotina (a cada 15 min) como fim de sessão.
+        // `TOKEN_EXPIRED` → front renova e repete; `INVALID_TOKEN` → vai para o login.
         const error =
             result.reason === "expired"
                 ? new AccessTokenExpiredError()

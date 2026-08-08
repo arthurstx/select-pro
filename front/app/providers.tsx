@@ -25,11 +25,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/*
-       * A reidratação da sessão (FEAT-0003-UI, seção 4.5) roda no boot da
-       * aplicação inteira, não só da área logada: o estado precisa estar
-       * resolvido antes de qualquer rota protegida renderizar.
-       */}
       <AuthProvider>{children}</AuthProvider>
       <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
     </QueryClientProvider>

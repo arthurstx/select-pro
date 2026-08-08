@@ -4,16 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
 import { signAccessToken } from "../src/lib/access-token";
 
-/**
- * Testes de HTTP: o que só existe na camada da rota — atributos do cookie,
- * CORS, códigos de status, modo de manutenção e o middleware de JWT. A lógica
- * dos fluxos está em `auth.service.test.ts`.
- *
- * Usa `app.fetch(request, env, ctx)` em vez de `SELF.fetch` por dois motivos:
- * os secrets (`JWT_SECRET` e companhia) não existem no `wrangler.jsonc` e
- * precisam ser injetados, e rodar no mesmo isolate do teste é o que permite
- * substituir o `fetch` global pela Supabase falsa.
- */
+// Testes de HTTP: cookie, CORS, status, manutenção, middleware de JWT. A
+// lógica dos fluxos está em `auth.service.test.ts`. Usa `app.fetch` direto
+// (não `SELF.fetch`) para injetar secrets e dublar o `fetch` global.
 
 const JWT_SECRET = "segredo-de-teste-suficientemente-longo";
 const FRONT_ORIGIN = "https://app.exemplo.test";
@@ -34,8 +27,6 @@ function testEnv(overrides: Record<string, unknown> = {}) {
 async function call(request: Request, envOverrides: Record<string, unknown> = {}) {
     const ctx = createExecutionContext();
     const response = await app.fetch(request, testEnv(envOverrides), ctx);
-    // Espera o que foi para o `waitUntil` (o envio de email), senão o teste
-    // termina antes de o trabalho diferido rodar.
     await waitOnExecutionContext(ctx);
 
     return response;
@@ -51,11 +42,7 @@ function postJson(path: string, body: unknown, headers: Record<string, string> =
 
 let counter = 0;
 
-/**
- * Substitui o `fetch` global — é assim que a Supabase é dublada no nível HTTP.
- * `member` nulo simula "não é membro"; `status` diferente de 200 simula o
- * diretório fora do ar.
- */
+/** Dubla a Supabase no nível HTTP. `member` nulo = "não é membro"; `status` != 200 = diretório fora do ar. */
 const realFetch = globalThis.fetch;
 
 function stubDirectory(options: { member?: unknown; status?: number; reject?: boolean }) {
@@ -70,7 +57,6 @@ function stubDirectory(options: { member?: unknown; status?: number; reject?: bo
             return Response.json(options.member ? [options.member] : []);
         }
 
-        // Resend e qualquer outra chamada externa: aceita silenciosamente.
         if (url.includes("api.resend.com")) {
             return Response.json({ id: "email-de-teste" });
         }
@@ -83,8 +69,6 @@ function tecMember(overrides: Record<string, unknown> = {}) {
     counter += 1;
 
     return {
-        // uuid fake mas válido para o `.uuid()` do TecMemberSchema — mesmo
-        // esquema do fixture em auth.service.test.ts.
         id: `00000000-0000-4000-9000-${counter.toString(16).padStart(12, "0")}`,
         full_name: `Membro Rota ${counter}`,
         email: `membro-rota-${counter}@cimatecjr.com.br`,
@@ -119,8 +103,6 @@ async function registerViaHttp(overrides: Record<string, unknown> = {}, password
     stubDirectory({ member });
 
     const response = await call(postJson("/auth/register", { email: member.email, password }));
-    // O corpo é lido uma vez só (o stream não pode ser relido) e devolvido
-    // cru junto do parse, para os testes que precisam inspecionar o texto.
     const rawBody = await response.text();
 
     return {
@@ -158,8 +140,6 @@ describe("POST /auth/register (HTTP)", () => {
         expect(cookie).toContain("refresh_token=");
         expect(cookie).toContain("HttpOnly");
         expect(cookie).toContain("Secure");
-        // SameSite=None é obrigatório: front e API estão em domínios diferentes,
-        // e com o Lax padrão o cookie nunca chegaria ao /auth/refresh.
         expect(cookie).toContain("SameSite=None");
         expect(cookie).toContain("Path=/auth");
         expect(cookie).toContain("Max-Age=604800");
@@ -197,10 +177,7 @@ describe("POST /auth/register (HTTP)", () => {
         expect(body.error.code).toBe("MEMBER_NOT_ACTIVE");
     });
 
-    // Este caso passa pelo `TecMemberSchema` de verdade (o fetch é dublado, o
-    // parse não), que é justamente onde o `null` erraria: com um schema estrito
-    // ele viraria falha de parse → E5 (503, "tente de novo") em vez de E3 (403).
-    // A coluna `status` é NULLABLE na tec, então isto não é hipotético.
+    // Passa pelo `TecMemberSchema` de verdade — é onde `status: null` erraria (E5 em vez de E3) se o schema fosse estrito.
     it("E3 - status null também é 403, e não E5 por falha de parse", async () => {
         const member = tecMember({ status: null });
         stubDirectory({ member });
@@ -214,8 +191,6 @@ describe("POST /auth/register (HTTP)", () => {
         expect(body.error.code).toBe("MEMBER_NOT_ACTIVE");
     });
 
-    // `update_at` na tec é NULLABLE: linha nunca editada vem sem valor. O campo
-    // não entra no snapshot, mas um schema estrito reprovaria o membro inteiro.
     it("membro com updated_at null se cadastra normalmente", async () => {
         const member = tecMember({ updated_at: null });
         stubDirectory({ member });
@@ -237,8 +212,6 @@ describe("POST /auth/register (HTTP)", () => {
             postJson("/auth/register", { email: "alguem@cimatecjr.com.br", password: "senha-de-teste" }),
         );
 
-        // 503 (transitório) e não 403 (definitivo): a UI precisa mandar tentar
-        // de novo, não dizer ao membro que ele não pertence à empresa.
         expect(response.status).toBe(503);
         const body = await response.json<{ error: { code: string } }>();
         expect(body.error.code).toBe("MEMBER_DIRECTORY_UNAVAILABLE");
@@ -291,7 +264,6 @@ describe("POST /auth/login (HTTP)", () => {
 
         expect(wrongPassword.status).toBe(401);
         expect(unknownEmail.status).toBe(401);
-        // Byte a byte: qualquer diferença aqui reintroduz o verificador de contas.
         expect(await unknownEmail.text()).toBe(await wrongPassword.text());
     });
 });
@@ -314,7 +286,6 @@ describe("POST /auth/refresh (HTTP)", () => {
 
         const body = await response.json<{ data: { accessToken: string; expiresIn: number } }>();
         expect(body.data.accessToken).toBeTruthy();
-        // O refresh não devolve dados do usuário — só a sessão renovada.
         expect(Object.keys(body.data)).toEqual(["accessToken", "expiresIn"]);
     });
 
@@ -432,9 +403,6 @@ describe("GET /auth/me e o middleware de JWT", () => {
 
         expect(response.status).toBe(401);
         const error = await response.json<{ error: { code: string } }>();
-        // A distinção é requisito funcional: TOKEN_EXPIRED manda o front
-        // renovar, INVALID_TOKEN manda deslogar. Colapsar os dois deslogaria o
-        // membro a cada 15 minutos.
         expect(error.error.code).toBe("TOKEN_EXPIRED");
     });
 
@@ -514,8 +482,6 @@ describe("CORS de /auth/*", () => {
             }),
         );
 
-        // Refletir aqui, com `credentials: true`, entregaria o cookie de sessão
-        // a qualquer site que pedisse.
         expect(response.headers.get("Access-Control-Allow-Origin")).not.toBe(
             "https://site-malicioso.test",
         );
@@ -532,8 +498,6 @@ describe("CORS de /auth/*", () => {
             }),
         );
 
-        // Correto para um fluxo público sem credenciais, e incompatível com
-        // cookie: o navegador nem aceita `*` junto de `credentials: true`.
         expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
         expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
     });
@@ -579,9 +543,6 @@ describe("Modo de manutenção em /auth/*", () => {
 
 describe("Documentação OpenAPI", () => {
     it("continua sendo gerada com as rotas de /auth registradas", async () => {
-        // `@hono/zod-openapi` monta o documento sob demanda e estoura em coisas
-        // que passam despercebidas no runtime das rotas (schema não suportado,
-        // componente duplicado). Sem este teste a quebra só apareceria em /docs.
         const response = await call(
             new Request("http://local.test/doc", {
                 headers: { Authorization: `Basic ${btoa("admin:senha-de-teste")}` },
@@ -614,8 +575,6 @@ describe("Escopo do cookie", () => {
     it("o refresh token fica em Path=/auth e não acompanha requisições de negócio", async () => {
         const { response } = await registerViaHttp();
 
-        // Não é uma asserção sobre o Worker, e sim sobre o contrato com o
-        // navegador: com Path=/auth, /candidate/* nunca recebe a credencial.
         expect(response.headers.get("Set-Cookie")).toContain("Path=/auth");
     });
 });

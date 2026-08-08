@@ -1,20 +1,10 @@
 import { ShieldCheckIcon } from "lucide-react";
 
-/**
- * Moldura comum das quatro telas de auth (FEAT-0003-UI, seção 3).
- *
- * O Stitch trazia duas identidades diferentes — login e cadastro com um painel,
- * recuperação com outro (pontilhado, "Sistema Corporativo Restrito"). A seção 12
- * pede para consolidar: existe um painel só, e ele é o mesmo nas quatro telas.
- *
- * O painel some abaixo de `lg` — no mobile ele viraria uma tela inteira de
- * marketing antes do formulário, que é o que os próprios mockups mobile evitam.
- */
+/** Moldura comum das quatro telas de auth. Painel some abaixo de `lg`. */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-screen w-full lg:grid-cols-2">
       <aside className="bg-brand-navy text-brand-navy-foreground relative hidden flex-col justify-between overflow-hidden p-12 lg:flex">
-        {/* Profundidade sutil, sem imagem: mantém o painel leve. */}
         <div
           aria-hidden
           className="absolute inset-0 bg-[radial-gradient(120%_80%_at_15%_0%,rgba(255,255,255,0.14),transparent_60%)]"

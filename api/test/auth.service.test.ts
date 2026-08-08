@@ -10,15 +10,8 @@ import { hashPassword, PBKDF2_ITERATIONS } from "../src/lib/password";
 import { AuthRepository } from "../src/repositories/auth.repository";
 import { AuthService, FORGOT_PASSWORD_MESSAGE } from "../src/services/auth.service";
 
-/**
- * Testes do service contra o D1 real do miniflare, com o banco da tec e o
- * provedor de email substituídos por dublês — o mesmo desenho do
- * `sheet-sync.service.test.ts`.
- *
- * A Supabase é dublê porque é justamente o comportamento dela (não responder,
- * responder um status estranho) que precisa ser exercitado, e não dá para
- * pedir isso a um serviço real.
- */
+// Testes do service contra o D1 real do miniflare, com o banco da tec e o
+// provedor de email substituídos por dublês.
 
 class FakeMemberDirectory implements MemberDirectory {
     member: TecMember | null = null;
@@ -51,15 +44,11 @@ function tecMember(overrides: Partial<TecMember> = {}): TecMember {
     counter += 1;
 
     return {
-        // uuid fake mas válido para o `.uuid()` do TecMemberSchema — versão 4,
-        // variante 8, só o sufixo muda para manter os ids únicos entre testes.
         id: `00000000-0000-4000-8000-${counter.toString(16).padStart(12, "0")}`,
         full_name: `Membro ${counter}`,
         email: `membro${counter}@cimatecjr.com.br`,
         phone: `7198887${String(counter).padStart(4, "0")}`,
         birth_date: "2003-05-12",
-        // Valores como a tec os grava: TEXT livre, sem relação com os enums da
-        // aplicação. O snapshot precisa aceitá-los como vieram.
         course: "Engenharia de Computação",
         semester: 5,
         gender: "Masculino",
@@ -77,7 +66,6 @@ describe("AuthService", () => {
     let directory: FakeMemberDirectory;
     let mailer: FakeMailer;
     let service: AuthService;
-    /** Promessas entregues ao `defer` (o waitUntil da rota), para os testes poderem esperá-las. */
     let deferred: Promise<unknown>[];
 
     beforeEach(() => {
@@ -102,7 +90,6 @@ describe("AuthService", () => {
         await Promise.all(deferred);
     }
 
-    /** Cadastra um membro ativo e devolve o que o fluxo produziu. */
     async function registerMember(overrides: Partial<TecMember> = {}, password = "senha-de-teste") {
         const member = tecMember(overrides);
         directory.member = member;
@@ -152,7 +139,6 @@ describe("AuthService", () => {
 
             expect(profile).toBeTruthy();
             expect(profile?.member_id).toBe(member.id);
-            // Valores crus da tec, sem conversão para os enums da aplicação.
             expect(profile?.course).toBe("Engenharia de Computação");
             expect(profile?.gender).toBe("Masculino");
             expect(profile?.synced_at).toEqual(expect.any(String));
@@ -178,7 +164,6 @@ describe("AuthService", () => {
                 .bind(session.user.id)
                 .first<{ refresh_token_hash: string }>();
 
-            // Um dump do D1 não pode virar acesso às contas.
             expect(row?.refresh_token_hash).not.toBe(session.refreshToken);
             expect(row?.refresh_token_hash).toBe(await hashOpaqueToken(session.refreshToken));
         });
@@ -198,8 +183,6 @@ describe("AuthService", () => {
         });
 
         it("entra como avaliador mesmo quando a tec diz que o membro é manager", async () => {
-            // Papel na aplicação e cargo na empresa são coisas diferentes: uma
-            // mudança na hierarquia da tec não pode conceder admin aqui.
             const { session } = await registerMember({ manager: true });
 
             expect(session.user.role).toBe("avaliador");
@@ -210,7 +193,6 @@ describe("AuthService", () => {
                 .bind(session.user.id)
                 .first<{ manager: number }>();
 
-            // ...mas o dado da tec é gravado por completude.
             expect(profile?.manager).toBe(1);
         });
 
@@ -241,8 +223,6 @@ describe("AuthService", () => {
             expect(await countUsers("estranho@exemplo.com")).toBe(0);
         });
 
-        // `null` está na lista porque a coluna é NULLABLE na tec: "sem status"
-        // é tão não-elegível quanto um status desconhecido, e pelo mesmo motivo.
         it.each<TecMember["status"]>(["inactive", "alumni", "on_leave", "suspended", "", "ACTIVE", null])(
             "E3 - recusa o status %s, inclusive valor fora do enum (fail-closed)",
             async (status) => {
@@ -255,8 +235,6 @@ describe("AuthService", () => {
                 );
 
                 expect(result.isLeft()).toBe(true);
-                // Um status desconhecido é E3 (403, definitivo) e não E5 (503,
-                // "tente de novo"): nenhuma nova tentativa resolveria.
                 if (result.isLeft()) expect(result.value.code).toBe("MEMBER_NOT_ACTIVE");
                 expect(await countUsers(member.email)).toBe(0);
             },
@@ -275,9 +253,6 @@ describe("AuthService", () => {
             expect(result.isLeft()).toBe(true);
             if (result.isLeft()) expect(result.value.code).toBe("MEMBER_DIRECTORY_UNAVAILABLE");
 
-            // O critério de aceite mais importante do fluxo: criar a conta "para
-            // validar depois" transformaria uma indisponibilidade momentânea em
-            // conta indevida permanente.
             expect(await countUsers(member.email)).toBe(0);
             const profiles = await env.DB.prepare(
                 "SELECT COUNT(*) AS total FROM member_profiles WHERE member_id = ?",
@@ -301,7 +276,6 @@ describe("AuthService", () => {
             expect(result.isRight()).toBe(true);
             if (result.isRight()) {
                 expect(result.value.user.id).toBe(registered.user.id);
-                // Sessão nova, não reaproveitada.
                 expect(result.value.refreshToken).not.toBe(registered.refreshToken);
             }
         });
@@ -321,8 +295,6 @@ describe("AuthService", () => {
             expect(wrongPassword.isLeft()).toBe(true);
             expect(unknownEmail.isLeft()).toBe(true);
             if (wrongPassword.isLeft() && unknownEmail.isLeft()) {
-                // Mesmo código E mesma mensagem: o login não pode revelar se o
-                // email existe, nem por uma vírgula de diferença.
                 expect(wrongPassword.value.code).toBe("INVALID_CREDENTIALS");
                 expect(unknownEmail.value.code).toBe(wrongPassword.value.code);
                 expect(unknownEmail.value.message).toBe(wrongPassword.value.message);
@@ -351,7 +323,6 @@ describe("AuthService", () => {
         it("re-deriva o hash no login quando ele foi gerado com menos iterações", async () => {
             const { member, password, session } = await registerMember();
 
-            // Simula uma conta criada antes de o custo subir.
             const legacyHash = await hashPassword(password, PBKDF2_ITERATIONS - 5000);
             await env.DB.prepare("UPDATE users SET password = ? WHERE id = ?")
                 .bind(legacyHash, session.user.id)
@@ -365,7 +336,6 @@ describe("AuthService", () => {
                 .bind(session.user.id)
                 .first<{ password: string }>();
 
-            // A conta se fortalece sozinha, sem migration e sem o membro saber.
             expect(user?.password).not.toBe(legacyHash);
             expect(user?.password).toContain(`$${PBKDF2_ITERATIONS}$`);
         });
@@ -392,7 +362,6 @@ describe("AuthService", () => {
                 .bind(session.user.id)
                 .all<{ family_id: string }>();
 
-            // Três linhas (cadastro + duas rotações), uma família só.
             expect(rows.results).toHaveLength(3);
             expect(new Set(rows.results.map((row) => row.family_id)).size).toBe(1);
         });
@@ -404,11 +373,9 @@ describe("AuthService", () => {
             expect(rotated.isRight()).toBe(true);
             if (!rotated.isRight()) return;
 
-            // O token antigo volta a aparecer: ou vazou, ou o cliente repetiu.
             const reuse = await service.refresh(session.refreshToken, { userAgent: null });
 
             expect(reuse.isLeft()).toBe(true);
-            // Mesmo código de um token qualquer inválido — a diferença fica no log.
             if (reuse.isLeft()) expect(reuse.value.code).toBe("INVALID_REFRESH_TOKEN");
 
             const active = await env.DB.prepare(
@@ -418,8 +385,6 @@ describe("AuthService", () => {
                 .first<{ total: number }>();
             expect(active?.total).toBe(0);
 
-            // E o token que era legítimo cai junto: não há como saber qual dos
-            // dois lados é o impostor, então os dois saem.
             const afterFamilyRevoke = await service.refresh(rotated.value.refreshToken, {
                 userAgent: null,
             });
@@ -458,18 +423,15 @@ describe("AuthService", () => {
         it("revoga a família inteira, não só o último token", async () => {
             const { session } = await registerMember();
 
-            // Uma rotação, para a família ter mais de uma linha.
             const rotated = await service.refresh(session.refreshToken, { userAgent: null });
             expect(rotated.isRight()).toBe(true);
             if (!rotated.isRight()) return;
 
             await service.logout(rotated.value.refreshToken);
 
-            // O token corrente deixou de valer...
             const afterLogout = await service.refresh(rotated.value.refreshToken, { userAgent: null });
             expect(afterLogout.isLeft()).toBe(true);
 
-            // ...e nenhuma linha daquela família sobrou ativa.
             const active = await env.DB.prepare(
                 "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ? AND revoked_at IS NULL",
             )
@@ -512,7 +474,6 @@ describe("AuthService", () => {
                     phone: member.phone,
                     course: member.course,
                     semester: 7,
-                    // INTEGER 0/1 no D1 vira boolean no contrato.
                     manager: true,
                     syncedAt: expect.any(String),
                 },
@@ -553,7 +514,6 @@ describe("AuthService", () => {
 
             expect(known.value).toEqual({ message: FORGOT_PASSWORD_MESSAGE });
             expect(unknown.value).toEqual(known.value);
-            // A mensagem precisa ser condicional para ser verdadeira nos dois casos.
             expect(FORGOT_PASSWORD_MESSAGE).toMatch(/^Se o email estiver cadastrado/);
         });
 
@@ -577,7 +537,6 @@ describe("AuthService", () => {
                 .all<{ token_hash: string }>();
 
             expect(tokens.results).toHaveLength(1);
-            // No banco só o hash; o token em claro só existe no link do email.
             const sentToken = new URL(mailer.sent[0].resetUrl).searchParams.get("token")!;
             expect(tokens.results[0].token_hash).toBe(await hashOpaqueToken(sentToken));
             expect(tokens.results[0].token_hash).not.toBe(sentToken);
@@ -599,7 +558,6 @@ describe("AuthService", () => {
 
             expect(stillValid?.total).toBe(1);
 
-            // O primeiro link não serve mais.
             const firstToken = new URL(mailer.sent[0].resetUrl).searchParams.get("token")!;
             const result = await service.resetPassword({ token: firstToken, password: "nova-senha-123" });
             expect(result.isLeft()).toBe(true);
@@ -610,7 +568,6 @@ describe("AuthService", () => {
             mailer.shouldFail = true;
 
             const result = await service.forgotPassword({ email: member.email });
-            // O `defer` não pode rejeitar: o membro já recebeu o 202.
             await expect(settleDeferred()).resolves.toBeUndefined();
 
             expect(result.value).toEqual({ message: FORGOT_PASSWORD_MESSAGE });
@@ -639,7 +596,6 @@ describe("AuthService", () => {
 
         it("troca a senha e revoga TODAS as sessões do usuário", async () => {
             const { member, session } = await registerMember();
-            // Uma segunda sessão, como se o membro estivesse logado noutro aparelho.
             await service.login({ email: member.email, password: "senha-de-teste" }, { userAgent: null });
 
             const token = await requestReset(member.email);
@@ -652,8 +608,6 @@ describe("AuthService", () => {
             )
                 .bind(session.user.id)
                 .first<{ total: number }>();
-            // É o ponto do fluxo: sem isso, um invasor com refresh token válido
-            // continuaria dentro por até 7 dias depois da troca de senha.
             expect(active?.total).toBe(0);
 
             const withOld = await service.login(
@@ -718,7 +672,6 @@ describe("AuthService", () => {
                 return new URL(mailer.sent.at(-1)!.resetUrl).searchParams.get("token")!;
             })();
 
-            // Uma sessão viva e uma expirada.
             const expiredSessionId = crypto.randomUUID();
             await env.DB.prepare(
                 `INSERT INTO sessions (id, user_id, refresh_token_hash, family_id, expires_at)
@@ -748,8 +701,6 @@ describe("AuthService", () => {
                 .first<{ total: number }>();
             expect(usedTokens?.total).toBe(0);
 
-            // Sessões revogadas recentes ficam: são a trilha de uma eventual
-            // investigação de reuso, e apagá-las na hora apagaria a evidência.
             const recentlyRevoked = await env.DB.prepare(
                 "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ? AND revoked_at IS NOT NULL",
             )

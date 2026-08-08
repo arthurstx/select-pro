@@ -3,11 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import app from "../src/index";
 
-/**
- * Testes de HTTP end-to-end (rota real, D1 real via miniflare). Desde a v3.0
- * o fluxo não chama nenhum serviço externo — não há mais stub de provedor de
- * email a montar aqui.
- */
+// Testes de HTTP end-to-end (rota real, D1 real via miniflare).
 let counter = 0;
 function uniqueCandidateInput() {
     counter += 1;
@@ -119,11 +115,6 @@ describe("POST /candidate/register (HTTP)", () => {
     });
 });
 
-/**
- * O middleware lê `MAINTENANCE_MODE` do env, então aqui o app é chamado
- * direto (`app.fetch`) com um env customizado — `SELF` sempre usa o env fixo
- * do wrangler.jsonc, onde a var é "false".
- */
 describe("Modo de manutenção", () => {
     function postRegisterWith(maintenanceMode: string) {
         const request = new Request("http://local.test/candidate/register", {

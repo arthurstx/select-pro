@@ -23,7 +23,6 @@ const NOTICE_COPY: Record<string, string> = {
   [LoginNotice.SESSION_EXPIRED]: "Sua sessão foi encerrada. Entre novamente para continuar.",
 };
 
-/** Tela 1 — Acessar Conta (FEAT-0003-UI, seções 4.2, 5 e 7.2). */
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();

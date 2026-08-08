@@ -2,19 +2,9 @@ import { z } from "zod";
 import { RegisterMemberSchema, ResetPasswordSchema } from "shared";
 
 /**
- * Schemas dos formulários = contrato de `shared` + `confirmPassword`
- * (FEAT-0003-UI, seção 6).
- *
- * `confirmPassword` é campo **só de cliente**: não existe no contrato da API e
- * nunca é enviado. Ele é acrescentado aqui, sobre o schema compartilhado, e o
- * payload volta a ser o do contrato no momento do submit — as telas chamam
- * `RegisterMemberSchema.parse` / `ResetPasswordSchema.parse`, que descartam
- * qualquer chave a mais.
- *
- * Nenhuma regra é reescrita: o formato do email e a política de senha continuam
- * vindo de `EmailSchema`/`PasswordSchema`. Em particular, **não há validação de
- * domínio** — a elegibilidade é decidida pela API contra a base da tec, e barrar
- * por domínio no cliente impediria um membro legítimo com email pessoal.
+ * Schemas dos formulários = contrato de `shared` + `confirmPassword`, campo
+ * só de cliente que nunca é enviado (as telas fazem `.parse` do schema
+ * compartilhado no submit, que descarta a chave extra).
  */
 const CONFIRM_PASSWORD_FIELD = z.string().min(1, "Confirme sua senha");
 

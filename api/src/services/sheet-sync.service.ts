@@ -6,19 +6,11 @@ import type { CandidateWithApplicationRow, CandidateRepository } from "../reposi
 
 const SHEET_TAB = "Inscricoes";
 
-/** Só o cabeçalho, para validar que estamos na planilha certa antes de escrever (E4). */
 const HEADER_RANGE = `${SHEET_TAB}!A1:O1`;
-/** Coluna de ids a partir da linha 2 — a 1 é o cabeçalho e não é um id. */
 const IDS_RANGE = `${SHEET_TAB}!A2:A`;
-/** Intervalo do append; a API acrescenta depois da última linha preenchida. */
 const APPEND_RANGE = `${SHEET_TAB}!A:O`;
 
-/**
- * Cabeçalho esperado, na ordem exata da seção 8.2 da FEAT-0002.
- *
- * Colunas novas entram **no fim**: as linhas já escritas nunca são reescritas,
- * então inserir no meio desalinha todo o histórico.
- */
+/** Colunas novas entram no fim — linhas já escritas nunca são reescritas. */
 export const SHEET_HEADER = [
     "id",
     "Data de inscrição",
@@ -38,7 +30,6 @@ export const SHEET_HEADER = [
 ] as const;
 
 export interface SheetSyncConfig {
-    /** Reflete a var `MAINTENANCE_MODE` do Worker. */
     maintenanceMode: boolean;
 }
 
@@ -49,15 +40,7 @@ export type SheetSyncResult =
 
 const yesNo = (value: number): string => (value ? "Sim" : "Não");
 
-/**
- * Converte uma inscrição na linha da planilha (FEAT-0002, seção 8.2).
- *
- * Os rótulos vêm de `shared`, os mesmos mapas que o wizard usa — a planilha
- * mostra "Engenharia de Computação", nunca `eng-computacao`. O fallback para o
- * próprio slug importa em `course`: é o único enum sem CHECK no banco (removido
- * na FEAT-0001 v3.1), então um valor fora do mapa é possível, e mostrá-lo cru é
- * melhor que escrever "undefined" na célula.
- */
+/** Rótulos vêm de `shared`, os mesmos mapas do wizard. Fallback ao slug cru se fora do mapa. */
 function toSheetRow(row: CandidateWithApplicationRow): CellValue[] {
     return [
         row.id,
@@ -79,13 +62,9 @@ function toSheetRow(row: CandidateWithApplicationRow): CellValue[] {
 }
 
 /**
- * Espelha as inscrições do D1 numa planilha do Google (FEAT-0002).
- *
- * Não guarda estado: a cada execução descobre o que já foi enviado lendo a
- * coluna de ids da própria planilha. Isso torna o job idempotente (rodar duas
- * vezes não duplica), auto-recuperável (linha apagada volta) e dispensa
- * qualquer migration — reconstruir `candidates` no D1 é operação de risco
- * (ver migration 0004 e `CONTEXT.md`).
+ * Espelha as inscrições do D1 numa planilha do Google (FEAT-0002). Sem
+ * estado: descobre o que já foi enviado lendo a coluna de ids da própria
+ * planilha (idempotente, auto-recuperável).
  */
 export class SheetSyncService {
     constructor(
@@ -95,10 +74,7 @@ export class SheetSyncService {
     ) {}
 
     async run(): Promise<SheetSyncResult> {
-        // O bloqueio de manutenção do fluxo de inscrição é um middleware em
-        // `/candidate/*` e não alcança o handler agendado. Sem esta checagem, o
-        // cron seria a única coisa lendo o banco no meio de uma migration que
-        // reconstrói tabelas (FEAT-0002, E7).
+        // O bloqueio de manutenção de `/candidate/*` não alcança o handler agendado.
         if (this.config.maintenanceMode) {
             logger.warn("sheet_sync.skipped_maintenance", {});
             return { status: "skipped", reason: "maintenance" };
@@ -121,14 +97,7 @@ export class SheetSyncService {
         return { status: "appended", count: missing.length };
     }
 
-    /**
-     * Aborta se a aba ou o cabeçalho não forem os esperados.
-     *
-     * Escrever em posição errada numa planilha compartilhada é o único dano
-     * irreversível que este job consegue causar — a API não tem desfazer. Diante
-     * de qualquer sinal de que a planilha não é a certa, não escrever sai sempre
-     * mais barato que escrever errado (FEAT-0002, E4).
-     */
+    /** Aborta se a aba/cabeçalho não forem os esperados — escrever errado numa planilha compartilhada é irreversível. */
     private async assertHeader(): Promise<void> {
         const [header = []] = await this.sheets.readValues(HEADER_RANGE);
 
@@ -147,7 +116,6 @@ export class SheetSyncService {
     private async readSyncedIds(): Promise<Set<string>> {
         const rows = await this.sheets.readValues(IDS_RANGE);
 
-        // Linhas em branco no meio da coluna chegam como array vazio.
         return new Set(rows.map(([id]) => String(id ?? "")).filter((id) => id !== ""));
     }
 }

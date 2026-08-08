@@ -5,12 +5,7 @@ import type { CellValue, SheetsClient } from "../src/lib/google-sheets";
 import { CandidateRepository } from "../src/repositories/candidates.repository";
 import { SHEET_HEADER, SheetSyncService } from "../src/services/sheet-sync.service";
 
-/**
- * Planilha falsa: guarda as linhas em memória e responde aos dois intervalos
- * que o service lê (cabeçalho e coluna de ids). Manter os intervalos explícitos
- * aqui é proposital — se o service passar a pedir outro, o teste falha em vez de
- * devolver `[]` silenciosamente e mascarar o erro.
- */
+/** Planilha falsa: guarda linhas em memória e responde aos dois intervalos que o service lê. */
 class FakeSheets implements SheetsClient {
     header: CellValue[] = [...SHEET_HEADER];
     rows: CellValue[][] = [];
@@ -93,7 +88,6 @@ describe("SheetSyncService", () => {
         expect(row).toBeDefined();
         expect(row).toHaveLength(SHEET_HEADER.length);
 
-        // Ordem da seção 8.2 da FEAT-0002.
         expect(row?.[2]).toBe(name);
         expect(row?.[5]).toBe("Engenharia de Computação"); // não o slug `eng-computacao`
         expect(row?.[7]).toBe("Feminino");
@@ -102,8 +96,6 @@ describe("SheetSyncService", () => {
         expect(row?.[10]).toBe("Cartaz no mural");
         expect(row?.[13]).toBe("Sim"); // saturday_restriction
         expect(row?.[14]).toBe("Não"); // special_needs
-
-        // `created_at` vai cru, no formato do SQLite (sem T/Z).
         expect(row?.[1]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     });
 

@@ -7,13 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/lib/auth/auth-context";
 
-/**
- * Placeholder da área logada. Mostra o que a sessão em memória sabe sobre o
- * membro e oferece o logout (FEAT-0003-UI, seção 8.5).
- *
- * Só exibe dado que veio de chamada autenticada — o `profile` aparece depois de
- * um `GET /auth/me`, que é o que a reidratação faz no reload.
- */
+/** Placeholder da área logada: mostra o que a sessão em memória sabe sobre o membro e oferece o logout. */
 export function SessionSummary() {
   const { user, profile, signOut } = useAuth();
   const [leaving, setLeaving] = useState(false);

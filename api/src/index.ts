@@ -18,27 +18,17 @@ const app = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
 
 app.use(honoLogger());
 
-// Fluxo público sem sessão/cookies (FEAT-0001-UI, seção 2) — reflete a origin
-// da requisição em vez de credentials, não há estado de auth para proteger.
+// Fluxo público sem sessão/cookies — reflete a origin, sem credentials.
 app.use("/candidate/*", cors());
 
 /**
- * CORS de `/auth/*` — separado do de `/candidate/*`, e não por organização.
- *
- * O `cors()` acima **reflete** a origin de quem chama. Isso é correto para um
- * fluxo público sem credenciais, e é inaceitável aqui: `credentials: true` com
- * origin refletida entrega o cookie de sessão a qualquer site que peça. Este
- * middleware usa allowlist explícita, vinda da var `FRONT_ORIGIN`
- * (FEAT-0003, seção 9).
- *
- * Instanciado dentro do handler porque `cors()` precisa do valor de `c.env`,
- * que só existe por requisição — mesmo motivo do `docsAuth` mais abaixo.
+ * `/auth/*` usa allowlist (`FRONT_ORIGIN`) em vez de refletir a origin:
+ * `credentials: true` com origin refletida entregaria o cookie de sessão a
+ * qualquer site (FEAT-0003, seção 9). Instanciado dentro do handler porque
+ * `cors()` precisa de `c.env`, que só existe por requisição.
  */
 app.use("/auth/*", (c, next) =>
   cors({
-    // Aceita lista separada por vírgula (produção + previews da Vercel). O
-    // middleware devolve no `Access-Control-Allow-Origin` apenas a origin que
-    // casar, nunca a lista inteira.
     origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
     credentials: true,
     allowMethods: ["GET", "POST", "OPTIONS"],
@@ -48,25 +38,14 @@ app.use("/auth/*", (c, next) =>
 );
 
 /**
- * Modo de manutenção — fecha a janela de escrita durante migrations de banco.
- *
- * Migrations que reconstroem `candidates` (ver 0004) rodam em duas etapas
- * inevitavelmente separadas no tempo: primeiro o banco, depois o deploy do
- * Worker com os contratos novos. Sem este bloqueio, uma inscrição enviada
- * nesse intervalo seria gravada pela versão antiga do código — com os valores
- * antigos, e sem CHECK no banco para barrá-la.
- *
- * Fica depois do CORS para que o 503 chegue ao navegador como resposta da
- * API (com os headers de origin), e não como erro de CORS — assim o front
- * exibe a mensagem abaixo em vez de "Algo deu errado".
+ * Modo de manutenção — fecha a janela de escrita durante migrations de
+ * banco. Fica depois do CORS para que o 503 chegue com os headers de
+ * origin, e não como erro de CORS.
  */
 function maintenanceGuard(
   message: string,
 ): MiddlewareHandler<{ Bindings: CloudflareBindings }> {
   return async (c, next) => {
-    // `wrangler types` infere o literal "false" a partir do valor commitado no
-    // wrangler.jsonc; em runtime a var vale "true" no deploy de manutenção.
-    // A anotação explícita como string é o que permite comparar os dois
     const maintenanceMode: string = c.env.MAINTENANCE_MODE;
 
     if (maintenanceMode !== "true") {
@@ -85,14 +64,6 @@ app.use(
   ),
 );
 
-/**
- * O mesmo bloqueio cobre `/auth/*` (FEAT-0003, seção 9).
- *
- * Uma migration que toque `users`, `sessions` ou `member_profiles` precisa da
- * mesma janela fechada que `/candidate/*` já tinha — e cadastro, login e
- * refresh escrevem nas três. A mensagem é própria porque quem está tentando
- * entrar na aplicação não está se inscrevendo em processo seletivo nenhum.
- */
 app.use(
   "/auth/*",
   maintenanceGuard(
@@ -107,17 +78,13 @@ app.get("/message", (c) => {
 app.route("/candidate", candidatesRouter);
 app.route("/auth", authRouter);
 
-// Declara o esquema Bearer para as rotas protegidas (`security: [{ Bearer: [] }]`).
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",
   scheme: "bearer",
   bearerFormat: "JWT",
 });
 
-// Documentação OpenAPI — gerada a partir dos schemas Zod das rotas
-// registradas via `.openapi()` (ver api/.agents/validation/SKILL.md).
-// Protegida por Basic Auth: expõe todo o schema da API (DOCS_PASSWORD via
-// `wrangler secret put`, nunca em `vars`).
+// Documentação OpenAPI, protegida por Basic Auth (DOCS_PASSWORD via `wrangler secret put`).
 const docsAuth: MiddlewareHandler<{ Bindings: CloudflareBindings }> = (
   c,
   next,
@@ -160,23 +127,11 @@ app.onError((err, c) => {
   );
 });
 
-/**
- * Trabalho periódico do Worker, pelo Cron Trigger que já roda de hora em hora.
- *
- * Duas tarefas independentes: sincronizar as inscrições com a planilha
- * (FEAT-0002) e limpar sessões e tokens vencidos (FEAT-0003, seção 9). Nenhuma
- * das duas está no caminho de uma requisição de usuário.
- *
- * A composição das dependências acontece aqui pelo mesmo motivo que acontece no
- * handler das rotas (`api/.agents/architecture/SKILL.md`): é o primeiro ponto
- * com acesso ao `env`.
- */
+/** Cron de hora em hora: sincroniza a planilha (FEAT-0002) e limpa sessões/tokens vencidos. */
 const scheduled: ExportedHandlerScheduledHandler<CloudflareBindings> = async (
   _event,
   env,
 ) => {
-  // `wrangler types` infere o literal "false" a partir do valor commitado;
-  // em runtime a var vale "true" no deploy de manutenção (ver middleware acima).
   const maintenanceMode: string = env.MAINTENANCE_MODE;
 
   const service = new SheetSyncService(
@@ -185,9 +140,7 @@ const scheduled: ExportedHandlerScheduledHandler<CloudflareBindings> = async (
     { maintenanceMode: maintenanceMode === "true" },
   );
 
-  // As duas rodam sempre, mesmo que a primeira falhe: são tarefas sem relação
-  // entre si, e deixar a planilha fora do ar impedir a limpeza do banco faria
-  // um problema virar dois.
+  // Tarefas independentes: as duas rodam mesmo que uma falhe.
   const failures: unknown[] = [];
 
   try {
@@ -200,9 +153,6 @@ const scheduled: ExportedHandlerScheduledHandler<CloudflareBindings> = async (
   }
 
   try {
-    // A rotação de refresh token grava uma linha por renovação: uma sessão
-    // ativa por 7 dias deixa centenas de linhas para trás. Sem esta limpeza,
-    // `sessions` cresce sem teto contra o limite de linhas do D1 no plano Free.
     await new AuthRepository(env.DB).pruneExpired();
     logger.info("auth.prune.success", {});
   } catch (err) {
@@ -212,9 +162,7 @@ const scheduled: ExportedHandlerScheduledHandler<CloudflareBindings> = async (
     failures.push(err);
   }
 
-  // Repropaga de propósito: os logs acima dão os eventos estruturados, e o
-  // throw faz a Cloudflare marcar a execução do cron como falha no painel. Sem
-  // ele, um erro recorrente ficaria invisível em qualquer métrica.
+  // Repropaga para a Cloudflare marcar a execução do cron como falha no painel.
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) {
     throw new AggregateError(failures, "Falhas no cron do Worker");

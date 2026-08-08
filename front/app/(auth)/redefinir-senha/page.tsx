@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: "Defina uma nova senha para sua conta no portal da CIMATEC jr.",
 };
 
-/** Estado "verificando token na URL" (FEAT-0003-UI, seção 5). */
+/** Estado "verificando token na URL". */
 function CheckingToken() {
   return (
     <AuthCard title="Definir Nova Senha">

@@ -10,16 +10,12 @@ interface RegisteredCandidate {
   createdAt: string;
 }
 
-/** Chave usada no sessionStorage — só as respostas do wizard, nunca `registered`. */
 const ANSWERS_STORAGE_KEY = "inscricao:wizard-answers";
 
 interface RegistrationContextValue {
-  /** Respostas acumuladas das etapas 1-5 do wizard (FEAT-0001-UI v3.0, seção 8.1). */
   answers: Partial<RegisterRequest>;
-  /** `true` assim que a leitura do sessionStorage (efeito de montagem) terminar. */
   isHydrated: boolean;
   setStepData: (partial: Partial<RegisterRequest>) => void;
-  /** Limpa só as respostas do wizard (sessionStorage), sem tocar em `registered`. */
   clearAnswers: () => void;
   registered: RegisteredCandidate | null;
   setRegistered: (data: RegisteredCandidate) => void;
@@ -29,26 +25,15 @@ interface RegistrationContextValue {
 const RegistrationContext = createContext<RegistrationContextValue | null>(null);
 
 /**
- * Duas políticas de estado distintas (FEAT-0001-UI v3.0, seção 8):
- *
- * - `answers` (respostas do wizard): contexto + espelhado em `sessionStorage`,
- *   para sobreviver a um F5 em qualquer uma das 6 etapas. Não é dado sensível
- *   — é só o que o próprio candidato acabou de digitar.
- * - `registered` (resposta do `POST /candidate/register`): **apenas em memória**,
- *   só para alimentar a tela de sucesso. Não persistir não perde nada: a
- *   inscrição já está gravada no banco e não há área logada para recuperar.
+ * `answers` (respostas do wizard): espelhado em `sessionStorage`, sobrevive a
+ * um F5 em qualquer etapa. `registered` (resposta do cadastro): só em
+ * memória — a inscrição já está gravada no banco, não há área logada.
  */
 export function RegistrationProvider({ children }: { children: React.ReactNode }) {
   const [answers, setAnswers] = useState<Partial<RegisterRequest>>({});
   const [isHydrated, setIsHydrated] = useState(false);
   const [registered, setRegisteredState] = useState<RegisteredCandidate | null>(null);
 
-  // Hidrata do sessionStorage só depois do primeiro render (evita mismatch de
-  // SSR — sessionStorage não existe no servidor). Não é estado derivado de
-  // props/state do React sendo recalculado; é a sincronização única e
-  // intencional com uma fonte externa (sessionStorage) logo após montar, um
-  // dos poucos casos em que a própria documentação do React recomenda
-  // `setState` dentro de um efeito.
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(ANSWERS_STORAGE_KEY);
@@ -67,7 +52,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
       try {
         sessionStorage.setItem(ANSWERS_STORAGE_KEY, JSON.stringify(next));
       } catch {
-        // Idem — se não for possível persistir, o wizard segue funcionando só em memória.
+        // segue funcionando só em memória
       }
       return next;
     });
@@ -78,7 +63,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
     try {
       sessionStorage.removeItem(ANSWERS_STORAGE_KEY);
     } catch {
-      // Nada a fazer — não há o que limpar se o storage já não estava acessível.
+      // nada a fazer
     }
   }, []);
 
@@ -92,7 +77,7 @@ export function RegistrationProvider({ children }: { children: React.ReactNode }
     try {
       sessionStorage.removeItem(ANSWERS_STORAGE_KEY);
     } catch {
-      // Nada a fazer — não há o que limpar se o storage já não estava acessível.
+      // nada a fazer
     }
   }, []);
 

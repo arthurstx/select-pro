@@ -24,22 +24,11 @@ import {
   type ResetPasswordFormValues,
 } from "../_lib/auth-form-schemas";
 
-/**
- * Tela 4 — Definir Nova Senha (FEAT-0003-UI, seções 4.4, 5 e 7.4).
- *
- * Esta é a única tela sem mockup no Stitch, e é bloqueante para o fluxo de
- * recuperação: sem ela o membro recebe o email e não tem para onde ir. O layout
- * é derivado das outras três — mesmo cartão, mesmos campos de senha do cadastro.
- *
- * O estado "verificando token" da seção 5 é o fallback de Suspense da rota: até
- * a query string estar disponível no cliente, a tela não decide nada.
- */
 export function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Congelado na primeira renderização de propósito: o efeito abaixo apaga a
-  // query string logo em seguida, e a partir daí `searchParams` vem vazio.
+  // Congelado na primeira renderização: o efeito abaixo apaga a query string logo em seguida.
   const [token] = useState(() => searchParams.get("token")?.trim() ?? "");
 
   const form = useForm<ResetPasswordFormValues>({
@@ -49,31 +38,21 @@ export function ResetPasswordForm() {
 
   const mutation = useMutation({
     mutationFn: (values: ResetPasswordFormValues) =>
-      // O token vem da URL, não do formulário; `parse` monta o payload do
-      // contrato e descarta `confirmPassword` (seção 6).
       resetPassword(ResetPasswordSchema.parse({ token, password: values.password })),
-    // Não autentica: o backend revogou todas as sessões, então o membro entra de
-    // novo com a senha nova (seção 4.4).
     onSuccess: () => router.replace(loginWithNotice(LoginNotice.PASSWORD_CHANGED)),
     onError: (error) => {
-      // `WEAK_PASSWORD` é o único erro desta tela com campo — a tela não tem
-      // campo de email.
       const view = describeResetPasswordError(error);
       if (view.field === "password") form.setError("password", { message: view.message });
     },
   });
 
-  // O token não deve sobrar na barra de endereços depois de a tela abrir: some
-  // do histórico e de eventual compartilhamento de tela (seção 4.4).
-  // `replaceState` é integrado ao router do Next, então `searchParams` acompanha
-  // — daí o valor ter sido congelado acima.
+  // O token não deve sobrar na barra de endereços depois de a tela abrir.
   useEffect(() => {
     if (window.location.search) {
       window.history.replaceState(null, "", window.location.pathname);
     }
   }, []);
 
-  // Token ausente na URL: erro direto, sem chamar a API (seção 4.4, passo 1).
   if (!token) {
     return (
       <AuthCard title="Link inválido">

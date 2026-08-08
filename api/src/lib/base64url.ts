@@ -1,12 +1,5 @@
-/**
- * base64url (RFC 4648 §5) sobre `Uint8Array`.
- *
- * O runtime dos Workers tem `btoa`/`atob`, mas os dois falam base64 padrão
- * (com `+`, `/` e `=`). O hash de senha e o refresh token viajam em contextos
- * onde esses três caracteres atrapalham — o hash usa `$` como separador e o
- * token vai em cookie e em query string de URL —, então a conversão para o
- * alfabeto url-safe fica isolada aqui em vez de repetida em cada chamador.
- */
+// base64url (RFC 4648 §5) sobre `Uint8Array`. `btoa`/`atob` falam base64
+// padrão; hash de senha e refresh token precisam do alfabeto url-safe.
 
 export function toBase64Url(bytes: Uint8Array): string {
     let binary = "";

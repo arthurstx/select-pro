@@ -29,7 +29,6 @@ function BackToLogin() {
   );
 }
 
-/** Tela 3 — Recuperar Acesso (FEAT-0003-UI, seções 4.3, 5 e 7.3). */
 export function ForgotPasswordForm() {
   const form = useForm<ForgotPasswordDTO>({
     resolver: zodResolver(ForgotPasswordSchema),
@@ -38,8 +37,6 @@ export function ForgotPasswordForm() {
 
   const mutation = useMutation({ mutationFn: forgotPassword });
 
-  // Estado terminal: o formulário dá lugar à mensagem, na mesma tela — não há
-  // rota nem tela de "verifique seu email" (seção 3).
   if (mutation.isSuccess) {
     return (
       <AuthCard title="Verifique seu email">
@@ -47,13 +44,7 @@ export function ForgotPasswordForm() {
           <span className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-full">
             <MailCheckIcon className="size-6" aria-hidden />
           </span>
-          {/*
-           * A mensagem vem do backend e é condicional de propósito ("se o email
-           * estiver cadastrado…"). A UI não pode afirmar que o email foi
-           * enviado: a resposta é idêntica para email existente e inexistente, e
-           * confirmar o envio transformaria o 202 genérico num verificador de
-           * contas (seção 4.3).
-           */}
+          {/* Mensagem condicional do backend — não confirma se o email existe. */}
           <p className="text-muted-foreground text-sm leading-relaxed" role="status">
             {mutation.data.message}
           </p>
@@ -89,11 +80,6 @@ export function ForgotPasswordForm() {
             <FieldError errors={[form.formState.errors.email]} />
           </Field>
 
-          {/*
-           * "Enviar link de recuperação", não "Enviar Código": a recuperação usa
-           * link com token, e a tela de código de 6 dígitos do Stitch está fora
-           * desta feature (seção 12).
-           */}
           <AuthSubmitButton pending={mutation.isPending} pendingLabel="Enviando…">
             Enviar link de recuperação
           </AuthSubmitButton>

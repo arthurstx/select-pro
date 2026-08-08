@@ -12,7 +12,6 @@ interface AuthInputProps extends React.ComponentProps<"input"> {
   icon: IconComponent;
 }
 
-/** `Input` do design system com o ícone à esquerda que os mockups usam. */
 export function AuthInput({ icon: Icon, className, ...props }: AuthInputProps) {
   return (
     <div className="relative">
@@ -25,12 +24,6 @@ export function AuthInput({ icon: Icon, className, ...props }: AuthInputProps) {
   );
 }
 
-/**
- * Campo de senha com alternância de visibilidade.
- *
- * O `aria-label` existe nas quatro telas — no Stitch ele estava só na de login,
- * e sem ele um botão que só tem ícone é anunciado sem nome (seção 12).
- */
 export function AuthPasswordInput({
   icon: Icon = LockIcon,
   className,

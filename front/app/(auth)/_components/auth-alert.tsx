@@ -5,11 +5,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import type { AuthErrorView } from "../_lib/auth-error-view";
 
-/**
- * Erro no nível do formulário. Recebe a view já resolvida por
- * `auth-error-view.ts` — a copy e a decisão de oferecer (ou não) uma saída
- * moram lá, junto da regra da seção 7.
- */
 export function AuthErrorAlert({ view }: { view: AuthErrorView }) {
   return (
     <Alert variant="destructive" className="border-destructive/30 bg-destructive/5 mb-6">
@@ -29,7 +24,6 @@ export function AuthErrorAlert({ view }: { view: AuthErrorView }) {
   );
 }
 
-/** Aviso positivo — usado pelos recados que uma tela deixa para a seguinte. */
 export function AuthNoticeAlert({ children }: { children: React.ReactNode }) {
   return (
     <Alert className="border-success/30 bg-success/5 text-success mb-6">

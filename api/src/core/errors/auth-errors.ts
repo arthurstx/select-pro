@@ -1,12 +1,7 @@
 import { AuthErrorCode } from "shared";
 
-/**
- * Erros de domínio do cadastro e da autenticação de membro (FEAT-0003, seção 5).
- *
- * Cada classe carrega o `code` que vai no envelope de erro e, quando o erro é
- * atribuível a um campo do formulário, o `field`. O status HTTP fica na rota:
- * é a única camada que deveria conhecer HTTP.
- */
+// Erros de domínio do cadastro e da autenticação de membro (FEAT-0003, seção 5).
+// O status HTTP fica na rota, não aqui.
 
 export class EmailAlreadyRegisteredError extends Error {
     readonly code = AuthErrorCode.EMAIL_ALREADY_REGISTERED;
@@ -18,7 +13,7 @@ export class EmailAlreadyRegisteredError extends Error {
     }
 }
 
-/** E2 — o email não consta em `members` na Supabase. Definitivo: tentar de novo não muda. */
+/** E2 — o email não consta em `members` na Supabase. Definitivo. */
 export class NotAMemberError extends Error {
     readonly code = AuthErrorCode.NOT_A_MEMBER;
     readonly field = "email";
@@ -44,14 +39,7 @@ export class MemberNotActiveError extends Error {
     }
 }
 
-/**
- * E5 — a Supabase não respondeu (timeout, rede ou não-2xx).
- *
- * **Transitório**, ao contrário de E2 e E3: a UI deve sugerir tentar de novo.
- * Nenhuma linha é gravada no D1 quando este erro acontece — o cadastro falha
- * fechado, porque criar a conta "para validar depois" transformaria uma
- * indisponibilidade momentânea em conta indevida permanente.
- */
+/** E5 — Supabase não respondeu. Transitório: nenhuma linha é gravada no D1 quando ocorre. */
 export class MemberDirectoryUnavailableError extends Error {
     readonly code = AuthErrorCode.MEMBER_DIRECTORY_UNAVAILABLE;
 
@@ -63,13 +51,7 @@ export class MemberDirectoryUnavailableError extends Error {
     }
 }
 
-/**
- * E7 — usado tanto para email inexistente quanto para senha errada.
- *
- * É uma classe só de propósito: se houvesse duas, mais cedo ou mais tarde
- * alguém daria mensagens diferentes a elas e o login viraria um verificador de
- * contas. Com uma classe, a resposta é byte a byte idêntica por construção.
- */
+/** E7 — email inexistente e senha errada compartilham a mesma classe/mensagem de propósito. */
 export class InvalidCredentialsError extends Error {
     readonly code = AuthErrorCode.INVALID_CREDENTIALS;
 
@@ -99,15 +81,7 @@ export class MissingRefreshTokenError extends Error {
     }
 }
 
-/**
- * E9 e E10 — token não encontrado, expirado **ou** reuso detectado.
- *
- * O reuso não tem erro próprio, e isso é a decisão da seção 8.4: para o cliente
- * legítimo os três casos são "sua sessão acabou, faça login". A diferença do
- * reuso — revogar a família inteira — acontece no service e aparece no log,
- * nunca na resposta, senão entregaria informação a quem estivesse testando
- * tokens roubados.
- */
+/** E9/E10 — token não encontrado, expirado ou reuso detectado. O cliente não distingue. */
 export class InvalidRefreshTokenError extends Error {
     readonly code = AuthErrorCode.INVALID_REFRESH_TOKEN;
 
@@ -117,15 +91,7 @@ export class InvalidRefreshTokenError extends Error {
     }
 }
 
-/**
- * E11 — access token malformado, com assinatura inválida, ou apontando para um
- * usuário que não existe mais.
- *
- * Distinto de "expirado" de propósito: `TOKEN_EXPIRED` manda o front renovar e
- * repetir a requisição, este manda ir para o login. Sem a distinção, a
- * expiração normal (a cada 15 minutos) seria lida como fim de sessão e o membro
- * seria deslogado o tempo todo.
- */
+/** E11 — token malformado/assinatura inválida/usuário inexistente. Distinto de "expirado". */
 export class InvalidAccessTokenError extends Error {
     readonly code = AuthErrorCode.INVALID_TOKEN;
 
@@ -135,7 +101,7 @@ export class InvalidAccessTokenError extends Error {
     }
 }
 
-/** E11 — access token expirado. O front deve chamar `/auth/refresh`, **não** deslogar. */
+/** E11 — access token expirado. O front deve chamar `/auth/refresh`, não deslogar. */
 export class AccessTokenExpiredError extends Error {
     readonly code = AuthErrorCode.TOKEN_EXPIRED;
 

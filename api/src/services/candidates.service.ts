@@ -12,11 +12,7 @@ type RegisterResult = { id: string; status: "registered"; name: string; email: s
 export class CandidateService {
     constructor(private readonly candidates: CandidateRepository) {}
 
-    /**
-     * Inscrição em passo único (FEAT-0001 v3.0, seção 4.1): valida, grava
-     * candidato + questionário no mesmo batch e acabou. Não existe estado
-     * intermediário — ou a inscrição está no banco, ou a requisição falhou.
-     */
+    /** Inscrição em passo único: valida e grava candidato + questionário no mesmo batch. */
     async register(input: RegisterRequest): Promise<Either<RegisterError, RegisterResult>> {
         const existingByEmail = await this.candidates.findByEmail(input.email);
         if (existingByEmail) {
@@ -44,9 +40,6 @@ export class CandidateService {
         const newApplication: Omit<NewCandidateApplication, "candidate_id"> = {
             id: crypto.randomUUID(),
             referral_source: input.referralSource,
-            // Só faz sentido guardar a descrição livre na origem "outros" — nas
-            // demais o campo é descartado mesmo que o cliente o envie
-            // (FEAT-0001 v3.0, seção 8.2).
             referral_source_other: input.referralSource === "outros" ? (input.referralSourceOther ?? null) : null,
             mej_acknowledged: input.mejAcknowledged,
             experience: input.experience,
@@ -59,9 +52,7 @@ export class CandidateService {
         try {
             row = await this.candidates.insertWithApplication(newCandidate, newApplication);
         } catch (err) {
-            // E5: a checagem prévia acima passou, mas outra inscrição concorrente
-            // gravou o mesmo email/telefone antes desta — a constraint é a
-            // barreira real (FEAT-0001 v3.0, seção 9).
+            // E5: inscrição concorrente gravou o mesmo email/telefone antes desta.
             const field = parseD1ConstraintError(err);
             if (field) {
                 logger.warn("candidate.register.constraint_conflict", { field });
@@ -72,7 +63,7 @@ export class CandidateService {
             logger.error("candidate.register.insert_failed", {
                 error: err instanceof Error ? err.message : String(err),
             });
-            throw err; // falha técnica genuína (não é E5) — sobe para app.onError()
+            throw err; // falha técnica genuína — sobe para app.onError()
         }
 
         logger.info("candidate.register.success", { candidateId: row.id, email: row.email });

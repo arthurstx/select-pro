@@ -17,11 +17,7 @@ import { WizardShell } from "./wizard-shell";
 
 const WHATSAPP_GROUP_URL = process.env.NEXT_PUBLIC_WHATSAPP_GROUP_URL;
 
-/**
- * Etapa 6 — Finalização (FEAT-0001-UI v3.0, seção 4.6). Único ponto de
- * submissão do wizard: `POST /candidate/register` grava a inscrição
- * definitiva e o candidato segue direto para a tela de sucesso.
- */
+/** Etapa 6 — único ponto de submissão do wizard: grava a inscrição definitiva. */
 export function FinalizationStepForm() {
   const router = useRouter();
   const { answers, setRegistered } = useRegistration();
@@ -30,10 +26,6 @@ export function FinalizationStepForm() {
 
   if (!isHydrated) return null;
 
-  // E1-E6 (FEAT-0001-UI v3.0, seção 7): erro de dados capturados em etapas
-  // anteriores, só detectado aqui porque é o único ponto de submissão. As
-  // respostas do wizard continuam em `answers`/sessionStorage — não há
-  // `reset()` aqui, só navegação de volta para o candidato corrigir.
   const fieldError = register.error instanceof ApiError && register.error.field ? register.error : null;
   const genericError =
     register.error instanceof ApiError && !register.error.field
@@ -42,8 +34,7 @@ export function FinalizationStepForm() {
         ? "Não foi possível enviar sua inscrição. Tente novamente."
         : null;
 
-  // Erro de origem ("Como conheceu") volta para a etapa 2; os demais campos
-  // com erro vêm todos da etapa 1.
+  // Erro de origem ("Como conheceu") volta para a etapa 2; os demais vêm da etapa 1.
   const correctionStep = fieldError?.field === "referralSourceOther" ? WIZARD_STEPS[1] : WIZARD_STEPS[0];
 
   function handleSubmit(event: React.FormEvent) {
@@ -59,10 +50,8 @@ export function FinalizationStepForm() {
     register.mutate(parsed.data, {
       onSuccess: (response) => {
         setRegistered(response.data);
-        // As respostas do wizard só são descartadas depois de chegar na tela
-        // de sucesso (é ela que chama `clearAnswers`) — limpá-las aqui,
-        // ainda sob o `useWizardGuard(6)`, dispararia o redirect do guard
-        // para a etapa 1 e o candidato nunca veria a confirmação.
+        // `clearAnswers` só roda na tela de sucesso — limpar aqui dispararia o
+        // redirect do `useWizardGuard(6)` antes do candidato ver a confirmação.
         router.push("/inscricao/sucesso");
       },
     });

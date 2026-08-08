@@ -14,7 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Converte uma Response não-2xx no envelope `{ error }` (FEAT-0001) em ApiError. */
+/** Converte uma Response não-2xx no envelope `{ error }` em ApiError. */
 export async function toApiError(response: Response): Promise<ApiError> {
   const body = await response.json().catch(() => null);
   const parsed = ErrorResponseSchema.safeParse(body);
@@ -31,13 +31,7 @@ export async function toApiError(response: Response): Promise<ApiError> {
   );
 }
 
-/**
- * Lê apenas o `code` do envelope de erro sem consumir o corpo da Response
- * original — quem chamou ainda precisa poder lê-lo.
- *
- * Retorna `null` quando o corpo não segue o envelope (ex: `429` devolvido pelo
- * edge da Cloudflare, que não passa pelo Worker e não tem envelope nenhum).
- */
+/** Lê só o `code` sem consumir o corpo da Response. `null` se o corpo não seguir o envelope (ex.: 429 do edge). */
 export async function readErrorCode(response: Response): Promise<string | null> {
   const body = await response
     .clone()

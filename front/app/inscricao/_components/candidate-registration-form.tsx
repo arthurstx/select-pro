@@ -33,13 +33,9 @@ import { WIZARD_STEPS } from "../_lib/wizard-steps";
 import { WizardNav } from "./wizard-nav";
 import { WizardShell } from "./wizard-shell";
 
-// COURSE_LABELS e GENDER_LABELS vêm de `shared`: os mesmos mapas são usados por
-// qualquer consumidor que precise exibir esses valores (painel, planilha,
-// export, email), sem duplicar a lista.
-
 const SEMESTERS = Array.from({ length: 10 }, (_, i) => i + 1);
 
-/** Etapa 1 — Dados Pessoais (FEAT-0001-UI v2.0, seção 4.1). */
+/** Etapa 1 — Dados Pessoais. */
 export function CandidateRegistrationForm() {
   const router = useRouter();
   const { answers, setStepData } = useRegistration();
@@ -50,10 +46,7 @@ export function CandidateRegistrationForm() {
       name: answers.name ?? "",
       email: answers.email ?? "",
       phone: answers.phone ?? "",
-      // Selects do Radix precisam de um valor definido desde o primeiro
-      // render (string vazia = "nada selecionado") para não alternar de
-      // não-controlado para controlado — "" nunca bate com nenhum
-      // SelectItem, então o placeholder continua visível até a escolha.
+      // "" nunca bate com nenhum SelectItem — mantém os Selects controlados desde o primeiro render.
       course: answers.course ?? ("" as PersonalDataStep["course"]),
       semester: answers.semester ?? ("" as unknown as PersonalDataStep["semester"]),
       gender: answers.gender ?? ("" as PersonalDataStep["gender"]),

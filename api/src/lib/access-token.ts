@@ -2,42 +2,18 @@ import { verify } from "hono/jwt";
 import { JwtTokenExpired } from "hono/utils/jwt/types";
 import { SignJWT } from "jose";
 
-/**
- * Access token (JWT HS256) — FEAT-0003, seção 9.
- *
- * Assinado com `jose` (já era dependência do `api/`, usada no FEAT-0002) e
- * verificado com `hono/jwt`, que é quem distingue "expirado" de "inválido"
- * através de classes de erro — distinção que é requisito funcional aqui
- * (E11) e não detalhe de implementação.
- *
- * HS256 e não RS256/EdDSA porque emissor e verificador são o mesmo Worker:
- * assimetria só traria gestão de par de chaves sem nenhum terceiro para
- * verificar a assinatura.
- */
+// Access token (JWT HS256) — FEAT-0003, seção 9. HS256 porque emissor e
+// verificador são o mesmo Worker.
 
-/**
- * 15 minutos. O access token é stateless — não há como revogá-lo antes de
- * expirar —, então este número é a janela de exposição aceita em troca de não
- * consultar o banco a cada requisição.
- *
- * Vai no corpo da resposta como `expiresIn`, em segundos.
- */
+/** 15 minutos — janela de exposição aceita por não revogar antes da expiração (token stateless). */
 export const ACCESS_TOKEN_TTL_SECONDS = 900;
 
-/**
- * Conteúdo do access token.
- *
- * Fica em `api/` e não em `shared/` porque não é contrato entre front e back:
- * para o front o token é uma string opaca que ele repassa em `Authorization`.
- * Quem lê estes claims é o middleware deste mesmo Worker. O que o front
- * consome de identidade vem do envelope de `/auth/me` e de `AuthUserSchema`,
- * esses sim em `shared`.
- */
+/** Fica em `api/`, não em `shared/`: o front trata o token como string opaca. */
 export interface AccessTokenClaims {
     /** `users.id`. */
     sub: string;
     email: string;
-    /** `roles.value` — `"avaliador"` em todo cadastro; `"admin"` só por promoção manual. */
+    /** `roles.value`. */
     role: string;
     /** `sessions.id` que originou este token. */
     sid: string;
@@ -67,17 +43,8 @@ export type AccessTokenVerification =
     | { ok: false; reason: AccessTokenFailure };
 
 /**
- * Verifica assinatura e expiração.
- *
- * O retorno separa `expired` de `invalid` porque o front reage de formas
- * opostas aos dois: expirado significa "chame /auth/refresh e repita a
- * requisição" (acontece a cada 15 minutos, é rotina), inválido significa "a
- * sessão acabou, vá para o login". Colapsar os dois num 401 genérico
- * deslogaria o usuário a cada quarto de hora (FEAT-0003, seção 5).
- *
- * Qualquer outra falha — assinatura trocada, algoritmo diferente, JSON
- * quebrado, claim faltando — cai em `invalid`. Não há terceiro caso útil: se
- * não dá para confiar no token, a sessão acabou.
+ * `expired` vs `invalid`: o front renova e repete no primeiro caso, manda
+ * para o login no segundo (FEAT-0003, seção 5).
  */
 export async function verifyAccessToken(
     token: string,
@@ -93,9 +60,6 @@ export async function verifyAccessToken(
 
     const { sub, email, role, sid, iat, exp } = payload;
 
-    // Um token assinado por nós sempre tem os cinco claims. Se algum faltar, ou
-    // ele foi emitido por uma versão incompatível ou não é nosso — nos dois
-    // casos a resposta é a mesma que para assinatura inválida.
     if (
         typeof sub !== "string" ||
         typeof email !== "string" ||

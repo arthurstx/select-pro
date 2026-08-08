@@ -27,9 +27,6 @@ import { WIZARD_STEPS } from "../_lib/wizard-steps";
 import { WizardNav } from "./wizard-nav";
 import { WizardShell } from "./wizard-shell";
 
-// ETHNICITY_LABELS vem de `shared`: o mesmo mapa é lido por qualquer
-// consumidor que precise exibir a cor/etnia (wizard, planilha, painel).
-
 function YesNoField({
   value,
   onChange,
@@ -57,7 +54,7 @@ function YesNoField({
   );
 }
 
-/** Etapa 5 — Disponibilidade e Diversidade (FEAT-0001-UI v2.0, seção 4.5). */
+/** Etapa 5 — Disponibilidade e Diversidade. */
 export function AvailabilityStepForm() {
   const router = useRouter();
   const { answers, setStepData } = useRegistration();

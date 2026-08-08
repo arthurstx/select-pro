@@ -19,7 +19,6 @@ import { AuthSubmitButton } from "../_components/auth-submit-button";
 import { describeRegisterError } from "../_lib/auth-error-view";
 import { RegisterFormSchema, type RegisterFormValues } from "../_lib/auth-form-schemas";
 
-/** Tela 2 — Criar Conta de Avaliador (FEAT-0003-UI, seções 4.1, 5 e 7.1). */
 export function RegisterForm() {
   const router = useRouter();
   const { signUp } = useAuth();
@@ -30,10 +29,8 @@ export function RegisterForm() {
   });
 
   const mutation = useMutation({
-    // `RegisterMemberSchema.parse` reconstrói o payload do contrato e descarta
-    // `confirmPassword`: ele nunca chega à API, nem por acidente.
     mutationFn: (values: RegisterFormValues) => signUp(RegisterMemberSchema.parse(values)),
-    // O cadastro já autentica (seção 4.1) — o membro entra direto, sem login.
+    // O cadastro já autentica — o membro entra direto, sem login.
     onSuccess: () => router.replace(AFTER_LOGIN_ROUTE),
     onError: (error) => {
       const view = describeRegisterError(error);

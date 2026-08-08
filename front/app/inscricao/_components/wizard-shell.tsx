@@ -8,11 +8,7 @@ interface WizardShellProps {
   children: React.ReactNode;
 }
 
-/**
- * Card compartilhado pelas 6 etapas do wizard (FEAT-0001-UI v2.0, seção 3):
- * borda superior de destaque, stepper e cabeçalho da etapa. Extraído do
- * layout que antes vivia inline em `candidate-registration-form.tsx`.
- */
+/** Card compartilhado pelas 6 etapas do wizard: borda superior, stepper e cabeçalho da etapa. */
 export function WizardShell({ current, title, description, children }: WizardShellProps) {
   return (
     <div className="border-t-primary w-full max-w-md rounded-2xl border border-t-4 bg-white p-4 shadow-2xl sm:max-w-2xl sm:p-8 md:p-10">

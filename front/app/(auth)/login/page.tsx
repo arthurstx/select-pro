@@ -10,8 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default function LoginPage() {
-  // `LoginForm` lê a query string (o aviso deixado por outra tela), o que exige
-  // fronteira de Suspense para o restante da rota continuar pré-renderizável.
+  // `LoginForm` lê a query string — exige fronteira de Suspense para a rota continuar pré-renderizável.
   return (
     <Suspense fallback={<AuthCardSkeleton />}>
       <LoginForm />

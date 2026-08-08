@@ -6,15 +6,9 @@ import type {
 } from "shared";
 
 /**
- * Candidato + respostas do questionário, achatados numa linha só — o formato
- * que a sincronização com a planilha consome (FEAT-0002, seção 8.2).
- *
- * Interno da API de propósito: não é contrato entre front e back (o front não
- * sabe que a planilha existe), então não vai para `shared`.
- *
- * Os booleanos aparecem como `number` porque é o que o D1 devolve: `INTEGER`
- * 0/1, garantido pelos CHECK da tabela. `CandidateApplicationRow` os tipa como
- * `boolean`, que descreve o domínio mas não o retorno cru da query.
+ * Candidato + questionário achatados numa linha só, para a sincronização com
+ * a planilha (FEAT-0002, seção 8.2). Interno da API — não vai para `shared`.
+ * Booleanos como `number`: é o que o D1 devolve.
  */
 export interface CandidateWithApplicationRow extends CandidateRow {
   referral_source: ReferralSource;
@@ -42,20 +36,7 @@ export class CandidateRepository {
       .first<CandidateRow>();
   }
 
-  /**
-   * Todas as inscrições com o questionário, para a sincronização com a planilha
-   * (FEAT-0002, seção 4.1).
-   *
-   * `INNER JOIN` e não `LEFT`: `insertWithApplication` grava as duas linhas no
-   * mesmo batch, então candidato sem questionário não é um estado que exista.
-   * As colunas de `candidate_applications` são listadas uma a uma porque um
-   * `a.*` traria o `id` da inscrição e sobrescreveria o `id` do candidato — que
-   * é justamente a chave usada para deduplicar na planilha.
-   *
-   * Ordenado por `created_at` para que a planilha cresça em ordem cronológica;
-   * `id` desempata linhas gravadas no mesmo segundo (a precisão de
-   * `CURRENT_TIMESTAMP` no SQLite), sem o que a ordem seria indefinida.
-   */
+  /** Todas as inscrições com questionário, para a sincronização com a planilha (FEAT-0002, seção 4.1). */
   async listAllWithApplication(): Promise<CandidateWithApplicationRow[]> {
     const { results } = await this.db
       .prepare(
@@ -75,13 +56,7 @@ export class CandidateRepository {
     return results ?? [];
   }
 
-  /**
-   * Insere o candidato e sua inscrição (questionário) numa única transação
-   * (`db.batch` — FEAT-0001 v3.0, seção 9): as duas linhas entram juntas ou
-   * nenhuma delas entra. Em caso de violação de UNIQUE (email/phone), deixa
-   * o erro bruto do D1 subir — cabe ao service traduzi-lo via
-   * `parseD1ConstraintError` (E5, FEAT-0001 v3.0 seção 5).
-   */
+  /** Candidato + inscrição num `db.batch` só. Violação de UNIQUE sobe crua para o service traduzir. */
   async insertWithApplication(
     candidate: NewCandidate,
     application: Omit<NewCandidateApplication, "candidate_id">,

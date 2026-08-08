@@ -4,11 +4,6 @@ import { cn } from "@/lib/utils";
 
 import { WIZARD_STEPS, type WizardStepNumber } from "../_lib/wizard-steps";
 
-/**
- * Indicador de progresso do wizard (FEAT-0001-UI v2.0, seção 3): os 6 passos
- * numerados, com check nos concluídos. É decoração/orientação — não captura
- * dado, então não precisa de nenhuma lógica de formulário.
- */
 export function WizardStepper({ current }: { current: WizardStepNumber }) {
   return (
     <ol className="flex w-full items-start" aria-label="Progresso da inscrição">

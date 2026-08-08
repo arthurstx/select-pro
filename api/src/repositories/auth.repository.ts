@@ -8,19 +8,11 @@ import type {
     UserRow,
 } from "shared";
 
-/**
- * Usuário com o papel já resolvido.
- *
- * O join com `roles` acompanha toda leitura de usuário porque o papel entra no
- * claim `role` do access token e no `/auth/me` — buscá-lo depois seria uma
- * segunda query para um dado que nunca é dispensável.
- */
 export interface UserWithRole extends UserRow {
-    /** `roles.value`. */
     role: string;
 }
 
-/** Usuário + papel + o snapshot que veio da tec. É o que `GET /auth/me` devolve. */
+/** Usuário + papel + snapshot da tec. É o que `GET /auth/me` devolve. */
 export interface UserWithProfile extends UserWithRole {
     member_id: string;
     full_name: string;
@@ -43,7 +35,6 @@ export class AuthRepository {
     // Usuários
     // ------------------------------------------------------------
 
-    /** O email já vem normalizado (trim + lowercase) por `EmailSchema`, então a comparação é exata. */
     async findUserByEmail(email: string): Promise<UserWithRole | null> {
         return this.db
             .prepare(
@@ -68,12 +59,7 @@ export class AuthRepository {
             .first<UserWithRole>();
     }
 
-    /**
-     * `INNER JOIN` em `member_profiles`: usuário sem perfil não é um estado que
-     * exista. As duas linhas nascem no mesmo batch de `createMemberAccount`, e a
-     * promoção a `admin` é um UPDATE numa conta que já passou por lá — nunca um
-     * INSERT novo (FEAT-0003, seção 9).
-     */
+    /** `INNER JOIN` em `member_profiles`: usuário sem perfil não é um estado que exista. */
     async findUserWithProfileById(id: string): Promise<UserWithProfile | null> {
         return this.db
             .prepare(
@@ -89,17 +75,7 @@ export class AuthRepository {
             .first<UserWithProfile>();
     }
 
-    /**
-     * Cadastro completo numa transação só: identidade, snapshot e sessão.
-     *
-     * `db.batch` é o que garante a atomicidade exigida pela seção 9 — nenhum dos
-     * estados parciais tem representação válida no domínio: "usuário sem perfil"
-     * quebraria o `/auth/me`, e "usuário sem sessão" contradiria o 201 que acaba
-     * de entregar um access token ao membro.
-     *
-     * Violações de UNIQUE sobem cruas; quem traduz é o service, via
-     * `parseUniqueConstraint` (E6, a corrida que a checagem prévia não pega).
-     */
+    /** Identidade, snapshot e sessão num `db.batch` só — nenhum estado parcial é válido. */
     async createMemberAccount(
         user: NewUser,
         profile: Omit<NewMemberProfile, "user_id">,
@@ -152,7 +128,6 @@ export class AuthRepository {
         await this.db.batch([insertUser, insertProfile, insertSession]);
     }
 
-    /** Regravação do hash após um login que passou por `passwordNeedsRehash`. */
     async updateUserPassword(userId: string, passwordHash: string): Promise<void> {
         await this.db
             .prepare("UPDATE users SET password = ?, updated_at = ? WHERE id = ?")
@@ -188,15 +163,7 @@ export class AuthRepository {
             .first<SessionRow>();
     }
 
-    /**
-     * Rotação: a linha usada é revogada e outra nasce na mesma `family_id`,
-     * no mesmo batch.
-     *
-     * Juntas ou nenhuma — se a revogação passasse e o insert falhasse, o membro
-     * ficaria sem sessão nenhuma no meio de um refresh que respondeu erro; se o
-     * insert passasse e a revogação falhasse, dois refresh tokens válidos
-     * coexistiriam e a detecção de reuso perderia o sentido.
-     */
+    /** Revoga a linha usada e cria a próxima na mesma `family_id`, atomicamente. */
     async rotateSession(currentSessionId: string, next: NewSession): Promise<void> {
         const revokeCurrent = this.db
             .prepare("UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
@@ -219,14 +186,7 @@ export class AuthRepository {
         await this.db.batch([revokeCurrent, insertNext]);
     }
 
-    /**
-     * Revoga toda a cadeia de rotações originada de um mesmo login.
-     *
-     * Usado no logout (derrubar a sessão inteira, não só o último token) e na
-     * detecção de reuso, onde é a reação inteira do sistema: se dois lados
-     * apresentam tokens da mesma família, um deles é cópia, e não há como saber
-     * qual — então os dois caem.
-     */
+    /** Revoga toda a cadeia de rotações de um mesmo login. Usado no logout e na detecção de reuso. */
     async revokeSessionFamily(familyId: string): Promise<void> {
         await this.db
             .prepare("UPDATE sessions SET revoked_at = ? WHERE family_id = ? AND revoked_at IS NULL")
@@ -234,7 +194,7 @@ export class AuthRepository {
             .run();
     }
 
-    /** Expulsa o usuário de todo lugar. Acontece na conta desativada (E12) e na redefinição de senha. */
+    /** Expulsa o usuário de todo lugar. Usado na conta desativada (E12) e na redefinição de senha. */
     async revokeAllUserSessions(userId: string): Promise<void> {
         await this.db
             .prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
@@ -246,13 +206,7 @@ export class AuthRepository {
     // Recuperação de senha
     // ------------------------------------------------------------
 
-    /**
-     * Invalida os pedidos anteriores e grava o novo, no mesmo batch.
-     *
-     * Pedir um link novo precisa matar o anterior: dois links válidos ao mesmo
-     * tempo dobram a janela de um email vazado sem dar nada em troca ao membro,
-     * que vai usar o último que recebeu de qualquer forma.
-     */
+    /** Invalida pedidos anteriores e grava o novo, no mesmo batch. */
     async replaceResetToken(token: NewPasswordResetToken): Promise<void> {
         const now = new Date().toISOString();
 
@@ -279,15 +233,7 @@ export class AuthRepository {
             .first<PasswordResetTokenRow>();
     }
 
-    /**
-     * Troca o hash, queima o token e derruba todas as sessões — num batch só.
-     *
-     * Os três precisam ser atômicos porque a garantia que o fluxo vende é
-     * "depois de redefinir, quem estava dentro saiu". Uma senha trocada com as
-     * sessões antigas vivas deixaria um invasor com refresh token válido dentro
-     * da conta por até 7 dias, que é exatamente o que a redefinição existe para
-     * impedir (FEAT-0003, seção 4.7).
-     */
+    /** Troca o hash, queima o token e derruba todas as sessões — num batch só (FEAT-0003, seção 4.7). */
     async completePasswordReset(params: {
         userId: string;
         tokenId: string;
@@ -314,22 +260,7 @@ export class AuthRepository {
     // Manutenção (Cron Trigger)
     // ------------------------------------------------------------
 
-    /**
-     * Apaga o que não serve mais para nada.
-     *
-     * A rotação grava uma linha por refresh: uma sessão ativa durante 7 dias
-     * deixa centenas de linhas revogadas para trás. Sem esta limpeza, `sessions`
-     * cresce sem teto contra o limite de linhas do D1 no plano Free — e o
-     * gargalo chegaria por acúmulo, não por uso.
-     *
-     * Sessões revogadas ficam 30 dias antes de sumir: elas são a única trilha
-     * que resta para investigar uma detecção de reuso (E10), e apagá-las na hora
-     * apagaria a evidência junto.
-     *
-     * Todas as datas comparadas aqui são escritas pela aplicação em ISO-8601
-     * UTC — nunca por `CURRENT_TIMESTAMP`, cujo formato é outro. Misturar os
-     * dois faria a comparação lexicográfica calar em vez de falhar.
-     */
+    /** Sessões revogadas ficam 30 dias (evidência para investigar reuso) antes de sumir. */
     async pruneExpired(now: Date = new Date()): Promise<void> {
         const nowIso = now.toISOString();
         const revokedCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();

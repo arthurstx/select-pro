@@ -23,8 +23,6 @@ test("N chamadas concorrentes disparam UMA execução e compartilham o resultado
     return gate.promise;
   });
 
-  // O cenário da seção 8.3: três requisições paralelas recebem 401 ao mesmo
-  // tempo e pedem renovação antes de qualquer uma terminar.
   const waiting = [refresh(), refresh(), refresh()];
   assert.equal(calls, 1, "o refresh precisa ser único enquanto está em curso");
 

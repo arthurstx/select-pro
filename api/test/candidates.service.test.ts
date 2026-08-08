@@ -128,11 +128,7 @@ describe("CandidateService.register", () => {
         const { service, candidates } = buildService();
         const input = uniqueCandidateInput();
 
-        // Simula a corrida do E5: a linha aparece no banco depois que
-        // `register` já leu (a checagem prévia não a viu), então quem detecta
-        // é a constraint UNIQUE do insert. A linha concorrente colide apenas
-        // no email — se colidisse também no telefone, a checagem seguinte
-        // (findByPhone) barraria antes e o teste não exercitaria a constraint.
+        // Simula a corrida do E5: a linha aparece no banco depois que `register` já leu.
         const original = candidates.findByEmail.bind(candidates);
         candidates.findByEmail = async () => {
             const { candidate, application } = candidateRowFrom({ ...uniqueCandidateInput(), email: input.email });
@@ -165,8 +161,6 @@ describe("CandidateService.register", () => {
 
     it("descarta a descrição livre quando a origem não é 'outros'", async () => {
         const { service } = buildService();
-        // O schema não impede o cliente de mandar o campo junto de outra origem —
-        // o service normaliza para null (FEAT-0001 v3.0, seção 8.2).
         const input = { ...uniqueCandidateInput(), referralSource: "linkedin" as const, referralSourceOther: "ignorar isso" };
 
         const result = await service.register(input);
@@ -186,11 +180,8 @@ describe("CandidateRepository.insertWithApplication — atomicidade (FEAT-0001 v
         const input = uniqueCandidateInput();
         const { candidate, application } = candidateRowFrom(input);
 
-        // Primeiro insert bem-sucedido.
         await candidates.insertWithApplication(candidate, application);
 
-        // Segundo insert com o mesmo email viola UNIQUE(candidates.email) — o batch
-        // inteiro deve falhar, sem gravar a segunda linha de candidate_applications.
         const duplicate = candidateRowFrom({ ...uniqueCandidateInput(), email: input.email });
         await expect(candidates.insertWithApplication(duplicate.candidate, duplicate.application)).rejects.toThrow();
 

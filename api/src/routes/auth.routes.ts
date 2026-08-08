@@ -31,15 +31,7 @@ export const authRouter = new OpenAPIHono<AuthEnv>();
 
 const REFRESH_COOKIE_NAME = "refresh_token";
 
-/**
- * `Path=/auth` limita o envio do cookie às rotas que precisam dele: nenhuma
- * requisição de negócio carrega o refresh token junto sem motivo.
- *
- * `SameSite=None` é obrigatório, não uma preferência — front (Vercel) e API
- * (Cloudflare) são sites diferentes, e o `Lax` padrão simplesmente não enviaria
- * o cookie no `/auth/refresh`. `None` exige `Secure`, o que também significa
- * que este cookie não funciona em `http://localhost` (FEAT-0003, seção 13).
- */
+/** `SameSite=None` + `Secure` porque front (Vercel) e API (Cloudflare) são sites diferentes. */
 const REFRESH_COOKIE_OPTIONS = {
     httpOnly: true,
     secure: true,
@@ -54,7 +46,6 @@ function setRefreshCookie(c: Context<AuthEnv>, token: string): void {
     });
 }
 
-/** Mesmos atributos, `Max-Age=0`: é o que apaga o cookie no navegador. */
 function clearRefreshCookie(c: Context<AuthEnv>): void {
     setCookie(c, REFRESH_COOKIE_NAME, "", { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 });
 }
@@ -69,19 +60,11 @@ function buildService(c: Context<AuthEnv>): AuthService {
         directory: new SupabaseMemberDirectory(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY),
         mailer: new ResendMailer(c.env.RESEND_API_KEY, c.env.RESEND_FROM_EMAIL),
         jwtSecret: c.env.JWT_SECRET,
-        // `FRONT_ORIGIN` aceita uma lista (produção + preview); a primeira é a
-        // canônica e é dela que sai o link do email de recuperação.
         frontOrigin: c.env.FRONT_ORIGIN.split(",")[0].trim(),
         defer: (promise) => c.executionCtx.waitUntil(promise),
     });
 }
 
-/**
- * Status HTTP de cada código de erro do domínio.
- *
- * A tabela vive na camada HTTP porque é a única que deveria conhecer HTTP: os
- * erros do service carregam `code`, `message` e às vezes `field`, e nada mais.
- */
 const STATUS_BY_ERROR_CODE: Record<string, ContentfulStatusCode> = {
     [AuthErrorCode.EMAIL_ALREADY_REGISTERED]: 409,
     [AuthErrorCode.NOT_A_MEMBER]: 403,
@@ -112,14 +95,6 @@ function throwDomainError(error: DomainError): never {
     );
 }
 
-/**
- * Erro de validação do Zod → envelope da API.
- *
- * Senha fora da política é `WEAK_PASSWORD`, o código que a UI espera para
- * destacar o campo (E4 no cadastro, E15 na redefinição). Qualquer outro campo
- * cai num código genérico: o front valida email antes de enviar, então este
- * caminho é rede de segurança, não fluxo previsto.
- */
 function mapValidationError(error: ZodError): DomainError {
     const issue = error.issues[0];
     const field = issue?.path[0];
@@ -284,8 +259,6 @@ authRouter.openapi(refreshRoute, async (c) => {
     const result = await buildService(c).refresh(getRefreshToken(c), requestContext(c));
 
     if (result.isLeft()) {
-        // O cookie é apagado em qualquer falha: se ele não serve mais, deixá-lo
-        // no navegador só faz o front repetir a mesma requisição inútil.
         clearRefreshCookie(c);
         throwDomainError(result.value);
     }
@@ -388,8 +361,6 @@ authRouter.openapi(
     async (c) => {
         const result = await buildService(c).forgotPassword(c.req.valid("json"));
 
-        // Sem checagem de `isLeft`: esta rota não tem cenário de erro visível ao
-        // cliente, e o tipo do service (`Either<never, …>`) diz isso.
         return c.json({ data: result.value }, 202);
     },
     validationHook,
@@ -430,8 +401,6 @@ authRouter.openapi(
             throwDomainError(result.value);
         }
 
-        // Nenhuma sessão é criada aqui: todas acabaram de ser revogadas, e o
-        // membro precisa entrar de novo com a senha nova.
         clearRefreshCookie(c);
 
         return c.body(null, 204);
@@ -439,12 +408,7 @@ authRouter.openapi(
     validationHook,
 );
 
-/**
- * O refresh token só existe no cookie — nunca em corpo, header ou query string.
- *
- * Um cookie vazio (o que sobra depois de um logout) vale como ausente: é E8
- * ("faça login"), não E9 ("token inválido").
- */
+/** Um cookie vazio (pós-logout) vale como ausente: E8, não E9. */
 function getRefreshToken(c: Context<AuthEnv>): string | undefined {
     return getCookie(c, REFRESH_COOKIE_NAME) || undefined;
 }
