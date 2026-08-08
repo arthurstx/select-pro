@@ -197,6 +197,36 @@ describe("POST /auth/register (HTTP)", () => {
         expect(body.error.code).toBe("MEMBER_NOT_ACTIVE");
     });
 
+    // Este caso passa pelo `TecMemberSchema` de verdade (o fetch é dublado, o
+    // parse não), que é justamente onde o `null` erraria: com um schema estrito
+    // ele viraria falha de parse → E5 (503, "tente de novo") em vez de E3 (403).
+    // A coluna `status` é NULLABLE na tec, então isto não é hipotético.
+    it("E3 - status null também é 403, e não E5 por falha de parse", async () => {
+        const member = tecMember({ status: null });
+        stubDirectory({ member });
+
+        const response = await call(
+            postJson("/auth/register", { email: member.email, password: "senha-de-teste" }),
+        );
+
+        expect(response.status).toBe(403);
+        const body = await response.json<{ error: { code: string } }>();
+        expect(body.error.code).toBe("MEMBER_NOT_ACTIVE");
+    });
+
+    // `update_at` na tec é NULLABLE: linha nunca editada vem sem valor. O campo
+    // não entra no snapshot, mas um schema estrito reprovaria o membro inteiro.
+    it("membro com updated_at null se cadastra normalmente", async () => {
+        const member = tecMember({ updated_at: null });
+        stubDirectory({ member });
+
+        const response = await call(
+            postJson("/auth/register", { email: member.email, password: "senha-de-teste" }),
+        );
+
+        expect(response.status).toBe(201);
+    });
+
     it.each([
         ["não-2xx", { status: 500 }],
         ["erro de rede", { reject: true }],
@@ -362,7 +392,7 @@ describe("GET /auth/me e o middleware de JWT", () => {
         const response = await getMe({ Authorization: `Bearer ${body.data.accessToken}` });
 
         expect(response.status).toBe(200);
-        const me = await response.json<{ data: { email: string; profile: { memberId: number } } }>();
+        const me = await response.json<{ data: { email: string; profile: { memberId: string } } }>();
         expect(me.data.email).toBe(member.email);
         expect(me.data.profile.memberId).toBe(member.id);
     });

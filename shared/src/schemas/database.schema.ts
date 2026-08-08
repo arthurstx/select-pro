@@ -132,10 +132,10 @@ export interface MemberProfileRow {
     /** FK unique -> users.id (garante o 1:1). */
     user_id: string;
     /**
-     * Id do membro na Supabase — a única chave de correlação estável com a
-     * tec. O email pode mudar; este não.
+     * Id do membro na Supabase (uuid) — a única chave de correlação estável
+     * com a tec. O email pode mudar; este não.
      */
-    member_id: number;
+    member_id: string;
 
     full_name: string;
     phone: string;

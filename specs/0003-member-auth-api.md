@@ -249,20 +249,27 @@ type MemberStatus = "active" | "inactive" | "alumni" | "on_leave";
 // liberação por admin — ver seção 10, pergunta 3.
 const ELIGIBLE_MEMBER_STATUSES = ["active"] as const;
 
+// ATENÇÃO: três nomes aqui NÃO são os nomes das colunas na tec. A tradução
+// acontece no `?select=` do PostgREST (`nosso:deles`) — ver seção 9. Os nomes
+// abaixo são os que valem no resto do sistema, inclusive em `member_profiles`.
+//
+//   full_name   <- name
+//   birth_date  <- birth_data   (typo na origem)
+//   updated_at  <- update_at    (typo na origem)
 interface TecMember {
-  id: number;
-  full_name: string;
+  id: string;                // uuid — PK da tabela na tec
+  full_name: string;         // alias de `name`
   email: string;
   phone: string;
-  birth_date: string | null; // DATE, ISO-8601
+  birth_date: string | null; // alias de `birth_data`; DATE, ISO-8601
   course: string;            // TEXT livre na origem — ver ponto de atenção abaixo
   semester: number;
   gender: string;            // TEXT livre na origem
   ethnicity: string;         // TEXT livre na origem
-  status: MemberStatus;
+  status: string | null;     // TEXT livre E nullable — ver ponto de atenção abaixo
   manager: boolean;
   created_at: string;
-  updated_at: string;
+  updated_at: string | null; // alias de `update_at`; null enquanto nunca editado
 }
 
 // ------------------------------------------------------------
@@ -292,7 +299,7 @@ interface UserRow {
 interface MemberProfileRow {
   id: string;
   user_id: string;   // FK unique -> users.id (garante o 1:1)
-  member_id: number; // unique — id do membro na Supabase, a única chave de correlação
+  member_id: string; // unique — uuid do membro na Supabase, a única chave de correlação
 
   full_name: string;
   phone: string;
@@ -367,7 +374,7 @@ interface AccessTokenClaims {
 **Pontos de atenção para quem for implementar:**
 
 - **Os enums da tec não são os nossos.** `course`, `gender` e `ethnicity` são `TEXT` livre na Supabase, enquanto a aplicação tem enums fechados (`Course`, `Gender`, `Ethnicity` em `database.schema.ts`). É esperado que os valores **não** coincidam (`"Engenharia de Computação"` lá vs. `"eng-computacao"` aqui). Por isso `member_profiles` guarda os valores **como vieram**, sem CHECK e sem conversão: aplicar nossas constraints a dados de um sistema que não controlamos faria o cadastro falhar por um dado que o membro não tem como corrigir. Se algum dia a aplicação precisar filtrar ou agregar por curso, a normalização acontece na leitura, com um mapa em `shared` — mesma linha de raciocínio que tirou o CHECK de `candidates.course` na v3.1.
-- **`status` vindo da Supabase não tem restrição no banco de origem (confirmado na v1.1).** A coluna é `TEXT` livre — o CHECK que aparecia no DDL de referência nunca foi criado. Portanto `MemberStatus` é o conjunto de valores *esperados*, não um conjunto *garantido*: a API pode receber um valor fora da lista, ou `null`. O tratamento é **fail-closed** — qualquer valor diferente de `"active"` bloqueia o cadastro (E3), inclusive um valor desconhecido. Isso não é uma precaução redundante: é a única barreira que existe, já que a origem não valida nada.
+- **`status` vindo da Supabase não tem restrição no banco de origem (confirmado na v1.1; nullability confirmada no schema de produção).** A coluna é `TEXT` livre **e NULLABLE** — o CHECK que aparecia no DDL de referência nunca foi criado. Portanto `MemberStatus` é o conjunto de valores *esperados*, não um conjunto *garantido*: a API pode receber um valor fora da lista, ou `null`. Por isso `TecMemberSchema.status` é `z.string().nullable()` e `isEligibleMemberStatus` aceita `string | null`: se o schema fosse estrito, um `null` viraria erro de parse e o membro receberia 503 em vez de 403 — exatamente a inversão que o parágrafo seguinte proíbe. O tratamento é **fail-closed** — qualquer valor diferente de `"active"` bloqueia o cadastro (E3), inclusive um valor desconhecido. Isso não é uma precaução redundante: é a única barreira que existe, já que a origem não valida nada.
 - **`status` é enum Zod fechado (`MemberStatusSchema`), e um valor fora dele reprova a elegibilidade, não a requisição.** O enum é o que documenta os valores esperados e torna a manutenção trivial: se a tec criar um `suspended`, basta acrescentar o literal em `shared`. Mas o parse do `status` não pode derrubar o parse do membro inteiro — um status desconhecido significa "não sei se essa pessoa pode entrar", e a resposta correta a isso é E3 (`403`, não elegível), não E5 (`503`, "tente novamente"). Na prática: valide o `status` de forma isolada (`safeParse` no campo, ou `.catch()` para um valor sentinela não-ativo) e deixe o resto do `TecMemberSchema` estrito. Sem esse cuidado, o membro recebe "serviço indisponível" para um problema que não é transitório e que nenhuma nova tentativa resolve.
 - **`member_id` é a única chave de correlação com a tec.** O email pode mudar; o `id` da Supabase, não. Guardá-lo é o que permite uma futura resincronização (fora de escopo aqui) sem depender de casar strings.
 - **`users.name` e `member_profiles.full_name` são a mesma informação em dois lugares.** `users.name` existe desde a 0001 e é o que a aplicação exibe; `full_name` é o valor cru do snapshot. Ambos são preenchidos com o mesmo valor no cadastro e podem divergir depois, se a aplicação permitir edição do nome de exibição — que é justamente o ponto de manter os dois.
@@ -384,7 +391,7 @@ ALTER TABLE users ADD COLUMN deactivated_at TEXT;
 CREATE TABLE member_profiles (
   id       TEXT PRIMARY KEY,
   user_id  TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-  member_id INTEGER NOT NULL UNIQUE,
+  member_id TEXT NOT NULL UNIQUE,   -- uuid da tec, não inteiro
   full_name TEXT NOT NULL,
   phone     TEXT NOT NULL,
   birth_date TEXT,
@@ -535,7 +542,7 @@ Acompanhado de um novo `Set-Cookie` com o token rotacionado.
     "name": "string",
     "role": "avaliador",
     "profile": {
-      "memberId": 42,
+      "memberId": "uuid",
       "fullName": "string",
       "phone": "string",
       "course": "string",
@@ -591,7 +598,8 @@ Segue o envelope já padronizado em `shared/src/schemas/error.schema.ts` (`{ err
 | Robustez do hash                 | **Risco aceito** enquanto o projeto estiver no plano Free. Mitigações que não custam CPU: salt único por usuário, hash nunca exposto em resposta ou log, e rate limiting no edge          | Com iterações ~40× abaixo do recomendado, o custo de um ataque offline cai na mesma proporção. Não há como comprar essa robustez de volta dentro de 10 ms de CPU — o que resta é reduzir a chance de o hash vazar e o custo de subir o parâmetro depois |
 | Reforço do hash (upgrade path)   | O `iterations` fica embutido no hash (`pbkdf2-sha256$<iterations>$…`). Ao logar com sucesso, se o hash armazenado usar menos iterações que o parâmetro atual, **re-derivar e regravar**  | Torna o aumento de custo uma mudança de constante, sem migration e sem forçar ninguém a trocar de senha: no dia em que o projeto for para o plano pago, as contas se fortalecem sozinhas no próximo login                    |
 | Comparação de hash               | Comparação em tempo constante                                                                                                                                                          | Comparação com short-circuit vaza o prefixo correto do hash byte a byte                                                                                                                                                     |
-| Consulta ao diretório (Supabase) | `fetch` direto no PostgREST: `GET {SUPABASE_URL}/rest/v1/members?email=ilike.{email}&select=*&limit=1`, headers `apikey` e `Authorization: Bearer {SUPABASE_SERVICE_ROLE_KEY}`, com `AbortSignal.timeout(3000)` | Uma query filtrada por email não justifica os ~50 kb e a camada de abstração do `@supabase/supabase-js` num runtime onde bundle size é cold start. O timeout impede que uma Supabase lenta segure a requisição do membro    |
+| Consulta ao diretório (Supabase) | `fetch` direto no PostgREST: `GET {SUPABASE_URL}/rest/v1/members?email=ilike.{email}&select={TEC_MEMBER_SELECT}&limit=1`, headers `apikey` e `Authorization: Bearer {SUPABASE_SERVICE_ROLE_KEY}`, com `AbortSignal.timeout(3000)` | Uma query filtrada por email não justifica os ~50 kb e a camada de abstração do `@supabase/supabase-js` num runtime onde bundle size é cold start. O timeout impede que uma Supabase lenta segure a requisição do membro    |
+| Nomes de coluna da tec           | Colunas explícitas no `?select=`, com alias `nosso:deles` para as três que divergem (`full_name:name`, `birth_date:birth_data`, `updated_at:update_at`)                                                                                                | Duas delas são typo na origem, e é banco de outro time — a aplicação não pode depender de um rename lá para funcionar. Traduzir no boundary mantém os nomes bons em `member_profiles`, no service e no `/auth/me`. Pedir coluna inexistente devolve **400**, que vira E5 (503) para todo membro: a falha não é do membro, e nenhuma tentativa dele resolve |
 | Filtro de email na Supabase      | `ilike` em vez de `eq`                                                                                                                                                                 | `TEXT` em Postgres é case-sensitive: se a tec gravou `Fulano@…` e o membro digita `fulano@…`, `eq` não acha e um membro legítimo é barrado como "não é membro"                                                              |
 | Segredo da Supabase              | `SUPABASE_SERVICE_ROLE_KEY` como secret do Worker; `SUPABASE_URL` como var                                                                                                             | A `service_role` ignora RLS e dá acesso total ao banco da tec. Ela só pode existir no backend, e nunca em `wrangler.jsonc`                                                                                                  |
 | Momento da validação             | Somente no cadastro                                                                                                                                                                    | Mantém a Supabase fora do caminho crítico do login: uma indisponibilidade dela impede cadastros novos, mas não derruba quem já tem conta. Desligamento de membro vira desativação manual (`users.deactivated_at`)             |

@@ -131,7 +131,8 @@ export type RefreshResponse = z.infer<typeof RefreshResponseSchema>;
  * quando a conta foi criada e podem estar desatualizados (FEAT-0003, seção 9).
  */
 export const MemberProfileSummarySchema = z.object({
-    memberId: z.number().int(),
+    /** `uuid` na tec — string, não number. Ver `TecMemberSchema.id`. */
+    memberId: z.string(),
     fullName: z.string(),
     phone: z.string(),
     course: z.string(),

@@ -241,10 +241,12 @@ describe("AuthService", () => {
             expect(await countUsers("estranho@exemplo.com")).toBe(0);
         });
 
-        it.each(["inactive", "alumni", "on_leave", "suspended", "", "ACTIVE"])(
+        // `null` está na lista porque a coluna é NULLABLE na tec: "sem status"
+        // é tão não-elegível quanto um status desconhecido, e pelo mesmo motivo.
+        it.each<TecMember["status"]>(["inactive", "alumni", "on_leave", "suspended", "", "ACTIVE", null])(
             "E3 - recusa o status %s, inclusive valor fora do enum (fail-closed)",
             async (status) => {
-                const member = tecMember({ status: status as TecMember["status"] });
+                const member = tecMember({ status });
                 directory.member = member;
 
                 const result = await service.register(
