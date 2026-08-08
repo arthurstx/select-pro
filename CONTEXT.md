@@ -12,14 +12,16 @@ Este arquivo guarda contexto operacional/de estado que não vive no código nem 
 
 - `master`: produção.
 - `develop`: branch de integração ativa.
-- Branches de feature nascem de `develop` (ex: `feat/wizard-inscricao-6-etapas`, já mergeada; `feat/remover-otc-inscricao-passo-unico`, em PR).
+- Branches de feature nascem de `develop` (ex: `feat/wizard-inscricao-6-etapas`, já mergeada; `feat/remover-otc-inscricao-passo-unico`, em PR; `feat/auth-membro`, com as specs do FEAT-0003 e nenhuma implementação ainda).
 
 > ⚠️ Antes de assumir que `develop` e `master` estão sincronizados, rode `git log master..develop` e `git log develop..master` — historicamente já divergiram nas duas direções (features prontas em `develop` aguardando promoção, e commits de deploy direto em `master`).
 
 ## Ambientes / Infra (Cloudflare Worker `api/`)
 
 - `api/wrangler.jsonc` define os bindings por ambiente (D1, vars). Ao alterar `database_name`/`database_id`, confirme qual ambiente (staging vs produção) está sendo afetado antes de commitar — esses valores têm mudado localmente sem commit correspondente em algumas sessões.
-- **Sem provedor de email desde FEAT-0001 v3.0:** a remoção do OTC eliminou o Resend do projeto (mailer, dependência e vars `RESEND_*`). O secret `RESEND_API_KEY` pode continuar existindo nos Workers (`api`, `api-staging`) até ser removido com `wrangler secret delete` — ele não é mais lido por nenhum código.
+- **O Worker roda no plano Free da Cloudflare.** O limite que importa é **10 ms de CPU por invocação** — tempo de I/O (fetch, D1, KV) não conta. Na prática quase nada esbarra nisso, exceto criptografia: o hash de senha do FEAT-0003 é o primeiro código do projeto que precisa ser calibrado para caber. Estourar o limite não é falha sob carga, é `Error 1102` determinístico, e `wrangler dev` **não** aplica o teto — só dá para medir em produção. Consequências no mesmo plano: **Cloudflare Queues indisponível** (exige plano pago) e apenas **uma** regra de Rate Limiting no WAF.
+- **Sem provedor de email desde FEAT-0001 v3.0, mas o Resend volta no FEAT-0003.** A remoção do OTC eliminou o mailer, a dependência e as vars `RESEND_*`; o fluxo de recuperação de senha o traz de volta, só que restrito a `/auth/forgot-password` e fora do caminho crítico (`waitUntil`). O secret `RESEND_API_KEY` pode continuar existindo nos Workers (`api`, `api-staging`), porque a v3.0 removeu o código sem rodar `wrangler secret delete` — **conferir com `wrangler secret list` antes de recriar.**
+- **Secrets e vars que o FEAT-0003 exige e ainda não existem:** secrets `JWT_SECRET` e `SUPABASE_SERVICE_ROLE_KEY`; vars `SUPABASE_URL` e `FRONT_ORIGIN` (origin explícita do front — o `cors()` atual reflete qualquer origin, o que é correto para `/candidate/*` e inaceitável em `/auth/*`, que trafega cookie). A `service_role` ignora RLS e dá acesso total ao banco da tec: nunca em `wrangler.jsonc`.
 - **KV `PENDING_REGISTRATIONS`:** não é mais referenciado no `wrangler.jsonc`. Os namespaces seguem existindo na conta Cloudflare (ids `c7ac7d5d…` produção e `0a7885b8…` staging) e podem ser deletados manualmente.
 - **Migrations do D1** precisam ser aplicadas por ambiente (`wrangler d1 migrations apply <DB> --remote`). A `0004-normalize-course-slugs.sql` é a mais recente.
 - **Existe CD por push, e ele sobrescreve deploy manual.** `master` → produção e `develop` → staging, tanto na Cloudflare (Worker) quanto na Vercel (front). Consequência prática: um `wrangler deploy --var ...` feito à mão é substituído pelo deploy do CD se houver um push logo em seguida — foi o que aconteceu na 0004, com o CD revertendo `MAINTENANCE_MODE` para `"false"` 18s depois do deploy manual. **Faça o push antes**, e só então o deploy manual de manutenção.
@@ -30,7 +32,7 @@ Este arquivo guarda contexto operacional/de estado que não vive no código nem 
 ## Backlog conhecido (`task.md`)
 
 - [ ] Inscrição do candidato na plataforma
-- [ ] Inscrição dos avaliadores na plataforma
+- [ ] Inscrição dos avaliadores na plataforma — specs de backend e UI prontas (FEAT-0003), implementação não começou. Pendências que não são código: calibrar as iterações do PBKDF2 medindo em produção, criar a regra de Rate Limiting em `/auth/*`, e desenhar a tela "Definir Nova Senha" (sem ela o fluxo de recuperação de senha não fecha).
 
 ## Onde procurar mais contexto
 

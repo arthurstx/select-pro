@@ -1,11 +1,10 @@
 import type { RegisterRequest, RegisterResponse } from "shared";
 
-import { toApiError } from "./api-error";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
+import { toApiError } from "@/lib/api/api-error";
+import { API_BASE_URL } from "@/lib/api/config";
 
 async function postJson<TResponse>(path: string, body: unknown): Promise<TResponse> {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
