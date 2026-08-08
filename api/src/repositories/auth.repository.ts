@@ -22,7 +22,7 @@ export interface UserWithRole extends UserRow {
 
 /** Usuário + papel + o snapshot que veio da tec. É o que `GET /auth/me` devolve. */
 export interface UserWithProfile extends UserWithRole {
-    member_id: number;
+    member_id: string;
     full_name: string;
     phone: string;
     course: string;

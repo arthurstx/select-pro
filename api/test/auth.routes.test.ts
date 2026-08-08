@@ -83,7 +83,9 @@ function tecMember(overrides: Record<string, unknown> = {}) {
     counter += 1;
 
     return {
-        id: 90_000 + counter,
+        // uuid fake mas válido para o `.uuid()` do TecMemberSchema — mesmo
+        // esquema do fixture em auth.service.test.ts.
+        id: `00000000-0000-4000-9000-${counter.toString(16).padStart(12, "0")}`,
         full_name: `Membro Rota ${counter}`,
         email: `membro-rota-${counter}@cimatecjr.com.br`,
         phone: `7197776${String(counter).padStart(4, "0")}`,

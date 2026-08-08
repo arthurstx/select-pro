@@ -59,7 +59,7 @@
     // Banco da tec (Supabase), consultado só em POST /auth/register. A
     // service_role key é secret (`wrangler secret put SUPABASE_SERVICE_ROLE_KEY`)
     // e nunca pode aparecer aqui: ela ignora RLS e dá acesso total ao banco.
-    "SUPABASE_URL": "https://PREENCHER.supabase.co",
+    "SUPABASE_URL": "https://zzqioofrjubccblvyilx.supabase.co",
     // Allowlist de CORS de /auth/*. Aceita lista separada por vírgula.
     // Diferente de /candidate/*, aqui a origin NÃO pode ser refletida: com
     // `credentials: true` isso entregaria o cookie de sessão a qualquer site.
@@ -68,9 +68,7 @@
     // URL real do projeto Vercel `select-pro-front` (alias de produção,
     // `vercel alias ls`) — não é mais placeholder.
     "FRONT_ORIGIN": "https://select-pro-front.vercel.app",
-    // Remetente do email de recuperação de senha. Precisa ser um domínio
-    // verificado no Resend; a chave em si é secret (RESEND_API_KEY).
-    "RESEND_FROM_EMAIL": "acesso@PREENCHER.com.br",
+    "RESEND_FROM_EMAIL": "inscricao@arthurstx.me",
   },
   /**
    * Service Bindings (communicate between multiple Workers)
@@ -117,7 +115,7 @@
         // cadastro de teste que consulte o banco real da tec não estraga nada,
         // mas o inverso — apontar produção para dados de teste — cria conta
         // para quem não é membro.
-        "SUPABASE_URL": "https://PREENCHER-staging.supabase.co",
+        "SUPABASE_URL": "https://urzdvlddicrxkiyikwiv.supabase.co",
         // Inclui o localhost do Next para desenvolvimento contra a API de
         // staging. Vale lembrar que o cookie de refresh é `Secure`, então ele
         // não é gravado em `http://localhost` — só o access token funciona aí
@@ -127,9 +125,8 @@
         // Alias estável do deploy do branch `develop` no Vercel (`vercel alias
         // ls`) — não é mais placeholder.
         "FRONT_ORIGIN": "https://select-pro-front-git-develop-arthurstxs-projects.vercel.app,http://localhost:3000",
-        // `onboarding@resend.dev` é o remetente de teste do Resend: dispensa
-        // domínio verificado, mas só entrega para o dono da conta.
-        "RESEND_FROM_EMAIL": "onboarding@resend.dev",
+
+        "RESEND_FROM_EMAIL": "inscricao@arthurstx.me",
       },
     },
   },

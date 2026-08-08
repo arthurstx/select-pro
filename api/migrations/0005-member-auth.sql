@@ -55,10 +55,10 @@ CREATE TABLE member_profiles (
   id      TEXT PRIMARY KEY,
   user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
 
-  -- Id do membro na Supabase. Única chave de correlação estável com a tec:
-  -- o email pode mudar, este não. É o que torna uma futura ressincronização
-  -- possível sem depender de casar strings.
-  member_id INTEGER NOT NULL UNIQUE,
+  -- Id do membro na Supabase (uuid). Única chave de correlação estável com a
+  -- tec: o email pode mudar, este não. É o que torna uma futura
+  -- ressincronização possível sem depender de casar strings.
+  member_id TEXT NOT NULL UNIQUE,
 
   full_name  TEXT NOT NULL,
   phone      TEXT NOT NULL,

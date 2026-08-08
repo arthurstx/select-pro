@@ -51,7 +51,9 @@ function tecMember(overrides: Partial<TecMember> = {}): TecMember {
     counter += 1;
 
     return {
-        id: counter,
+        // uuid fake mas válido para o `.uuid()` do TecMemberSchema — versão 4,
+        // variante 8, só o sufixo muda para manter os ids únicos entre testes.
+        id: `00000000-0000-4000-8000-${counter.toString(16).padStart(12, "0")}`,
         full_name: `Membro ${counter}`,
         email: `membro${counter}@cimatecjr.com.br`,
         phone: `7198887${String(counter).padStart(4, "0")}`,
