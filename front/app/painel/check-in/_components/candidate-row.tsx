@@ -62,7 +62,13 @@ export function CandidateRow({ candidate }: CandidateRowProps) {
       {/* Mobile — card vertical */}
       <div className="flex flex-col gap-3 md:hidden">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex gap-3">
+          {/*
+            `min-w-0` também aqui, não só no bloco de texto: sem isso, este
+            wrapper (ele mesmo um item flex da linha `justify-between`) não
+            aceita encolher abaixo do conteúdo, o `truncate` do nome não tem
+            efeito, e a badge é empurrada para fora do card em nomes longos.
+          */}
+          <div className="flex min-w-0 flex-1 gap-3">
             <Avatar name={candidate.name} />
             <div className="flex min-w-0 flex-col gap-0.5">
               <h3 className="truncate text-base leading-tight font-semibold">{candidate.name}</h3>
