@@ -35,6 +35,15 @@
       "migrations_dir": "migrations",
     },
   ],
+  // Cache da listagem de candidatos do check-in (`CheckinListCache`,
+  // api/src/lib/checkin-list-cache.ts) — TTL de 60s (mínimo aceito pelo KV)
+  // + invalidação por geração a cada marcar/desmarcar (FEAT-0005).
+  "kv_namespaces": [
+    {
+      "binding": "CANDIDATES_KV",
+      "id": "51d028fbfdd043878d16792caa552663",
+    },
+  ],
   /**
    * Environment Variables
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
@@ -101,6 +110,12 @@
           "database_name": "select-pro-staging",
           "database_id": "8514d550-87c5-41e8-864d-5ebd762fd8c2",
           "migrations_dir": "migrations",
+        },
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "CANDIDATES_KV",
+          "id": "b904715da55f4fa991181258cc34242b",
         },
       ],
       "vars": {

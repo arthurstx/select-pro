@@ -12,6 +12,7 @@ import {
     CandidateNotInActiveProcessError,
     NoActiveSelectionProcessError,
 } from "../core/errors/checkin-errors";
+import { type CachedListParams, type CachedListResult, CheckinListCache } from "../lib/checkin-list-cache";
 import { logger } from "../lib/logger";
 import { selectionProcessWindowFor } from "../lib/selection-process-window";
 import type { CandidateRepository } from "../repositories/candidates.repository";
@@ -29,6 +30,13 @@ export class CheckinService {
     constructor(
         private readonly candidates: CandidateRepository,
         private readonly checkins: CheckinRepository,
+        /**
+         * Opcional só para não obrigar todo teste/uso a passar um KV —
+         * quando ausente, o service se comporta como se o cache estivesse
+         * sempre frio (lê e escreve direto no D1, sem cache-aside nem
+         * invalidação). Em produção `checkin.routes.ts` sempre injeta um.
+         */
+        private readonly listCache?: CheckinListCache,
     ) {}
 
     /** Busca, filtro e paginação resolvidos no banco — nunca no cliente (FEAT-0005, seção 4.2). */
@@ -42,15 +50,15 @@ export class CheckinService {
         }
         const process = processResult.value;
 
-        const { items, total } = await this.checkins.listCandidates({
-            processId: process.id,
-            startsAt: process.starts_at,
-            endsAt: process.ends_at,
-            search: query.search,
-            status: query.status,
+        const cacheParams: CachedListParams = {
             page: query.page,
             perPage: query.per_page,
-        });
+            status: query.status,
+            search: query.search,
+        };
+
+        const cached = await this.listCache?.get(process.id, cacheParams);
+        const { items, total } = cached ?? (await this.fetchAndCacheList(process, cacheParams));
 
         return right({
             process: { id: process.id, label: process.label },
@@ -101,6 +109,10 @@ export class CheckinService {
             checkedInBy: actorId,
         });
 
+        // Depois da escrita, nunca antes: invalidar cedo demais deixaria uma
+        // leitura concorrente repopular o cache com o estado anterior.
+        await this.listCache?.invalidate(process.id);
+
         return right({ candidateId, checkedInAt: checkin.checked_in_at });
     }
 
@@ -124,8 +136,29 @@ export class CheckinService {
         // Sem checagem de E3 aqui: desmarcar uma presença que nunca existiu
         // (candidato de outra edição, por exemplo) já é E5 — no-op, sem erro.
         await this.checkins.removeCheckin({ candidateId, processId: process.id, actorId });
+        await this.listCache?.invalidate(process.id);
 
         return right(undefined);
+    }
+
+    /** Lê do D1 no cache-miss e povoa o cache antes de devolver — chamado no máximo uma vez por 15s por variante/processo. */
+    private async fetchAndCacheList(
+        process: SelectionProcessRow,
+        params: CachedListParams,
+    ): Promise<CachedListResult> {
+        const result = await this.checkins.listCandidates({
+            processId: process.id,
+            startsAt: process.starts_at,
+            endsAt: process.ends_at,
+            search: params.search,
+            status: params.status,
+            page: params.page,
+            perPage: params.perPage,
+        });
+
+        await this.listCache?.set(process.id, params, result);
+
+        return result;
     }
 
     /**

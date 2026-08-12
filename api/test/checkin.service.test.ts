@@ -1,17 +1,29 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
+import { CheckinListCache } from "../src/lib/checkin-list-cache";
 import { CandidateRepository } from "../src/repositories/candidates.repository";
 import { CheckinRepository } from "../src/repositories/checkin.repository";
 import { CheckinService } from "../src/services/checkin.service";
 
 // D1 real via miniflare (isolatedStorage por teste — cada `it` começa do
-// banco recém-migrado, com os dois processos seletivos semeados).
+// banco recém-migrado, com os dois processos seletivos semeados). KV também
+// é real (miniflare), via `env.CANDIDATES_KV`.
 
 let counter = 0;
 
+/** Sem cache — a maioria dos testes quer ler o D1 direto, sem se preocupar com TTL/geração. */
 function service(): CheckinService {
     return new CheckinService(new CandidateRepository(env.DB), new CheckinRepository(env.DB));
+}
+
+/** Com cache — só para os testes desta seção, que existem para provar que ele funciona. */
+function serviceWithCache(): CheckinService {
+    return new CheckinService(
+        new CandidateRepository(env.DB),
+        new CheckinRepository(env.DB),
+        new CheckinListCache(env.CANDIDATES_KV),
+    );
 }
 
 async function insertCandidate(overrides: { name?: string; createdAt?: string } = {}) {
@@ -282,5 +294,67 @@ describe("CheckinService.listCandidates — busca, filtro e paginação", () => 
         if (result.isRight()) {
             expect(result.value.items).toHaveLength(0);
         }
+    });
+});
+
+describe("CheckinService.listCandidates — cache em KV", () => {
+    it("a segunda leitura idêntica vem do cache: um candidato inserido direto no D1 não aparece até o cache invalidar", async () => {
+        const svc = serviceWithCache();
+        const query = { page: 1, per_page: 25, status: "todos" as const, search: "Cache Kv Unico" };
+
+        const first = await svc.listCandidates(query, NOW);
+        expect(first.isRight()).toBe(true);
+        if (first.isRight()) expect(first.value.items).toHaveLength(0);
+
+        // Inserção direta no D1, por fora do service — nada chama invalidate().
+        await insertCandidate({ name: "Cache Kv Unico Fantasma" });
+
+        const second = await svc.listCandidates(query, NOW);
+        expect(second.isRight()).toBe(true);
+        if (second.isRight()) {
+            // Prova que a segunda leitura veio do cache, não do D1: se tivesse
+            // ido ao banco, o candidato inserido acima apareceria.
+            expect(second.value.items).toHaveLength(0);
+        }
+    });
+
+    it("marcar presença invalida o cache — a próxima listagem reflete a mudança na hora, não depois do TTL", async () => {
+        const svc = serviceWithCache();
+        const actorId = await insertUser();
+        const candidate = await insertCandidate({ name: "Cache Invalida Unico" });
+        const query = { page: 1, per_page: 25, status: "todos" as const, search: "Cache Invalida Unico" };
+
+        const before = await svc.listCandidates(query, NOW);
+        expect(before.isRight()).toBe(true);
+        if (before.isRight()) expect(before.value.items[0]?.checkedInAt).toBeNull();
+
+        const markResult = await svc.markPresent(candidate.id, actorId, NOW);
+        expect(markResult.isRight()).toBe(true);
+
+        const after = await svc.listCandidates(query, NOW);
+        expect(after.isRight()).toBe(true);
+        if (after.isRight()) {
+            // Mesma consulta, mesmo cache — mas checkedInAt não pode ser o
+            // valor cacheado ANTES de marcar. Se aparecer null aqui, a
+            // invalidação por geração não está funcionando.
+            expect(after.value.items[0]?.checkedInAt).not.toBeNull();
+        }
+    });
+
+    it("desmarcar presença também invalida o cache", async () => {
+        const svc = serviceWithCache();
+        const actorId = await insertUser();
+        const candidate = await insertCandidate({ name: "Cache Desmarca Unico" });
+        const query = { page: 1, per_page: 25, status: "todos" as const, search: "Cache Desmarca Unico" };
+
+        await svc.markPresent(candidate.id, actorId, NOW);
+        const beforeUnmark = await svc.listCandidates(query, NOW);
+        if (beforeUnmark.isRight()) expect(beforeUnmark.value.items[0]?.checkedInAt).not.toBeNull();
+
+        const unmarkResult = await svc.unmarkPresent(candidate.id, actorId, NOW);
+        expect(unmarkResult.isRight()).toBe(true);
+
+        const afterUnmark = await svc.listCandidates(query, NOW);
+        if (afterUnmark.isRight()) expect(afterUnmark.value.items[0]?.checkedInAt).toBeNull();
     });
 });

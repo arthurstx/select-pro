@@ -11,6 +11,7 @@ import {
 } from "shared";
 import type { ZodError } from "zod";
 
+import { CheckinListCache } from "../lib/checkin-list-cache";
 import { httpError } from "../lib/http-error";
 import { type AuthEnv, requireAuth } from "../middlewares/require-auth";
 import { requireRole } from "../middlewares/require-role";
@@ -32,7 +33,11 @@ const CandidateIdParamsSchema = z.object({
 const AUTHORIZED = [requireAuth, requireRole(ROLES.ADMIN, ROLES.AVALIADOR)];
 
 function buildService(c: Context<AuthEnv>): CheckinService {
-    return new CheckinService(new CandidateRepository(c.env.DB), new CheckinRepository(c.env.DB));
+    return new CheckinService(
+        new CandidateRepository(c.env.DB),
+        new CheckinRepository(c.env.DB),
+        new CheckinListCache(c.env.CANDIDATES_KV),
+    );
 }
 
 const STATUS_BY_ERROR_CODE: Record<string, ContentfulStatusCode> = {
