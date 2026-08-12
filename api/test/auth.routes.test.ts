@@ -20,6 +20,11 @@ function testEnv(overrides: Record<string, unknown> = {}) {
         SUPABASE_SERVICE_ROLE_KEY: "service-role-de-teste",
         RESEND_API_KEY: "resend-de-teste",
         RESEND_FROM_EMAIL: "acesso@exemplo.test",
+        // Sempre "false" aqui, mesmo que o `.dev.vars` local tenha "true": os
+        // testes E2/E3/E5 abaixo existem para exercitar a checagem real da
+        // Supabase (via `stubDirectory`), e não podem depender de como quem
+        // roda a suíte tem o próprio ambiente de dev configurado.
+        MEMBER_DIRECTORY_BYPASS: "false",
         ...overrides,
     } as unknown as CloudflareBindings;
 }

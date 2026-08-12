@@ -15,3 +15,8 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 # Envio do email de recuperação de senha.
 RESEND_API_KEY=
+
+# Pula a checagem de membro na Supabase em POST /auth/register — qualquer
+# email vira conta local. Recomendado para dev local; NÃO defina isto em
+# staging/produção (lá o wrangler nem lê este arquivo, então nem precisaria).
+MEMBER_DIRECTORY_BYPASS=true

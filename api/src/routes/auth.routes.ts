@@ -17,8 +17,10 @@ import {
 import type { ZodError } from "zod";
 
 import { httpError } from "../lib/http-error";
+import { logger } from "../lib/logger";
+import { LocalMemberDirectory } from "../lib/local-member-directory";
 import { ResendMailer } from "../lib/mailer";
-import { SupabaseMemberDirectory } from "../lib/member-directory";
+import { SupabaseMemberDirectory, type MemberDirectory } from "../lib/member-directory";
 import { type AuthEnv, requireAuth } from "../middlewares/require-auth";
 import { AuthRepository } from "../repositories/auth.repository";
 import { AuthService, REFRESH_TOKEN_TTL_SECONDS } from "../services/auth.service";
@@ -54,10 +56,26 @@ function clearRefreshCookie(c: Context<AuthEnv>): void {
 // Composição e tradução de erros
 // ============================================================
 
+/**
+ * `MEMBER_DIRECTORY_BYPASS=true` só existe em `.dev.vars` local — o wrangler
+ * nunca aplica esse arquivo a `deploy`, então staging e produção sempre
+ * checam a Supabase de verdade, mesmo que este código não mude. Sem o
+ * bypass, cadastrar um membro local exigiria uma linha de verdade no banco
+ * da tec, inacessível para quem só quer rodar o projeto na própria máquina.
+ */
+function buildMemberDirectory(env: CloudflareBindings): MemberDirectory {
+    if (env.MEMBER_DIRECTORY_BYPASS === "true") {
+        logger.warn("auth.member_directory.bypassed", {});
+        return new LocalMemberDirectory();
+    }
+
+    return new SupabaseMemberDirectory(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 function buildService(c: Context<AuthEnv>): AuthService {
     return new AuthService({
         repository: new AuthRepository(c.env.DB),
-        directory: new SupabaseMemberDirectory(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY),
+        directory: buildMemberDirectory(c.env),
         mailer: new ResendMailer(c.env.RESEND_API_KEY, c.env.RESEND_FROM_EMAIL),
         jwtSecret: c.env.JWT_SECRET,
         frontOrigin: c.env.FRONT_ORIGIN.split(",")[0].trim(),
