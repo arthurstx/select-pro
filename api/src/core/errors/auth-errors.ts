@@ -111,6 +111,20 @@ export class AccessTokenExpiredError extends Error {
     }
 }
 
+/**
+ * E9 da FEAT-0005 — papel do token fora do conjunto permitido pela rota.
+ * Nasce com `requireRole` (FEAT-0005), mas o código mora aqui: é o primeiro
+ * código de autorização do projeto e não pertence a uma feature de negócio.
+ */
+export class InsufficientRoleError extends Error {
+    readonly code = AuthErrorCode.INSUFFICIENT_ROLE;
+
+    constructor(message = "Você não tem permissão para executar esta ação") {
+        super(message);
+        this.name = "InsufficientRoleError";
+    }
+}
+
 /** E14 — token de recuperação não encontrado, expirado ou já usado. Sem dizer qual. */
 export class InvalidResetTokenError extends Error {
     readonly code = AuthErrorCode.INVALID_RESET_TOKEN;

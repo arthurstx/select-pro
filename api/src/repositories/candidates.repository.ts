@@ -22,6 +22,13 @@ export interface CandidateWithApplicationRow extends CandidateRow {
 export class CandidateRepository {
   constructor(private readonly db: D1Database) {}
 
+  async findById(id: string): Promise<CandidateRow | null> {
+    return this.db
+      .prepare("SELECT * FROM candidates WHERE id = ?")
+      .bind(id)
+      .first<CandidateRow>();
+  }
+
   async findByEmail(email: string): Promise<CandidateRow | null> {
     return this.db
       .prepare("SELECT * FROM candidates WHERE email = ?")

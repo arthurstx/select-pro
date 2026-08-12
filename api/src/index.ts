@@ -12,6 +12,7 @@ import { AuthRepository } from "./repositories/auth.repository";
 import { CandidateRepository } from "./repositories/candidates.repository";
 import { authRouter } from "./routes/auth.routes";
 import { candidatesRouter } from "./routes/candidates.routes";
+import { checkinRouter } from "./routes/checkin.routes";
 import { SheetSyncService } from "./services/sheet-sync.service";
 
 const app = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
@@ -32,6 +33,22 @@ app.use("/auth/*", (c, next) =>
     origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
     credentials: true,
     allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/candidates/*` (plural, autenticado) é distinto de `/candidate/*`
+ * (singular, público): devolve email/telefone de candidatos, então não pode
+ * herdar o `cors()` que reflete qualquer origin. `allowMethods` precisa de
+ * PUT/DELETE — as duas rotas de escrita do check-in (FEAT-0005, seção 9).
+ */
+app.use("/candidates/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400,
   })(c, next),
@@ -71,12 +88,20 @@ app.use(
   ),
 );
 
+app.use(
+  "/candidates/*",
+  maintenanceGuard(
+    "O check-in está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
 
 app.route("/candidate", candidatesRouter);
 app.route("/auth", authRouter);
+app.route("/candidates", checkinRouter);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",
