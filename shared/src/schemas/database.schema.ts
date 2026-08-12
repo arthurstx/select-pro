@@ -167,6 +167,80 @@ export interface GroupRow {
     updated_at: string | null;
 }
 
+// Check-in de candidatos — FEAT-0005 (seção 8.1)
+
+/**
+ * Uma edição do processo seletivo. A CIMATEC jr roda um por semestre, e a
+ * presença precisa ser escopada a um deles — sem isso, a lista do semestre
+ * novo mostraria os candidatos de todos os anteriores.
+ *
+ * As janelas são jan–jul e ago–dez, não dois semestres iguais: é o calendário
+ * real da tec. Elas não se sobrepõem e cobrem o ano inteiro, o que é o que
+ * permite resolver o processo corrente por uma comparação de data simples.
+ *
+ * Não há coluna `is_active`: o processo corrente é o que contém a data de
+ * hoje. Uma flag booleana depende de alguém lembrar de desligá-la, e o
+ * esquecimento seria silencioso. A linha é criada sob demanda quando falta
+ * (FEAT-0005, seção 4.1.1) — não por CRUD nem por cron.
+ */
+export interface SelectionProcessRow {
+    id: string;
+    /** "2026.2" — identificador humano, unique. */
+    label: string;
+    /** Início da janela (inclusive). */
+    starts_at: string;
+    /** Fim da janela (inclusive). */
+    ends_at: string;
+
+    created_at: string;
+}
+
+/**
+ * Presença confirmada — ESTADO ATUAL, não histórico. A existência da linha É
+ * a presença: não há coluna de estado, e desmarcar apaga a linha. O
+ * histórico mora em `CheckinEventRow`.
+ *
+ * `process_id` é redundante com a janela de datas de `CandidateRow.created_at`
+ * enquanto `candidates` não tiver a própria coluna — mas é ele que mantém
+ * esta tabela correta por conta própria.
+ */
+export interface CandidateCheckinRow {
+    id: string;
+    candidate_id: string;
+    process_id: string;
+
+    /**
+     * Quem confirmou. Redundante com o último evento `"marcou"` de
+     * `checkin_events`, e mantido assim de propósito: a listagem lê esta
+     * tabela a cada página, e derivar o autor do log exigiria uma subquery
+     * por linha.
+     */
+    checked_in_by: string;
+
+    checked_in_at: string;
+}
+
+/**
+ * Histórico append-only. Uma linha por mudança REAL de estado (marcar/
+ * desmarcar) — repetições idempotentes não geram evento.
+ *
+ * Nada nas rotas de FEAT-0005 lê esta tabela; é escrita pura, para a futura
+ * tela de logs do admin encontrar história em vez de começar do zero.
+ */
+export type CheckinAction = "marcou" | "desmarcou";
+
+export interface CheckinEventRow {
+    id: string;
+    candidate_id: string;
+    process_id: string;
+
+    action: CheckinAction;
+    /** Membro que executou a ação. */
+    actor_id: string;
+
+    created_at: string;
+}
+
 // ------------------------------------------------------------
 // Tabelas de junção
 // ------------------------------------------------------------
@@ -246,6 +320,18 @@ export type NewGroup = Omit<GroupRow, "created_at" | "updated_at"> & {
     updated_at?: string | null;
 };
 
+export type NewSelectionProcess = Omit<SelectionProcessRow, "created_at"> & {
+    created_at?: string;
+};
+
+export type NewCandidateCheckin = Omit<CandidateCheckinRow, "checked_in_at"> & {
+    checked_in_at?: string;
+};
+
+export type NewCheckinEvent = Omit<CheckinEventRow, "created_at"> & {
+    created_at?: string;
+};
+
 export type NewGroupEvaluator = GroupEvaluatorRow;
 export type NewGroupCandidate = GroupCandidateRow;
 
@@ -316,6 +402,9 @@ export interface DatabaseSchema {
     group_evaluators: GroupEvaluatorRow;
     group_candidates: GroupCandidateRow;
     evaluations: EvaluationRow;
+    selection_processes: SelectionProcessRow;
+    candidate_checkins: CandidateCheckinRow;
+    checkin_events: CheckinEventRow;
 }
 
 export type TableName = keyof DatabaseSchema;

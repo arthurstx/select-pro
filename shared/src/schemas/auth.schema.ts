@@ -118,6 +118,8 @@ export const AuthErrorCode = {
     ACCOUNT_DEACTIVATED: "ACCOUNT_DEACTIVATED", // E12
     INVALID_RESET_TOKEN: "INVALID_RESET_TOKEN", // E14
     WEAK_PASSWORD: "WEAK_PASSWORD", // E4, E15
+    /** Primeiro código de autorização por papel do projeto — nasce em FEAT-0005 (E9), `requireRole`. */
+    INSUFFICIENT_ROLE: "INSUFFICIENT_ROLE",
 } as const;
 
 export type AuthErrorCode = (typeof AuthErrorCode)[keyof typeof AuthErrorCode];
