@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOutIcon } from "lucide-react";
+import { ListChecksIcon, LogOutIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -31,7 +31,7 @@ export function PainelSidebar() {
     <aside className="bg-secondary text-secondary-foreground fixed inset-y-0 left-0 z-40 hidden w-64 flex-col py-6 md:flex">
       <div className="flex items-center gap-3 px-6 pb-8">
         <div className="bg-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
-          <ClipboardIcon />
+          <ListChecksIcon className="size-5 text-white" aria-hidden />
         </div>
         <div>
           <p className="font-heading text-lg leading-tight font-bold">SelectPro</p>
@@ -85,19 +85,5 @@ export function PainelSidebar() {
         )}
       </div>
     </aside>
-  );
-}
-
-function ClipboardIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="size-5 text-white" aria-hidden>
-      <path
-        d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-5 8 2 2 4-4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
