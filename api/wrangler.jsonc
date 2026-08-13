@@ -75,8 +75,12 @@
     // É também a base do link do email de recuperação (a primeira da lista).
     //
     // URL real do projeto Vercel `select-pro-front` (alias de produção,
-    // `vercel alias ls`) — não é mais placeholder.
-    "FRONT_ORIGIN": "https://select-pro-front.vercel.app",
+    // `vercel alias ls`) + localhost:3000 — sem ele, `wrangler dev` local
+    // (que usa este bloco raiz, não há env "development" separado) rejeita
+    // /auth/* e /candidates/* por CORS assim que o front local chama a API.
+    // O cookie de refresh não é gravado em http://localhost mesmo assim
+    // (é `Secure`); só o access token funciona localmente (ver env.staging).
+    "FRONT_ORIGIN": "https://select-pro-front.vercel.app,http://localhost:3000",
     "RESEND_FROM_EMAIL": "inscricao@arthurstx.me",
   },
   /**
