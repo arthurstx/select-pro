@@ -1,11 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { CheckinStatusFilter, ListCandidatesQuery, ListCandidatesResponse } from "shared";
+import type { ListCandidatesQuery } from "shared";
 
 import { listCandidates, markPresent, unmarkPresent } from "./api";
-
-type ListData = ListCandidatesResponse["data"];
+import { reconcileItem, type ListData } from "./reconcile";
 
 /**
  * Prefixo comum a toda listagem, independente de página/busca/status — é
@@ -28,6 +27,22 @@ export function useCandidatesQuery(params: ListCandidatesQuery) {
     return useQuery({
         queryKey: checkinKeys.list(params),
         queryFn: () => listCandidates(params),
+
+        /**
+         * O default global é `staleTime: 5min` + `refetchOnWindowFocus:
+         * false` (`app/providers.tsx`), o que é razoável para o resto do app
+         * e errado aqui: voltar para um filtro já visitado servia cache de
+         * até 5 minutos SEM refetch, e só um F5 (QueryClient novo) corrigia.
+         *
+         * Esta lista é operacional e concorrente — vários avaliadores mexem
+         * nela ao mesmo tempo, na porta do evento. Ela nunca deve ser
+         * considerada fresca: toda montagem/troca de chave revalida, e
+         * voltar para a aba também. O custo é baixo (o backend serve a
+         * listagem de um cache em KV).
+         */
+        staleTime: 0,
+        refetchOnWindowFocus: true,
+
         // `keepPreviousData` "cru" mantinha a lista de QUALQUER query anterior
         // visível, mesmo trocando de filtro — o que fazia a troca de aba
         // parecer não ter efeito (mostrava "Todos" por baixo de "Ausentes")
@@ -43,45 +58,6 @@ export function useCandidatesQuery(params: ListCandidatesQuery) {
             return sameFilter ? previousData : undefined;
         },
     });
-}
-
-function patchItem(data: ListData, candidateId: string, checkedInAt: string | null): ListData {
-    return {
-        ...data,
-        items: data.items.map((item) => (item.id === candidateId ? { ...item, checkedInAt } : item)),
-    };
-}
-
-/**
- * Remove o item da página em cache quando ele deixa de pertencer ao filtro
- * dela (ex.: desmarcar alguém enquanto se olha "Presentes"). Só é seguro
- * fazer isso para o filtro que o item JÁ estava — inserir numa página de um
- * filtro diferente exigiria saber a posição de ordenação certa, que só o
- * servidor tem; por isso o item que passa a pertencer a um filtro não
- * visitado só aparece nele no próximo fetch real (a invalidação do KV no
- * backend garante que esse fetch já vem certo).
- */
-function reconcileItem(
-    data: ListData,
-    candidateId: string,
-    checkedInAt: string | null,
-    status: CheckinStatusFilter,
-): ListData {
-    const stillBelongs = status === "todos" || (status === "presentes") === (checkedInAt !== null);
-    const wasInThisPage = data.items.some((item) => item.id === candidateId);
-
-    if (!wasInThisPage) return data;
-
-    if (!stillBelongs) {
-        const total = Math.max(0, data.pagination.total - 1);
-        return {
-            ...data,
-            items: data.items.filter((item) => item.id !== candidateId),
-            pagination: { ...data.pagination, total, totalPages: Math.ceil(total / data.pagination.perPage) },
-        };
-    }
-
-    return patchItem(data, candidateId, checkedInAt);
 }
 
 function listQueries(queryClient: QueryClient) {
