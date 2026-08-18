@@ -49,7 +49,7 @@ async function insertCandidate(overrides: { name?: string; createdAt?: string } 
         id: crypto.randomUUID(),
         name: overrides.name ?? `Candidato Http ${counter}`,
         email: `candidato-http-${counter}@example.com`,
-        phone: `7199990${String(counter).padStart(3, "0")}`,
+        phone: `+557199990${String(counter).padStart(4, "0")}`,
         course: "eng-computacao",
         semester: 4,
         gender: "outro",
@@ -57,11 +57,13 @@ async function insertCandidate(overrides: { name?: string; createdAt?: string } 
         created_at: overrides.createdAt ?? "2026-08-05 12:00:00",
     };
 
+    // `process_id` derivado da janela do próprio `created_at` — mesma regra
+    // da migration 0007, para o fixture refletir o que a inscrição grava.
     await env.DB.prepare(
-        `INSERT INTO candidates (id, course, semester, gender, ethnicity, name, email, phone, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO candidates (id, process_id, course, semester, gender, ethnicity, name, email, phone, created_at)
+         VALUES (?, (SELECT id FROM selection_processes WHERE ? BETWEEN starts_at AND ends_at), ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-        .bind(row.id, row.course, row.semester, row.gender, row.ethnicity, row.name, row.email, row.phone, row.created_at)
+        .bind(row.id, row.created_at, row.course, row.semester, row.gender, row.ethnicity, row.name, row.email, row.phone, row.created_at)
         .run();
 
     return row;

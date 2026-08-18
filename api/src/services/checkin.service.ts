@@ -14,9 +14,9 @@ import {
 } from "../core/errors/checkin-errors";
 import { type CachedListParams, type CachedListResult, CheckinListCache } from "../lib/checkin-list-cache";
 import { logger } from "../lib/logger";
-import { selectionProcessWindowFor } from "../lib/selection-process-window";
 import type { CandidateRepository } from "../repositories/candidates.repository";
 import type { CheckinRepository } from "../repositories/checkin.repository";
+import type { SelectionProcessRepository } from "../repositories/selection-process.repository";
 
 type ListResult = {
     process: SelectionProcessSummary;
@@ -30,6 +30,7 @@ export class CheckinService {
     constructor(
         private readonly candidates: CandidateRepository,
         private readonly checkins: CheckinRepository,
+        private readonly processes: SelectionProcessRepository,
         /**
          * Opcional só para não obrigar todo teste/uso a passar um KV —
          * quando ausente, o service se comporta como se o cache estivesse
@@ -172,7 +173,7 @@ export class CheckinService {
         now: Date,
     ): Promise<Either<NoActiveSelectionProcessError, SelectionProcessRow>> {
         try {
-            const process = await this.checkins.resolveProcess(selectionProcessWindowFor(now));
+            const process = await this.processes.resolveCurrent(now);
             return right(process);
         } catch (err) {
             logger.error("checkin.resolve_process.failed", {

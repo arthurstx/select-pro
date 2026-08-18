@@ -13,6 +13,7 @@ import {
 } from "../core/errors/candidate-errors";
 import { httpError } from "../lib/http-error";
 import { CandidateRepository } from "../repositories/candidates.repository";
+import { SelectionProcessRepository } from "../repositories/selection-process.repository";
 import { CandidateService } from "../services/candidates.service";
 
 export const candidatesRouter = new OpenAPIHono<{
@@ -20,7 +21,10 @@ export const candidatesRouter = new OpenAPIHono<{
 }>();
 
 function buildService(env: CloudflareBindings): CandidateService {
-  return new CandidateService(new CandidateRepository(env.DB));
+  return new CandidateService(
+    new CandidateRepository(env.DB),
+    new SelectionProcessRepository(env.DB),
+  );
 }
 
 /** Diferencia E3 (email inválido) de E4 (telefone inválido) a partir do primeiro issue do Zod. */

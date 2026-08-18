@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { CheckinListCache } from "../src/lib/checkin-list-cache";
 import { CandidateRepository } from "../src/repositories/candidates.repository";
 import { CheckinRepository } from "../src/repositories/checkin.repository";
+import { SelectionProcessRepository } from "../src/repositories/selection-process.repository";
 import { CheckinService } from "../src/services/checkin.service";
 
 // D1 real via miniflare (isolatedStorage por teste — cada `it` começa do
@@ -14,7 +15,7 @@ let counter = 0;
 
 /** Sem cache — a maioria dos testes quer ler o D1 direto, sem se preocupar com TTL/geração. */
 function service(): CheckinService {
-    return new CheckinService(new CandidateRepository(env.DB), new CheckinRepository(env.DB));
+    return new CheckinService(new CandidateRepository(env.DB), new CheckinRepository(env.DB), new SelectionProcessRepository(env.DB));
 }
 
 /** Com cache — só para os testes desta seção, que existem para provar que ele funciona. */
@@ -22,6 +23,7 @@ function serviceWithCache(): CheckinService {
     return new CheckinService(
         new CandidateRepository(env.DB),
         new CheckinRepository(env.DB),
+        new SelectionProcessRepository(env.DB),
         new CheckinListCache(env.CANDIDATES_KV),
     );
 }
@@ -32,7 +34,7 @@ async function insertCandidate(overrides: { name?: string; createdAt?: string } 
         id: crypto.randomUUID(),
         name: overrides.name ?? `Candidato Svc ${counter}`,
         email: `candidato-svc-${counter}@example.com`,
-        phone: `71988880${String(counter).padStart(3, "0")}`,
+        phone: `+557198888${String(counter).padStart(4, "0")}`,
         course: "eng-computacao",
         semester: 3,
         gender: "outro",
@@ -41,11 +43,13 @@ async function insertCandidate(overrides: { name?: string; createdAt?: string } 
         created_at: overrides.createdAt ?? "2026-08-05 12:00:00",
     };
 
+    // `process_id` derivado da janela do próprio `created_at` — mesma regra
+    // da migration 0007, para o fixture refletir o que a inscrição grava.
     await env.DB.prepare(
-        `INSERT INTO candidates (id, course, semester, gender, ethnicity, name, email, phone, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO candidates (id, process_id, course, semester, gender, ethnicity, name, email, phone, created_at)
+         VALUES (?, (SELECT id FROM selection_processes WHERE ? BETWEEN starts_at AND ends_at), ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-        .bind(row.id, row.course, row.semester, row.gender, row.ethnicity, row.name, row.email, row.phone, row.created_at)
+        .bind(row.id, row.created_at, row.course, row.semester, row.gender, row.ethnicity, row.name, row.email, row.phone, row.created_at)
         .run();
 
     return row;
@@ -77,11 +81,11 @@ const NOW = new Date("2026-08-10T12:00:00.000Z");
 describe("CheckinService.listCandidates — resolução do processo (FEAT-0005, seção 4.1.1)", () => {
     it("reaproveita a linha semeada pela migration (0006) sem duplicar", async () => {
         const svc = service();
-        const repo = new CheckinRepository(env.DB);
+        const repo = new SelectionProcessRepository(env.DB);
 
         // A migration já semeia `2026.1`/`2026.2` (cobre 2026.1, que a
         // criação sob demanda nunca geraria por olhar só para "hoje").
-        const seeded = await repo.findProcessByLabel("2026.2");
+        const seeded = await repo.findByLabel("2026.2");
         expect(seeded).not.toBeNull();
 
         const first = await svc.listCandidates({ page: 1, per_page: 25, status: "todos" }, NOW);
@@ -100,16 +104,16 @@ describe("CheckinService.listCandidates — resolução do processo (FEAT-0005, 
 
     it("cria a edição sob demanda quando a data cai fora das duas linhas semeadas", async () => {
         const svc = service();
-        const repo = new CheckinRepository(env.DB);
+        const repo = new SelectionProcessRepository(env.DB);
         const futureDate = new Date("2027-03-15T12:00:00.000Z"); // 2027.1 — não semeado
 
-        expect(await repo.findProcessByLabel("2027.1")).toBeNull();
+        expect(await repo.findByLabel("2027.1")).toBeNull();
 
         const result = await svc.listCandidates({ page: 1, per_page: 25, status: "todos" }, futureDate);
 
         expect(result.isRight()).toBe(true);
         if (result.isRight()) expect(result.value.process.label).toBe("2027.1");
-        expect(await repo.findProcessByLabel("2027.1")).not.toBeNull();
+        expect(await repo.findByLabel("2027.1")).not.toBeNull();
     });
 });
 
@@ -184,14 +188,15 @@ describe("CheckinService.markPresent / unmarkPresent", () => {
         const svc = service();
         const actorId = await insertUser();
         const candidate = await insertCandidate();
-        const repo = new CheckinRepository(env.DB);
+        const processes = new SelectionProcessRepository(env.DB);
+        const checkins = new CheckinRepository(env.DB);
 
         await svc.markPresent(candidate.id, actorId, NOW);
         const unmarkResult = await svc.unmarkPresent(candidate.id, actorId, NOW);
         expect(unmarkResult.isRight()).toBe(true);
 
-        const process = await repo.findProcessByLabel("2026.2");
-        expect(await repo.findCheckin(candidate.id, process!.id)).toBeNull();
+        const process = await processes.findByLabel("2026.2");
+        expect(await checkins.findCheckin(candidate.id, process!.id)).toBeNull();
 
         const { results } = await env.DB.prepare(
             "SELECT action, actor_id FROM checkin_events WHERE candidate_id = ? ORDER BY created_at ASC",
@@ -214,9 +219,8 @@ describe("CheckinService.markPresent / unmarkPresent", () => {
 
         expect(first.isRight() && second.isRight()).toBe(true);
 
-        const repo = new CheckinRepository(env.DB);
-        const process = await repo.findProcessByLabel("2026.2");
-        const row = await repo.findCheckin(candidate.id, process!.id);
+        const process = await new SelectionProcessRepository(env.DB).findByLabel("2026.2");
+        const row = await new CheckinRepository(env.DB).findCheckin(candidate.id, process!.id);
 
         expect(row?.checked_in_by).toBe(firstActor);
     });

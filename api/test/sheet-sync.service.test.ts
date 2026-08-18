@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { CellValue, SheetsClient } from "../src/lib/google-sheets";
 import { CandidateRepository } from "../src/repositories/candidates.repository";
+import { SelectionProcessRepository } from "../src/repositories/selection-process.repository";
 import { SHEET_HEADER, SheetSyncService } from "../src/services/sheet-sync.service";
 
 /** Planilha falsa: guarda linhas em memória e responde aos dois intervalos que o service lê. */
@@ -29,15 +30,18 @@ async function insertCandidate(repo: CandidateRepository) {
     const id = crypto.randomUUID();
     const name = `Candidato ${counter}`;
 
+    const process = await new SelectionProcessRepository(env.DB).resolveCurrent();
+
     await repo.insertWithApplication(
         {
             id,
+            process_id: process.id,
             name,
             email: `candidato${counter}@example.com`,
-            phone: `7199999${String(counter).padStart(4, "0")}`,
+            phone: `+557199999${String(counter).padStart(4, "0")}`,
             course: "eng-computacao",
             semester: 3,
-            gender: "fem",
+            gender: "feminino",
             ethnicity: "parda",
         },
         {

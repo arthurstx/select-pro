@@ -4,11 +4,7 @@ import type {
   Course,
   NewCandidateCheckin,
   NewCheckinEvent,
-  NewSelectionProcess,
-  SelectionProcessRow,
 } from "shared";
-
-import type { SelectionProcessWindow } from "../lib/selection-process-window";
 
 /** Linha da listagem paginada — join de `candidates` com `candidate_checkins` (FEAT-0005, seção 8.3). */
 export interface CandidateWithCheckinRow {
@@ -39,51 +35,6 @@ function escapeLikeTerm(term: string): string {
 
 export class CheckinRepository {
   constructor(private readonly db: D1Database) {}
-
-  // ------------------------------------------------------------
-  // Processo seletivo (FEAT-0005, seção 4.1.1)
-  // ------------------------------------------------------------
-
-  /**
-   * Resolve a edição de `window`, criando-a se faltar. Idempotente: lê
-   * primeiro (só a primeira requisição de cada semestre escreve), insere com
-   * `ON CONFLICT (label) DO NOTHING` se ausente, e relê — o `UNIQUE(label)`
-   * resolve a corrida entre duas requisições simultâneas no mesmo instante.
-   */
-  async resolveProcess(window: SelectionProcessWindow): Promise<SelectionProcessRow> {
-    const existing = await this.findProcessByLabel(window.label);
-    if (existing) return existing;
-
-    const newProcess: NewSelectionProcess = {
-      id: crypto.randomUUID(),
-      label: window.label,
-      starts_at: window.startsAt,
-      ends_at: window.endsAt,
-    };
-
-    await this.db
-      .prepare(
-        `INSERT INTO selection_processes (id, label, starts_at, ends_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT (label) DO NOTHING`,
-      )
-      .bind(newProcess.id, newProcess.label, newProcess.starts_at, newProcess.ends_at)
-      .run();
-
-    const row = await this.findProcessByLabel(window.label);
-    if (!row) {
-      // Guarda de invariante (FEAT-0005, seção 4.1.1) — não deveria ser alcançável.
-      throw new Error(`Falha ao resolver o processo seletivo ${window.label}`);
-    }
-    return row;
-  }
-
-  async findProcessByLabel(label: string): Promise<SelectionProcessRow | null> {
-    return this.db
-      .prepare("SELECT * FROM selection_processes WHERE label = ?")
-      .bind(label)
-      .first<SelectionProcessRow>();
-  }
 
   // ------------------------------------------------------------
   // Listagem (FEAT-0005, seção 4.2 / 8.3)

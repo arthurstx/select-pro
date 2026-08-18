@@ -5,29 +5,42 @@ import { EmailAlreadyRegisteredError, PhoneAlreadyRegisteredError } from "../cor
 import { parseD1ConstraintError } from "../lib/d1-errors";
 import { logger } from "../lib/logger";
 import type { CandidateRepository } from "../repositories/candidates.repository";
+import type { SelectionProcessRepository } from "../repositories/selection-process.repository";
 
 type RegisterError = EmailAlreadyRegisteredError | PhoneAlreadyRegisteredError;
 type RegisterResult = { id: string; status: "registered"; name: string; email: string; createdAt: string };
 
 export class CandidateService {
-    constructor(private readonly candidates: CandidateRepository) {}
+    constructor(
+        private readonly candidates: CandidateRepository,
+        private readonly processes: SelectionProcessRepository,
+    ) {}
 
     /** Inscrição em passo único: valida e grava candidato + questionário no mesmo batch. */
     async register(input: RegisterRequest): Promise<Either<RegisterError, RegisterResult>> {
-        const existingByEmail = await this.candidates.findByEmail(input.email);
+        // A edição corrente é resolvida (e criada, se faltar) antes de
+        // qualquer checagem: desde a FEAT-0006 a unicidade é escopada nela,
+        // então sem a edição não há como saber o que é duplicata.
+        const process = await this.processes.resolveCurrent();
+
+        const existingByEmail = await this.candidates.findByEmailInProcess(input.email, process.id);
         if (existingByEmail) {
-            logger.warn("candidate.register.email_conflict", { email: input.email });
+            logger.warn("candidate.register.email_conflict", { email: input.email, processId: process.id });
             return left(new EmailAlreadyRegisteredError());
         }
 
-        const existingByPhone = await this.candidates.findByPhone(input.phone);
+        // `input.phone` já chega em E.164 — o schema Zod normaliza (FEAT-0006,
+        // seção 4.3). Antes disso esta comparação errava por diferença de
+        // máscara, e só a constraint segurava.
+        const existingByPhone = await this.candidates.findByPhoneInProcess(input.phone, process.id);
         if (existingByPhone) {
-            logger.warn("candidate.register.phone_conflict", { phone: input.phone });
+            logger.warn("candidate.register.phone_conflict", { phone: input.phone, processId: process.id });
             return left(new PhoneAlreadyRegisteredError());
         }
 
         const newCandidate: NewCandidate = {
             id: crypto.randomUUID(),
+            process_id: process.id,
             name: input.name,
             email: input.email,
             phone: input.phone,

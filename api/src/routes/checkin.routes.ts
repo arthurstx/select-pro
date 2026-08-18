@@ -17,6 +17,7 @@ import { type AuthEnv, requireAuth } from "../middlewares/require-auth";
 import { requireRole } from "../middlewares/require-role";
 import { CandidateRepository } from "../repositories/candidates.repository";
 import { CheckinRepository } from "../repositories/checkin.repository";
+import { SelectionProcessRepository } from "../repositories/selection-process.repository";
 import { CheckinService } from "../services/checkin.service";
 
 export const checkinRouter = new OpenAPIHono<AuthEnv>();
@@ -36,6 +37,7 @@ function buildService(c: Context<AuthEnv>): CheckinService {
     return new CheckinService(
         new CandidateRepository(c.env.DB),
         new CheckinRepository(c.env.DB),
+        new SelectionProcessRepository(c.env.DB),
         new CheckinListCache(c.env.CANDIDATES_KV),
     );
 }

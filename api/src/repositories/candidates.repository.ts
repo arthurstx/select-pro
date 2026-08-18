@@ -29,17 +29,23 @@ export class CandidateRepository {
       .first<CandidateRow>();
   }
 
-  async findByEmail(email: string): Promise<CandidateRow | null> {
+  /**
+   * Duplicidade é por edição desde a FEAT-0006 — o mesmo email em processos
+   * diferentes é recandidatura, não conflito. É uma otimização de mensagem
+   * de erro; a barreira real é `UNIQUE (process_id, email)`.
+   */
+  async findByEmailInProcess(email: string, processId: string): Promise<CandidateRow | null> {
     return this.db
-      .prepare("SELECT * FROM candidates WHERE email = ?")
-      .bind(email)
+      .prepare("SELECT * FROM candidates WHERE email = ? AND process_id = ?")
+      .bind(email, processId)
       .first<CandidateRow>();
   }
 
-  async findByPhone(phone: string): Promise<CandidateRow | null> {
+  /** `phone` chega em E.164 — a comparação exata só é confiável porque o valor é canônico. */
+  async findByPhoneInProcess(phone: string, processId: string): Promise<CandidateRow | null> {
     return this.db
-      .prepare("SELECT * FROM candidates WHERE phone = ?")
-      .bind(phone)
+      .prepare("SELECT * FROM candidates WHERE phone = ? AND process_id = ?")
+      .bind(phone, processId)
       .first<CandidateRow>();
   }
 
@@ -70,12 +76,13 @@ export class CandidateRepository {
   ): Promise<CandidateRow> {
     const insertCandidate = this.db
       .prepare(
-        `INSERT INTO candidates (id, course, semester, gender, ethnicity, name, email, phone)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO candidates (id, process_id, course, semester, gender, ethnicity, name, email, phone)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                  RETURNING *`,
       )
       .bind(
         candidate.id,
+        candidate.process_id,
         candidate.course,
         candidate.semester,
         candidate.gender,

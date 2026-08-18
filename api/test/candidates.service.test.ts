@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { EmailAlreadyRegisteredError, PhoneAlreadyRegisteredError } from "../src/core/errors/candidate-errors";
 import { CandidateRepository } from "../src/repositories/candidates.repository";
+import { SelectionProcessRepository } from "../src/repositories/selection-process.repository";
 import { CandidateService } from "../src/services/candidates.service";
 
 let counter = 0;
@@ -11,7 +12,10 @@ function uniqueCandidateInput() {
     return {
         name: `Candidato ${counter}`,
         email: `candidato${counter}@example.com`,
-        phone: `7199999${String(counter).padStart(4, "0")}`,
+        // Já em E.164: `RegisterRequest` é o tipo de SAÍDA do schema, que
+        // normaliza no `.transform()` (FEAT-0006). O service nunca recebe
+        // telefone com máscara — quem faz esse trabalho é a validação.
+        phone: `+557199999${String(counter).padStart(4, "0")}`,
         course: "eng-computacao" as const,
         semester: 3 as const,
         gender: "outro" as const,
@@ -25,11 +29,18 @@ function uniqueCandidateInput() {
     };
 }
 
+/** Edição corrente, resolvida do mesmo jeito que o service faz — sem depender do id semeado pela migration. */
+async function currentProcessId(): Promise<string> {
+    const process = await new SelectionProcessRepository(env.DB).resolveCurrent();
+    return process.id;
+}
+
 /** Payload de `candidates.insertWithApplication` a partir do input de inscrição (sem os campos gerados). */
-function candidateRowFrom(input: ReturnType<typeof uniqueCandidateInput>) {
+function candidateRowFrom(input: ReturnType<typeof uniqueCandidateInput>, processId: string) {
     return {
         candidate: {
             id: crypto.randomUUID(),
+            process_id: processId,
             name: input.name,
             email: input.email,
             phone: input.phone,
@@ -53,7 +64,8 @@ function candidateRowFrom(input: ReturnType<typeof uniqueCandidateInput>) {
 
 function buildService() {
     const candidates = new CandidateRepository(env.DB);
-    return { service: new CandidateService(candidates), candidates };
+    const processes = new SelectionProcessRepository(env.DB);
+    return { service: new CandidateService(candidates, processes), candidates };
 }
 
 async function applicationOf(candidateId: string) {
@@ -84,7 +96,7 @@ describe("CandidateService.register", () => {
         expect(result.value.email).toBe(input.email);
         expect(result.value.createdAt).toBeTruthy();
 
-        const stored = await candidates.findByEmail(input.email);
+        const stored = await candidates.findByEmailInProcess(input.email, await currentProcessId());
         expect(stored?.id).toBe(result.value.id);
         expect(stored?.ethnicity).toBe(input.ethnicity);
 
@@ -99,7 +111,7 @@ describe("CandidateService.register", () => {
     it("E1 - bloqueia quando o email já pertence a um candidato inscrito", async () => {
         const { service, candidates } = buildService();
         const input = uniqueCandidateInput();
-        const { candidate, application } = candidateRowFrom(input);
+        const { candidate, application } = candidateRowFrom(input, await currentProcessId());
         await candidates.insertWithApplication(candidate, application);
 
         const result = await service.register({ ...uniqueCandidateInput(), email: input.email });
@@ -113,7 +125,7 @@ describe("CandidateService.register", () => {
     it("E2 - bloqueia quando o telefone já pertence a um candidato inscrito", async () => {
         const { service, candidates } = buildService();
         const input = uniqueCandidateInput();
-        const { candidate, application } = candidateRowFrom(input);
+        const { candidate, application } = candidateRowFrom(input, await currentProcessId());
         await candidates.insertWithApplication(candidate, application);
 
         const result = await service.register({ ...uniqueCandidateInput(), phone: input.phone });
@@ -129,11 +141,11 @@ describe("CandidateService.register", () => {
         const input = uniqueCandidateInput();
 
         // Simula a corrida do E5: a linha aparece no banco depois que `register` já leu.
-        const original = candidates.findByEmail.bind(candidates);
-        candidates.findByEmail = async () => {
-            const { candidate, application } = candidateRowFrom({ ...uniqueCandidateInput(), email: input.email });
+        const original = candidates.findByEmailInProcess.bind(candidates);
+        candidates.findByEmailInProcess = async () => {
+            const { candidate, application } = candidateRowFrom({ ...uniqueCandidateInput(), email: input.email }, await currentProcessId());
             await candidates.insertWithApplication(candidate, application);
-            candidates.findByEmail = original;
+            candidates.findByEmailInProcess = original;
             return null;
         };
 
@@ -178,16 +190,72 @@ describe("CandidateRepository.insertWithApplication — atomicidade (FEAT-0001 v
     it("uma falha no insert do candidato não deixa uma linha órfã em candidate_applications", async () => {
         const { candidates } = buildService();
         const input = uniqueCandidateInput();
-        const { candidate, application } = candidateRowFrom(input);
+        const { candidate, application } = candidateRowFrom(input, await currentProcessId());
 
         await candidates.insertWithApplication(candidate, application);
 
-        const duplicate = candidateRowFrom({ ...uniqueCandidateInput(), email: input.email });
+        const duplicate = candidateRowFrom({ ...uniqueCandidateInput(), email: input.email }, await currentProcessId());
         await expect(candidates.insertWithApplication(duplicate.candidate, duplicate.application)).rejects.toThrow();
 
         const count = await env.DB.prepare("SELECT COUNT(*) as count FROM candidate_applications WHERE candidate_id = ?")
             .bind(duplicate.candidate.id)
             .first<{ count: number }>();
         expect(count?.count).toBe(0);
+    });
+});
+
+describe("Unicidade por edição (FEAT-0006)", () => {
+    it("o MESMO email e o MESMO telefone são aceitos em edições diferentes", async () => {
+        const { candidates } = buildService();
+        const processes = new SelectionProcessRepository(env.DB);
+        const input = uniqueCandidateInput();
+
+        const atual = await processes.resolveCurrent();
+        // Edição anterior: a `2026.1` é semeada pela migration e nunca seria
+        // criada sob demanda (a criação só olha para "hoje").
+        const anterior = await processes.findByLabel("2026.1");
+        expect(anterior).not.toBeNull();
+        expect(anterior!.id).not.toBe(atual.id);
+
+        const primeira = candidateRowFrom(input, anterior!.id);
+        await candidates.insertWithApplication(primeira.candidate, primeira.application);
+
+        // Mesma pessoa, mesmos dados de contato, edição nova — é
+        // recandidatura, não conflito. Antes da FEAT-0006 isto falhava.
+        const segunda = candidateRowFrom(input, atual.id);
+        await candidates.insertWithApplication(segunda.candidate, segunda.application);
+
+        const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM candidates WHERE email = ?")
+            .bind(input.email)
+            .first<{ n: number }>();
+        expect(total?.n).toBe(2);
+    });
+
+    it("a busca de duplicidade é escopada: não enxerga o candidato de outra edição", async () => {
+        const { candidates } = buildService();
+        const processes = new SelectionProcessRepository(env.DB);
+        const input = uniqueCandidateInput();
+
+        const anterior = await processes.findByLabel("2026.1");
+        const { candidate, application } = candidateRowFrom(input, anterior!.id);
+        await candidates.insertWithApplication(candidate, application);
+
+        const atual = await processes.resolveCurrent();
+        expect(await candidates.findByEmailInProcess(input.email, atual.id)).toBeNull();
+        expect(await candidates.findByEmailInProcess(input.email, anterior!.id)).not.toBeNull();
+    });
+
+    it("na MESMA edição o conflito continua barrado pela constraint", async () => {
+        const { candidates } = buildService();
+        const input = uniqueCandidateInput();
+        const processId = await currentProcessId();
+
+        const primeira = candidateRowFrom(input, processId);
+        await candidates.insertWithApplication(primeira.candidate, primeira.application);
+
+        const duplicata = candidateRowFrom(input, processId);
+        await expect(
+            candidates.insertWithApplication(duplicata.candidate, duplicata.application),
+        ).rejects.toThrow();
     });
 });
