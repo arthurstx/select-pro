@@ -2,7 +2,7 @@
 
 import { CheckIcon, MailIcon, PhoneIcon, UndoIcon } from "lucide-react";
 import { toast } from "sonner";
-import { COURSE_LABELS, type CandidateCheckinItem } from "shared";
+import { COURSE_LABELS, formatPhone, type CandidateCheckinItem } from "shared";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -84,7 +84,7 @@ export function CandidateRow({ candidate }: CandidateRowProps) {
           </span>
           <span className="flex items-center gap-2">
             <PhoneIcon className="size-4 shrink-0" aria-hidden />
-            {candidate.phone}
+            {formatPhone(candidate.phone)}
           </span>
         </div>
         <ActionButton present={present} pending={pending} onMark={handleMark} onUnmark={handleUnmark} className="h-11 w-full" />
@@ -99,7 +99,12 @@ export function CandidateRow({ candidate }: CandidateRowProps) {
         </div>
         <div className="border-border mx-4 hidden min-w-0 flex-1 flex-col justify-center border-r border-l px-4 lg:flex">
           <p className="text-muted-foreground truncate text-sm">{candidate.email}</p>
-          <p className="text-muted-foreground truncate text-sm">{candidate.phone}</p>
+          {/*
+            Formatar aqui inverte a proibição da FEAT-0005-UI §12 — e o
+            motivo dela deixou de existir: mascarar no cliente escondia a
+            inconsistência do formato, que a FEAT-0006 eliminou na raiz.
+          */}
+          <p className="text-muted-foreground truncate text-sm">{formatPhone(candidate.phone)}</p>
         </div>
         <div className="flex w-32 shrink-0 justify-center">
           <StatusBadge present={present} />

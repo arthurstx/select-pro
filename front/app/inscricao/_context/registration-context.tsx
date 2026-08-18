@@ -10,7 +10,13 @@ interface RegisteredCandidate {
   createdAt: string;
 }
 
-const ANSWERS_STORAGE_KEY = "inscricao:wizard-answers";
+/**
+ * O sufixo de versão descarta estado antigo em vez de hidratá-lo contra um
+ * schema incompatível. Foi bumpado para `v2` na FEAT-0006: quem estivesse com
+ * o wizard aberto durante o deploy tinha `gender: "mascu"` gravado aqui, e o
+ * valor deixou de existir em `GenderSchema`.
+ */
+const ANSWERS_STORAGE_KEY = "inscricao:wizard-answers:v2";
 
 interface RegistrationContextValue {
   answers: Partial<RegisterRequest>;
