@@ -19,8 +19,26 @@
 -- toda a segurança da 0007 depende desta checagem ser confiável, ela precisa
 -- FALHAR, não apenas relatar.
 --
--- Se algo falhar, rode as consultas de diagnóstico do fim deste arquivo com
+-- Se algo falhar, rode as consultas de diagnóstico logo abaixo com
 -- `--command` (que exibe resultados) para ver QUAIS linhas são o problema.
+-- ============================================================
+
+-- ============================================================
+-- DIAGNÓSTICO — rode com `--command` (que exibe resultados) só se alguma
+-- checagem abaixo falhar, para ver quais linhas são o problema.
+--
+-- E1:
+--   SELECT id, name, phone FROM candidates WHERE NOT (
+--     (length(replace(replace(replace(replace(replace(replace(phone,'(',''),')',''),'-',''),' ',''),'+',''),'.','')) = 13
+--      AND substr(replace(replace(replace(replace(replace(replace(phone,'(',''),')',''),'-',''),' ',''),'+',''),'.',''),1,2) = '55')
+--     OR length(replace(replace(replace(replace(replace(replace(phone,'(',''),')',''),'-',''),' ',''),'+',''),'.','')) IN (10,11));
+--
+-- E2:
+--   SELECT id, name, created_at FROM candidates c WHERE NOT EXISTS
+--     (SELECT 1 FROM selection_processes sp WHERE c.created_at BETWEEN sp.starts_at AND sp.ends_at);
+--
+-- E3: agrupe por telefone normalizado e veja os grupos com mais de uma linha
+--     (a expressão está no INSERT do bloco E3, abaixo).
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -125,20 +143,3 @@ SELECT CASE WHEN COUNT(*) = 0 THEN 1 ELSE 0 END
 
 DROP TABLE _precheck_e4;
 
--- ============================================================
--- DIAGNÓSTICO — rode com `--command` (que exibe resultados) só se alguma
--- checagem acima falhar, para ver quais linhas são o problema.
---
--- E1:
---   SELECT id, name, phone FROM candidates WHERE NOT (
---     (length(replace(replace(replace(replace(replace(replace(phone,'(',''),')',''),'-',''),' ',''),'+',''),'.','')) = 13
---      AND substr(replace(replace(replace(replace(replace(replace(phone,'(',''),')',''),'-',''),' ',''),'+',''),'.',''),1,2) = '55')
---     OR length(replace(replace(replace(replace(replace(replace(phone,'(',''),')',''),'-',''),' ',''),'+',''),'.','')) IN (10,11));
---
--- E2:
---   SELECT id, name, created_at FROM candidates c WHERE NOT EXISTS
---     (SELECT 1 FROM selection_processes sp WHERE c.created_at BETWEEN sp.starts_at AND sp.ends_at);
---
--- E3: agrupe por telefone normalizado e veja os grupos com mais de uma linha
---     (a expressão está no INSERT do bloco E3, acima).
--- ============================================================
