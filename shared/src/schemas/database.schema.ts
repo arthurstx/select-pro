@@ -26,7 +26,8 @@ export type Course =
 
 export type Semester = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
-export type Gender = "mascu" | "fem" | "outro";
+/** Palavras inteiras desde FEAT-0006 — `mascu`/`fem` eram truncamentos sem ganho, como os slugs de curso antes da FEAT-0001 v3.1. */
+export type Gender = "masculino" | "feminino" | "outro";
 
 export type Ethnicity = "branca" | "preta" | "parda" | "amarela" | "indigena" | "nao-informado";
 
@@ -128,6 +129,18 @@ export interface PasswordResetTokenRow {
 export interface CandidateRow {
     id: string;
 
+    /**
+     * Edição em que esta inscrição aconteceu (FEAT-0006). É o que torna a
+     * unicidade escopada possível — `UNIQUE (process_id, email)` e
+     * `UNIQUE (process_id, phone)`, no lugar dos UNIQUE globais que
+     * impediam a recandidatura.
+     *
+     * Substitui a inferência por janela de data que a FEAT-0005 usava como
+     * dívida assumida: o vínculo passa a ser afirmado na inscrição, então
+     * corrigir as datas de um processo não remaneja mais quem pertence a ele.
+     */
+    process_id: string;
+
     course: Course;
     semester: Semester;
     gender: Gender;
@@ -135,6 +148,7 @@ export interface CandidateRow {
 
     name: string;
     email: string;
+    /** Sempre E.164 (`+55` + DDD + número) — ver `phone.schema.ts`. */
     phone: string;
 
     created_at: string;

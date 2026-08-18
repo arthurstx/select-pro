@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { Course, Ethnicity, Gender, ReferralSource, Semester } from "./database.schema";
+import { toE164 } from "./phone.schema";
 
 // Enums — espelham as CHECK constraints de `candidates` (api/migrations/0001-schema.sql).
 
@@ -46,13 +47,14 @@ export const SemesterSchema = z.union(
     { errorMap: () => ({ message: "Selecione um semestre" }) },
 ) satisfies z.ZodType<Semester>;
 
-export const GenderSchema = z.enum(["mascu", "fem", "outro"], {
+export const GenderSchema = z.enum(["masculino", "feminino", "outro"], {
     errorMap: () => ({ message: "Selecione um gênero" }),
 }) satisfies z.ZodType<Gender>;
 
+/** Os rótulos não mudaram na FEAT-0006 — só as chaves deixaram de ser abreviadas. */
 export const GENDER_LABELS: Record<Gender, string> = {
-    mascu: "Masculino",
-    fem: "Feminino",
+    masculino: "Masculino",
+    feminino: "Feminino",
     outro: "Outro",
 };
 
@@ -83,13 +85,39 @@ export const REFERRAL_SOURCE_LABELS: Record<ReferralSource, string> = {
 
 const PHONE_REGEX = /^(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/;
 
+/**
+ * Valida o formato digitado e **normaliza para E.164** (FEAT-0006, seção 4.3).
+ *
+ * A normalização vive aqui, no schema, e não no service: assim front e API
+ * usam exatamente o mesmo código, e a checagem prévia de duplicidade passa a
+ * comparar valores canônicos. Antes disso ela errava por diferença de
+ * máscara — `(71) 98888-7777` e `71988887777` eram duas linhas distintas que
+ * passavam pelo `UNIQUE`.
+ *
+ * O `transform` é idempotente: o E.164 que sai daqui volta a casar com a
+ * `PHONE_REGEX`, então a API revalidar o que o front já normalizou é no-op.
+ */
+const PhoneSchema = z
+    .string()
+    .regex(PHONE_REGEX, "Telefone inválido")
+    .transform((value, ctx) => {
+        const normalized = toE164(value);
+
+        if (!normalized) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Telefone inválido" });
+            return z.NEVER;
+        }
+
+        return normalized;
+    });
+
 // POST /candidate/register (FEAT-0001 v3.0, seção 8.2) — um schema por etapa
 // do wizard, compostos no schema de request completo.
 
 export const PersonalDataStepSchema = z.object({
     name: z.string().min(1, "Nome é obrigatório"),
     email: z.string().email("Email inválido"),
-    phone: z.string().regex(PHONE_REGEX, "Telefone inválido"),
+    phone: PhoneSchema,
     course: CourseSchema,
     semester: SemesterSchema,
     gender: GenderSchema,

@@ -4,10 +4,14 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
+  "scripts": {
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.ts\""
+  },
   "dependencies": {
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/node": "^20",
     "typescript": "^5.0.0"
   }
 }

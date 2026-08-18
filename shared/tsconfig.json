@@ -7,7 +7,13 @@
     "skipLibCheck": true,
     "declaration": true,
     "esModuleInterop": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    // Os testes rodam por `node --test` (type stripping), e importam com
+    // extensão `.ts` explícita — mesmo arranjo do workspace `front`.
+    // `noEmit` é pré-requisito de `allowImportingTsExtensions` e não custa
+    // nada aqui: `main` aponta para o fonte, este pacote nunca é compilado.
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*"]
 }
