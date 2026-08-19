@@ -6,6 +6,8 @@ import { Controller, useForm } from "react-hook-form";
 import {
   COURSE_LABELS,
   CourseSchema,
+  formatPhone,
+  formatPhoneAsYouType,
   GENDER_LABELS,
   GenderSchema,
   PersonalDataStepSchema,
@@ -45,7 +47,9 @@ export function CandidateRegistrationForm() {
     values: {
       name: answers.name ?? "",
       email: answers.email ?? "",
-      phone: answers.phone ?? "",
+      // O que fica salvo é E.164; ao voltar para esta etapa o campo mostra o
+      // formato nacional, igual ao que a pessoa digitou.
+      phone: answers.phone ? formatPhone(answers.phone) : "",
       // "" nunca bate com nenhum SelectItem — mantém os Selects controlados desde o primeiro render.
       course: answers.course ?? ("" as PersonalDataStep["course"]),
       semester: answers.semester ?? ("" as unknown as PersonalDataStep["semester"]),
@@ -92,13 +96,29 @@ export function CandidateRegistrationForm() {
 
             <Field data-invalid={!!form.formState.errors.phone}>
               <FieldLabel htmlFor="phone">Telefone</FieldLabel>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="(71) 98888-7777"
-                autoComplete="tel"
-                aria-invalid={!!form.formState.errors.phone}
-                {...form.register("phone")}
+              {/*
+                `Controller` em vez de `register` porque o valor é reescrito a
+                cada tecla pela máscara. O campo guarda o texto formatado; o
+                schema converte para E.164 no submit.
+              */}
+              <Controller
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="(71) 98888-7777"
+                    autoComplete="tel"
+                    aria-invalid={!!form.formState.errors.phone}
+                    name={field.name}
+                    ref={field.ref}
+                    onBlur={field.onBlur}
+                    value={formatPhoneAsYouType(field.value ?? "")}
+                    onChange={(event) => field.onChange(formatPhoneAsYouType(event.target.value))}
+                  />
+                )}
               />
               <FieldError errors={[form.formState.errors.phone]} />
             </Field>

@@ -10,7 +10,7 @@ function uniqueCandidateInput() {
     return {
         name: `Candidato Route ${counter}`,
         email: `candidato-route-${counter}@example.com`,
-        phone: `7188888${String(counter).padStart(4, "0")}`,
+        phone: `7198888${String(counter).padStart(4, "0")}`,
         course: "eng-computacao",
         semester: 3,
         gender: "outro",
@@ -53,6 +53,36 @@ describe("POST /candidate/register (HTTP)", () => {
         const body = await res.json<{ error: { code: string; field?: string } }>();
         expect(body.error.code).toBe("INVALID_EMAIL");
         expect(body.error.field).toBe("email");
+    });
+
+    // A validação passou a ser por libphonenumber-js/max (FEAT-0006): os
+    // casos abaixo têm forma de telefone e a regex antiga aceitava todos.
+    it.each([
+        ["11111111111", "repetição óbvia, mas com 11 dígitos"],
+        ["(00) 00000-0000", "DDD 00 não existe"],
+        ["71888887777", "celular brasileiro começa com 9 depois do DDD"],
+        ["988887777", "sem DDD"],
+    ])("E4 - rejeita %s (%s)", async (phone) => {
+        const res = await postRegister({ ...uniqueCandidateInput(), phone });
+
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { code: string; field?: string } }>();
+        expect(body.error.field).toBe("phone");
+    });
+
+    it("normaliza para E.164 antes de gravar, qualquer que seja a máscara digitada", async () => {
+        const input = uniqueCandidateInput();
+        const digitado = `(71) 9${input.phone.slice(3, 7)}-${input.phone.slice(7)}`;
+
+        const res = await postRegister({ ...input, phone: digitado });
+        expect(res.status).toBe(201);
+
+        const body = await res.json<{ data: { id: string } }>();
+        const row = await env.DB.prepare("SELECT phone FROM candidates WHERE id = ?")
+            .bind(body.data.id)
+            .first<{ phone: string }>();
+
+        expect(row?.phone).toBe(`+55${input.phone}`);
     });
 
     it("E4 - telefone com formato inválido retorna 400 com envelope de erro", async () => {

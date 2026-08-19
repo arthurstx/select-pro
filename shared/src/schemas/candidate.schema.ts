@@ -83,10 +83,8 @@ export const REFERRAL_SOURCE_LABELS: Record<ReferralSource, string> = {
     outros: "Outros",
 };
 
-const PHONE_REGEX = /^(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/;
-
 /**
- * Valida o formato digitado e **normaliza para E.164** (FEAT-0006, seção 4.3).
+ * Valida e **normaliza para E.164** (FEAT-0006, seção 4.3).
  *
  * A normalização vive aqui, no schema, e não no service: assim front e API
  * usam exatamente o mesmo código, e a checagem prévia de duplicidade passa a
@@ -94,22 +92,27 @@ const PHONE_REGEX = /^(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/;
  * máscara — `(71) 98888-7777` e `71988887777` eram duas linhas distintas que
  * passavam pelo `UNIQUE`.
  *
- * O `transform` é idempotente: o E.164 que sai daqui volta a casar com a
- * `PHONE_REGEX`, então a API revalidar o que o front já normalizou é no-op.
+ * Não há mais regex de formato: `toE164` usa `libphonenumber-js/max`, que
+ * cobre tudo que a regex cobria e mais o que ela não tinha como saber — DDD
+ * inexistente, celular que não começa com 9, número repetido. A regex antiga
+ * aceitava `(00) 00000-0000`.
+ *
+ * O `transform` é idempotente: o E.164 que sai daqui é aceito de volta na
+ * entrada, então a API revalidar o que o front já normalizou é no-op.
  */
-const PhoneSchema = z
-    .string()
-    .regex(PHONE_REGEX, "Telefone inválido")
-    .transform((value, ctx) => {
-        const normalized = toE164(value);
+const PhoneSchema = z.string().transform((value, ctx) => {
+    const normalized = toE164(value);
 
-        if (!normalized) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Telefone inválido" });
-            return z.NEVER;
-        }
+    if (!normalized) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Informe um telefone válido com DDD",
+        });
+        return z.NEVER;
+    }
 
-        return normalized;
-    });
+    return normalized;
+});
 
 // POST /candidate/register (FEAT-0001 v3.0, seção 8.2) — um schema por etapa
 // do wizard, compostos no schema de request completo.

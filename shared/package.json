@@ -8,6 +8,7 @@
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "libphonenumber-js": "^1.13.11",
     "zod": "^3.23.8"
   },
   "devDependencies": {
