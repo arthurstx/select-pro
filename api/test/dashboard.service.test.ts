@@ -1,6 +1,8 @@
 import { env } from "cloudflare:test";
+import type { DashboardCandidatesQuery } from "shared";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import type { Either } from "../src/core/either";
 import { DashboardCache } from "../src/lib/dashboard-cache";
 import { DashboardRepository } from "../src/repositories/dashboard.repository";
 import { SelectionProcessRepository } from "../src/repositories/selection-process.repository";
@@ -120,11 +122,12 @@ async function insertCandidate(overrides: CandidateOverrides = {}) {
     return row;
 }
 
-function unwrap<L, R>(result: { isLeft(): boolean; value: L | R }): R {
+/** `isLeft()` é um type guard (`this is Left`), então o `return` já vem estreitado para `R`. */
+function unwrap<L, R>(result: Either<L, R>): R {
     if (result.isLeft()) {
         throw new Error(`Esperava sucesso, veio erro: ${JSON.stringify(result.value)}`);
     }
-    return result.value as R;
+    return result.value;
 }
 
 // ============================================================
@@ -343,8 +346,11 @@ describe("Agregações", () => {
 // ============================================================
 
 describe("Listagem de inscritos", () => {
-    const query = (overrides: Record<string, unknown> = {}) =>
-        ({ page: 1, per_page: 25, ...overrides }) as never;
+    const query = (overrides: Partial<DashboardCandidatesQuery> = {}): DashboardCandidatesQuery => ({
+        page: 1,
+        per_page: 25,
+        ...overrides,
+    });
 
     it("ordena da inscrição mais recente para a mais antiga", async () => {
         await insertCandidate({ name: "Primeira", createdAt: "2026-08-02 08:00:00" });

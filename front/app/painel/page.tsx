@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
 
-import { SessionSummary } from "./session-summary";
+import { DashboardScreen } from "./dashboard-screen";
 
 export const metadata: Metadata = {
   title: "Painel | CIMATEC jr.",
 };
 
+/**
+ * Server Component só pelo `metadata` — a tela em si é cliente (gráficos,
+ * filtros, painel lateral). `AuthGuard` já é aplicado pelo layout de
+ * `/painel`. Substitui o `SessionSummary` que ocupava esta rota como
+ * placeholder desde a FEAT-0003.
+ */
 export default function PainelPage() {
-  return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-16">
-      <SessionSummary />
-    </div>
-  );
+  return <DashboardScreen />;
 }

@@ -48,6 +48,22 @@
    */
   --brand-navy: #002b5c;
   --brand-navy-foreground: #ffffff;
+
+  /*
+   * Séries de gráfico (FEAT-0007-UI). Tiradas da paleta que já existe —
+   * vermelho da marca, azul institucional, verde de sucesso — em vez de uma
+   * escala nova só para o dashboard.
+   *
+   * No modo "soma" cada gráfico usa UMA cor: os três tons sem critério do
+   * mockup faziam um curso de valor maior aparecer mais claro que um de
+   * valor menor, sugerindo um ranking que não existe. Mais de uma cor só no
+   * comparativo, onde cor = edição.
+   */
+  --chart-1: #c8181e;
+  --chart-2: #002b5c;
+  --chart-3: #1e7a3d;
+  --chart-4: #a15c00;
+  --chart-5: #5f5e5e;
 }
 
 .dark {
@@ -81,6 +97,12 @@
   --border: #333333;
   --input: #3a3a3a;
   --ring: #ff544c;
+
+  --chart-1: #ff544c;
+  --chart-2: #5b9bd5;
+  --chart-3: #4ade80;
+  --chart-4: #e0a458;
+  --chart-5: #a1a1a1;
 }
 
 @theme inline {
@@ -112,6 +134,11 @@
   --color-ring: var(--ring);
   --color-brand-navy: var(--brand-navy);
   --color-brand-navy-foreground: var(--brand-navy-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 
   --font-sans: var(--font-inter);
   --font-heading: var(--font-outfit);

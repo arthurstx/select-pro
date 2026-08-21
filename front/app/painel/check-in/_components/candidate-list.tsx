@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api/api-error";
 
+// Promovida para `painel/_components` na FEAT-0007 — o dashboard pagina do
+// mesmo jeito, e duas barras idênticas divergiriam na primeira mudança.
+import { PaginationBar } from "../../_components/pagination-bar";
 import { CandidateRow } from "./candidate-row";
-import { PaginationBar } from "./pagination-bar";
 
 interface CandidateListProps {
   query: UseQueryResult<ListCandidatesResponse["data"], Error>;
