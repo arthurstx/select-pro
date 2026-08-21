@@ -52,6 +52,26 @@ export class SelectionProcessRepository {
         return row;
     }
 
+    async findById(id: string): Promise<SelectionProcessRow | null> {
+        return this.db
+            .prepare("SELECT * FROM selection_processes WHERE id = ?")
+            .bind(id)
+            .first<SelectionProcessRow>();
+    }
+
+    /**
+     * Catálogo do seletor de edição (FEAT-0007). Ordena por `starts_at DESC`,
+     * não por `label`: a ordenação alfabética de "2026.1"/"2026.2" coincide
+     * hoje, mas é coincidência do formato, não garantia.
+     */
+    async listAll(): Promise<SelectionProcessRow[]> {
+        const { results } = await this.db
+            .prepare("SELECT * FROM selection_processes ORDER BY starts_at DESC")
+            .all<SelectionProcessRow>();
+
+        return results ?? [];
+    }
+
     async findByLabel(label: string): Promise<SelectionProcessRow | null> {
         return this.db
             .prepare("SELECT * FROM selection_processes WHERE label = ?")

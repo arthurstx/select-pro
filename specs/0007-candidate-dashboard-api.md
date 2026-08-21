@@ -2,9 +2,11 @@
 
 ID: FEAT-0007
 Módulo: Operação do processo seletivo — visão das inscrições
-Versão: 1.0
-Data: 2026-08-19
+Versão: 1.1
+Data: 2026-08-20
 Status: DRAFT
+
+> **v1.1 (2026-08-20):** acrescenta `GET /dashboard/editions`. Lacuna encontrada na implementação: as três rotas originais apenas CONSOMEM `process_id`, e nenhuma o enumera — o front sabia qual era a edição corrente (vem em `scope.process`) mas não tinha o uuid da anterior para montar o seletor. Alternativas descartadas: embutir o catálogo em `metrics` (mistura catálogo com agregado, e a lista viajaria de novo a cada troca de filtro) e aceitar `label` além de `uuid` (duplicaria a regra de calendário no cliente, e faria aparecer no seletor edições que nunca existiram).
 
 > **Contexto:** o `/painel` é um placeholder desde a FEAT-0003 — um card com os dados da própria sessão e um botão de sair. Não há nenhuma visão de quem está se inscrevendo: para saber quantos são, de quais cursos, ou ler o que uma pessoa escreveu no questionário, é preciso consultar o D1 à mão.
 >
@@ -53,7 +55,7 @@ Para eu poder me preparar antes de avaliá-lo.
 
 ## 4. Fluxo Principal (Happy Path)
 
-As três rotas vivem sob o prefixo **`/dashboard`**, autenticado, com `requireAuth` seguido de `requireRole(ADMIN, AVALIADOR)`.
+As quatro rotas vivem sob o prefixo **`/dashboard`**, autenticado, com `requireAuth` seguido de `requireRole(ADMIN, AVALIADOR)`.
 
 ### 4.1 Recorte de edição
 
@@ -93,6 +95,16 @@ Com `mode=by_edition`, cada distribuição vem quebrada por edição em vez de s
 4. Sistema retorna `200 OK` com contato, dados acadêmicos, respostas do questionário e os dois textos livres.
 
 > **O detalhe não é filtrado por edição.** Um id identifica uma inscrição específica, e a edição dela vem no corpo — abrir o detalhe de alguém de 2026.1 enquanto a tela mostra 2026.2 é legítimo, e acontece na visão "todas as edições".
+
+### 4.5 Catálogo de edições — `GET /dashboard/editions` (v1.1)
+
+1. Sistema resolve a edição corrente, **criando-a se faltar** (FEAT-0005, seção 4.1.1).
+2. Sistema lista todas as edições, da mais recente para a mais antiga.
+3. Sistema retorna `200 OK` com a lista e a corrente.
+
+> **A ordem dos dois passos importa.** Resolver a corrente ANTES de listar é o que garante que ela apareça no seletor: na ordem inversa, o primeiro acesso de cada semestre devolveria um catálogo sem a edição em curso.
+>
+> Ordena por `starts_at DESC`, não por `label`. A ordenação alfabética de `2026.1`/`2026.2` coincide com a cronológica hoje, mas é coincidência do formato — não garantia.
 
 ---
 
@@ -269,6 +281,24 @@ Nenhuma tabela nova. Tudo sai de `candidates` e `candidate_applications`:
 ```
 
 > `demographics` segue a mesma regra de `byGender`/`byEthnicity`: **ausente** para `avaliador`, presente para `admin`.
+
+**`GET /dashboard/editions` (`200 OK`)** — v1.1
+
+```json
+{
+  "data": {
+    "editions": [
+      { "id": "uuid", "label": "2026.2" },
+      { "id": "uuid", "label": "2026.1" }
+    ],
+    "current": { "id": "uuid", "label": "2026.2" }
+  }
+}
+```
+
+> `current` vem separado além de estar em `editions`: o seletor precisa marcar qual é a corrente, e derivar isso por data no cliente reintroduziria a regra de calendário que a rota existe para evitar.
+>
+> Mesmo corpo para os dois papéis — a edição não é dado demográfico.
 
 ### 8.4 Response — Erros
 

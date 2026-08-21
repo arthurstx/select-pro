@@ -2,10 +2,10 @@
 
 ID: FEAT-0007-UI
 Módulo: Operação do processo seletivo — visão das inscrições / Camada de UI
-Versão: 1.0
-Data: 2026-08-19
+Versão: 1.1
+Data: 2026-08-20
 Status: DRAFT
-Depende de: FEAT-0007 (backend) v1.0
+Depende de: FEAT-0007 (backend) v1.1
 Design: Stitch — projeto "Design System Integration" (ID `15618719394726153851`)
 
 > **Contexto:** esta tela substitui o placeholder de `/painel` e é a primeira do produto com **visualização de dados** — gráficos, não só listas e formulários. Também é a primeira em que o que aparece na tela depende do papel de quem olha.
@@ -168,6 +168,7 @@ Tudo de `shared`, nada redeclarado (`front/AGENTS.md`, seção 1):
 | Query e resposta de métricas | `DashboardMetricsQuerySchema` / `DashboardMetricsResponseSchema` |
 | Query e resposta da listagem | `DashboardCandidatesQuerySchema` / `DashboardCandidatesResponseSchema` |
 | Detalhe | `CandidateDetailResponseSchema` |
+| Catálogo do seletor de edição | `SelectionProcessListResponseSchema` (`GET /dashboard/editions`) |
 | Paginação | `PaginationMetaSchema` |
 | Rótulos dos gráficos | `COURSE_LABELS`, `GENDER_LABELS`, `ETHNICITY_LABELS`, `REFERRAL_SOURCE_LABELS` |
 | Telefone formatado | `formatPhone` |

@@ -13,6 +13,7 @@ import { CandidateRepository } from "./repositories/candidates.repository";
 import { authRouter } from "./routes/auth.routes";
 import { candidatesRouter } from "./routes/candidates.routes";
 import { checkinRouter } from "./routes/checkin.routes";
+import { dashboardRouter } from "./routes/dashboard.routes";
 import { SheetSyncService } from "./services/sheet-sync.service";
 
 const app = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
@@ -49,6 +50,24 @@ app.use("/candidates/*", (c, next) =>
     origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
     credentials: true,
     allowMethods: ["GET", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/dashboard/*` devolve email, telefone e — para `admin` — gênero e etnia
+ * dos candidatos. Mesma allowlist de `/candidates/*`, e nunca o `cors()` que
+ * reflete qualquer origin. Só GET: a feature é inteiramente somente leitura.
+ *
+ * Prefixo novo não herda middleware nenhum — este bloco existe pelo mesmo
+ * motivo que a FEAT-0002 E7: lá o cron escapou do guard justamente assim.
+ */
+app.use("/dashboard/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400,
   })(c, next),
@@ -95,6 +114,13 @@ app.use(
   ),
 );
 
+app.use(
+  "/dashboard/*",
+  maintenanceGuard(
+    "O painel está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
@@ -102,6 +128,7 @@ app.get("/message", (c) => {
 app.route("/candidate", candidatesRouter);
 app.route("/auth", authRouter);
 app.route("/candidates", checkinRouter);
+app.route("/dashboard", dashboardRouter);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",

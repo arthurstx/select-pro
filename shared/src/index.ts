@@ -7,3 +7,4 @@ export * from './schemas/error.schema';
 export * from './schemas/phone.schema';
 export * from './schemas/pagination.schema';
 export * from './schemas/checkin.schema';
+export * from './schemas/dashboard.schema';

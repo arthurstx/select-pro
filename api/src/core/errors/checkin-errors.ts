@@ -27,6 +27,21 @@ export class NoActiveSelectionProcessError extends Error {
     }
 }
 
+/**
+ * FEAT-0007 E3 — `process_id` informado não corresponde a nenhuma edição.
+ * Distinto de `NoActiveSelectionProcessError`: lá o sistema não conseguiu
+ * resolver a edição de hoje (defeito nosso); aqui o cliente pediu uma edição
+ * que não existe (404, e a UI volta para a corrente).
+ */
+export class SelectionProcessNotFoundError extends Error {
+    readonly code = CheckinErrorCode.SELECTION_PROCESS_NOT_FOUND;
+
+    constructor(message = "Edição do processo seletivo não encontrada") {
+        super(message);
+        this.name = "SelectionProcessNotFoundError";
+    }
+}
+
 /** E3 — candidato existe, mas seu `created_at` está fora da janela do processo corrente. */
 export class CandidateNotInActiveProcessError extends Error {
     readonly code = CheckinErrorCode.CANDIDATE_NOT_IN_ACTIVE_PROCESS;

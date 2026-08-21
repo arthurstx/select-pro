@@ -79,6 +79,13 @@ export const CheckinErrorCode = {
     CANDIDATE_NOT_FOUND: "CANDIDATE_NOT_FOUND", // E1
     NO_ACTIVE_SELECTION_PROCESS: "NO_ACTIVE_SELECTION_PROCESS", // E2 — guarda de invariante, não configuração faltando
     CANDIDATE_NOT_IN_ACTIVE_PROCESS: "CANDIDATE_NOT_IN_ACTIVE_PROCESS", // E3
+    /**
+     * FEAT-0007 (E3): `process_id` que não corresponde a nenhuma edição.
+     * Mora aqui, e não num enum novo, porque é do domínio de processo
+     * seletivo — vizinho de `NO_ACTIVE_SELECTION_PROCESS`, apesar do nome
+     * deste enum. Um enum novo com um código só seria pior.
+     */
+    SELECTION_PROCESS_NOT_FOUND: "SELECTION_PROCESS_NOT_FOUND",
 } as const;
 
 export type CheckinErrorCode = (typeof CheckinErrorCode)[keyof typeof CheckinErrorCode];
