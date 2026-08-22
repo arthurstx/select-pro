@@ -61,7 +61,8 @@ export function useDashboardCandidatesQuery(params: DashboardCandidatesQuery) {
         previous.process_id === params.process_id &&
         (previous.search ?? "") === (params.search ?? "") &&
         (previous.from ?? "") === (params.from ?? "") &&
-        (previous.to ?? "") === (params.to ?? "");
+        (previous.to ?? "") === (params.to ?? "") &&
+        previous.sort === params.sort;
 
       return sameFilter ? previousData : undefined;
     },

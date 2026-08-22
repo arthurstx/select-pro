@@ -109,6 +109,7 @@ export class DashboardService {
             byCourse: rollup(rows.byCourse, editions, byEdition),
             bySemester: rollup(rows.bySemester, editions, byEdition),
             byReferralSource: rollup(rows.byReferralSource, editions, byEdition),
+            byDay: rollupDaily(rows.byDay, editions, byEdition),
             // Espalhados condicionalmente, e não atribuídos como `undefined`:
             // `{ byGender: undefined }` ainda TEM a chave, e só some no
             // `JSON.stringify` — a ausência ficaria por conta do serializador.
@@ -147,6 +148,7 @@ export class DashboardService {
             query.search?.trim().toLowerCase() ?? "",
             query.from ?? "",
             query.to ?? "",
+            query.sort,
         ]);
 
         const cached = await this.cache?.get<ListResult>(cacheKey);
@@ -161,6 +163,7 @@ export class DashboardService {
             to: query.to,
             page: query.page,
             perPage: query.per_page,
+            sort: query.sort,
         });
 
         const result: ListResult = {
@@ -372,4 +375,72 @@ function rollup<K extends string | number>(
         }
         return b.count - a.count || String(a.key).localeCompare(String(b.key));
     });
+}
+
+/**
+ * `byDay` não passa por `rollup`: aqui a ordem é CRONOLÓGICA, não por
+ * contagem, e os dias sem inscrição precisam aparecer com `count: 0` — sem
+ * isso o gráfico de linha (FEAT-0007-UI, seção 5.1) mostraria só os dias com
+ * dado, escondendo os intervalos parados como se não existissem.
+ *
+ * O intervalo preenchido vai do primeiro ao último dia com QUALQUER
+ * inscrição no recorte, nunca até "hoje": numa edição encerrada isso
+ * estenderia a linha com uma cauda de zeros sem significado.
+ *
+ * No comparativo, cada edição é zero-preenchida em CADA dia do intervalo —
+ * diferente de `rollup`, que simplesmente omite a edição sem dado naquele
+ * valor (uma barra ausente já lê como zero; um ponto ausente numa linha vira
+ * um buraco no traçado, que é outra coisa).
+ */
+function rollupDaily(
+    rows: DistributionRow[],
+    editions: SelectionProcessRow[],
+    byEdition: boolean,
+): DistributionItem<string>[] {
+    if (rows.length === 0) return [];
+
+    const totalsByDay = new Map<string, number>();
+    const perEditionByDay = new Map<string, Map<string, number>>();
+
+    for (const row of rows) {
+        const day = String(row.key);
+        totalsByDay.set(day, (totalsByDay.get(day) ?? 0) + row.count);
+
+        if (byEdition) {
+            const byProcess = perEditionByDay.get(day) ?? new Map<string, number>();
+            byProcess.set(row.process_id, (byProcess.get(row.process_id) ?? 0) + row.count);
+            perEditionByDay.set(day, byProcess);
+        }
+    }
+
+    const daysWithData = [...totalsByDay.keys()].sort();
+    const firstDay = daysWithData[0];
+    const lastDay = daysWithData[daysWithData.length - 1];
+
+    return daysBetween(firstDay, lastDay).map((day) => ({
+        key: day,
+        count: totalsByDay.get(day) ?? 0,
+        ...(byEdition
+            ? {
+                  byEdition: editions.map((process) => ({
+                      process: toSummary(process),
+                      count: perEditionByDay.get(day)?.get(process.id) ?? 0,
+                  })),
+              }
+            : {}),
+    }));
+}
+
+/** Todas as datas entre `from` e `to`, inclusive — ambas em `AAAA-MM-DD`. */
+function daysBetween(from: string, to: string): string[] {
+    const days: string[] = [];
+    let cursor = new Date(`${from}T00:00:00.000Z`);
+    const end = new Date(`${to}T00:00:00.000Z`);
+
+    while (cursor <= end) {
+        days.push(cursor.toISOString().slice(0, 10));
+        cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+    }
+
+    return days;
 }

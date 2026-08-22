@@ -1,12 +1,13 @@
 "use client";
 
 import type { UseQueryResult } from "@tanstack/react-query";
-import { CalendarOffIcon, SearchXIcon, UsersIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, CalendarOffIcon, SearchXIcon, UsersIcon } from "lucide-react";
 import {
   COURSE_LABELS,
   formatPhone,
   type DashboardCandidateItem,
   type DashboardCandidatesResponse,
+  type DashboardCandidatesSort,
 } from "shared";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,8 +32,11 @@ interface CandidatesTableProps {
   hasDateFilter: boolean;
   /** Mostra a coluna de edição só quando o recorte é "todas". */
   showEdition: boolean;
+  /** `recent` (default) = mais nova primeiro; `oldest` inverte. */
+  sort: DashboardCandidatesSort;
   onSelect: (candidate: DashboardCandidateItem) => void;
   onPageChange: (page: number) => void;
+  onSortChange: (sort: DashboardCandidatesSort) => void;
   onClearSearch: () => void;
   onClearDateFilter: () => void;
 }
@@ -42,8 +46,10 @@ export function CandidatesTable({
   search,
   hasDateFilter,
   showEdition,
+  sort,
   onSelect,
   onPageChange,
+  onSortChange,
   onClearSearch,
   onClearDateFilter,
 }: CandidatesTableProps) {
@@ -76,7 +82,9 @@ export function CandidatesTable({
               <TableHead>Curso</TableHead>
               <TableHead>Semestre</TableHead>
               <TableHead>Telefone</TableHead>
-              <TableHead>Inscrição</TableHead>
+              <TableHead>
+                <SortableSignupDateHeader sort={sort} onSortChange={onSortChange} />
+              </TableHead>
               {showEdition && <TableHead>Edição</TableHead>}
             </TableRow>
           </TableHeader>
@@ -143,6 +151,38 @@ export function CandidatesTable({
 
       <PaginationBar pagination={data.pagination} onPageChange={onPageChange} disabled={isFetching} />
     </div>
+  );
+}
+
+/**
+ * Único cabeçalho clicável da tabela: alterna a ordenação por data de
+ * inscrição entre mais recente e mais antiga primeiro (observação do time,
+ * 2026-08-21). A seta indica a direção ATUAL, não a que o clique vai
+ * produzir — mesma convenção de qualquer cabeçalho ordenável.
+ */
+function SortableSignupDateHeader({
+  sort,
+  onSortChange,
+}: {
+  sort: DashboardCandidatesSort;
+  onSortChange: (sort: DashboardCandidatesSort) => void;
+}) {
+  const isRecent = sort === "recent";
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSortChange(isRecent ? "oldest" : "recent")}
+      className="hover:text-foreground focus-visible:ring-ring -m-2 flex items-center gap-1 rounded p-2 focus-visible:ring-2 focus-visible:outline-none"
+      aria-label={`Inscrição — ordenado por ${isRecent ? "mais recente" : "mais antiga"} primeiro. Clique para inverter.`}
+    >
+      Inscrição
+      {isRecent ? (
+        <ArrowDownIcon className="size-3.5" aria-hidden />
+      ) : (
+        <ArrowUpIcon className="size-3.5" aria-hidden />
+      )}
+    </button>
   );
 }
 

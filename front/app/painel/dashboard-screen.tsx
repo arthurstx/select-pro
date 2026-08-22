@@ -7,6 +7,7 @@ import {
   ALL_EDITIONS,
   CheckinErrorCode,
   type DashboardCandidateItem,
+  type DashboardCandidatesSort,
   type DashboardMetricsMode,
 } from "shared";
 
@@ -36,9 +37,17 @@ interface Filters {
   from: string;
   to: string;
   page: number;
+  sort: DashboardCandidatesSort;
 }
 
-const INITIAL_FILTERS: Filters = { processId: undefined, search: "", from: "", to: "", page: 1 };
+const INITIAL_FILTERS: Filters = {
+  processId: undefined,
+  search: "",
+  from: "",
+  to: "",
+  page: 1,
+  sort: "recent",
+};
 
 export function DashboardScreen() {
   const [searchInput, setSearchInput] = useState("");
@@ -74,6 +83,7 @@ export function DashboardScreen() {
     search: filters.search || undefined,
     from: filters.from || undefined,
     to: filters.to || undefined,
+    sort: filters.sort,
   });
   const detailQuery = useCandidateDetailQuery(selected?.id ?? null);
 
@@ -148,6 +158,10 @@ export function DashboardScreen() {
     updateFilters({ search: "" });
   }
 
+  function handleSortChange(sort: DashboardCandidatesSort) {
+    updateFilters({ sort });
+  }
+
   const scopeLabel =
     metricsQuery.data?.scope.kind === "edition" ? metricsQuery.data.scope.process.label : "todas as edições";
   const hasDateFilter = filters.from !== "" || filters.to !== "";
@@ -218,8 +232,10 @@ export function DashboardScreen() {
                 search={filters.search}
                 hasDateFilter={hasDateFilter}
                 showEdition={filters.processId === ALL_EDITIONS}
+                sort={filters.sort}
                 onSelect={setSelected}
                 onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
+                onSortChange={handleSortChange}
                 onClearSearch={handleClearSearch}
                 onClearDateFilter={() => handleDateRangeApply({ from: "", to: "" })}
               />

@@ -32,6 +32,8 @@ export interface DashboardMetricsRows {
     byCourse: DistributionRow[];
     bySemester: DistributionRow[];
     byReferralSource: DistributionRow[];
+    /** `key` é a data (`AAAA-MM-DD`) — não é dado demográfico, então vai para todo papel. */
+    byDay: DistributionRow[];
     /** Ausentes quando o papel não é `admin` — as consultas nem chegam a ser enviadas. */
     byGender?: DistributionRow[];
     byEthnicity?: DistributionRow[];
@@ -74,6 +76,8 @@ export interface ListCandidatesFilters {
     to?: string;
     page: number;
     perPage: number;
+    /** `recent` = mais nova primeiro (default de sempre); `oldest` inverte. */
+    sort: "recent" | "oldest";
 }
 
 /** Escapa `%`/`_` antes de envolver o termo em wildcards — sem isso, buscar por "50%" vira "tudo". */
@@ -128,6 +132,11 @@ export class DashboardRepository {
             this.distributionStatement("a.referral_source", scope, {
                 join: "INNER JOIN candidate_applications a ON a.candidate_id = c.id",
             }),
+            // `SUBSTR` em vez de `date(...)`: `created_at` já é
+            // `"AAAA-MM-DD HH:MM:SS"` (CURRENT_TIMESTAMP do D1), então cortar
+            // os 10 primeiros caracteres é mais barato que fazer o SQLite
+            // reanalisar a string como data.
+            this.distributionStatement("SUBSTR(c.created_at, 1, 10)", scope),
         ];
 
         if (includeDemographics) {
@@ -147,8 +156,9 @@ export class DashboardRepository {
             byCourse: rowsAt(1),
             bySemester: rowsAt(2),
             byReferralSource: rowsAt(3),
-            byGender: includeDemographics ? rowsAt(4) : undefined,
-            byEthnicity: includeDemographics ? rowsAt(5) : undefined,
+            byDay: rowsAt(4),
+            byGender: includeDemographics ? rowsAt(5) : undefined,
+            byEthnicity: includeDemographics ? rowsAt(6) : undefined,
         };
     }
 
@@ -181,10 +191,13 @@ export class DashboardRepository {
      * Busca, intervalo de data e paginação na MESMA consulta — filtrar depois,
      * sobre uma página já recortada, faria `total` mentir.
      *
-     * `ORDER BY c.created_at DESC` é o inverso do check-in, que ordena `ASC`.
-     * Mesma coluna, perguntas opostas: lá é a fila de quem chegou, aqui é o
-     * que aconteceu por último. O `id` desempata para a paginação não repetir
-     * linha quando dois cadastros caem no mesmo segundo.
+     * `ORDER BY c.created_at DESC` (o default, `sort: "recent"`) é o inverso
+     * do check-in, que ordena `ASC`. Mesma coluna, perguntas opostas: lá é a
+     * fila de quem chegou, aqui é o que aconteceu por último — `sort:
+     * "oldest"` inverte isso sob pedido da UI. O `id` desempata sempre `ASC`,
+     * nas duas direções: só precisa ser consistente para a paginação não
+     * repetir linha quando dois cadastros caem no mesmo segundo, não
+     * precisa acompanhar a direção da data.
      */
     async listCandidates(filters: ListCandidatesFilters): Promise<{ items: DashboardCandidateRow[]; total: number }> {
         const conditions: string[] = [];
@@ -218,13 +231,18 @@ export class DashboardRepository {
         const fromClause = `FROM candidates c
                             INNER JOIN selection_processes p ON p.id = c.process_id`;
 
+        // `filters.sort` chega tipado (`"recent" | "oldest"`), já validado pelo
+        // Zod na rota — nunca uma string arbitrária do cliente. Interpolar
+        // aqui é seguro pela mesma razão de `distributionStatement` acima.
+        const direction = filters.sort === "oldest" ? "ASC" : "DESC";
+
         const listStatement = this.db
             .prepare(
                 `SELECT c.id, c.name, c.email, c.phone, c.course, c.semester, c.created_at,
                         p.id AS process_id, p.label AS process_label
                    ${fromClause}
                    ${whereClause}
-                  ORDER BY c.created_at DESC, c.id ASC
+                  ORDER BY c.created_at ${direction}, c.id ASC
                   LIMIT ? OFFSET ?`,
             )
             .bind(...bindings, filters.perPage, (filters.page - 1) * filters.perPage);

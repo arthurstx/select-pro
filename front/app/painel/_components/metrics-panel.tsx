@@ -1,7 +1,13 @@
 "use client";
 
 import type { UseQueryResult } from "@tanstack/react-query";
-import { AccessibilityIcon, CalendarOffIcon, GraduationCapIcon, InboxIcon, UsersIcon } from "lucide-react";
+import {
+  AccessibilityIcon,
+  CalendarOffIcon,
+  GraduationCapIcon,
+  InboxIcon,
+  UsersIcon,
+} from "lucide-react";
 import {
   COURSE_LABELS,
   ETHNICITY_LABELS,
@@ -18,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { DistributionChart } from "./distribution-chart";
+import { SignupsLineChart } from "./signups-line-chart";
 import { LoadErrorState, StateMessage } from "./state-message";
 
 type Metrics = DashboardMetricsResponse["data"];
@@ -30,23 +37,35 @@ export function MetricsPanel({ query }: MetricsPanelProps) {
   const { data, isPending, isError, refetch } = query;
 
   if (isPending) return <MetricsSkeleton />;
-  if (isError && !data) return <LoadErrorState what="as métricas" onRetry={() => refetch()} />;
+  if (isError && !data)
+    return <LoadErrorState what="as métricas" onRetry={() => refetch()} />;
   if (!data) return null;
 
   return (
-    <section className="flex flex-col gap-6" aria-label="Métricas das inscrições">
+    <section
+      className="flex flex-col gap-6"
+      aria-label="Métricas das inscrições"
+    >
       <SummaryCards totals={data.totals} />
 
       {data.totals.candidates === 0 ? (
         // Nada de gráficos zerados: eles não dizem "não há inscrições", dizem
         // "todo mundo marcou zero" (FEAT-0007-UI, seção 5).
         <StateMessage
-          icon={<InboxIcon className="text-muted-foreground size-8" aria-hidden />}
+          icon={
+            <InboxIcon className="text-muted-foreground size-8" aria-hidden />
+          }
           title="Nenhuma inscrição nesta edição ainda."
           description="Assim que alguém se inscrever, os números e a lista aparecem aqui."
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 lg:grid-rows-2">
+          <ChartCard
+            title="Inscritos por dia"
+            className="md:col-span-2 lg:col-span-3"
+          >
+            <SignupsLineChart items={data.byDay} />
+          </ChartCard>
           <ChartCard title="Inscritos por curso">
             <DistributionChart
               items={data.byCourse}
@@ -56,13 +75,18 @@ export function MetricsPanel({ query }: MetricsPanelProps) {
           </ChartCard>
 
           <ChartCard title="Inscritos por semestre">
-            <DistributionChart items={data.bySemester} labelOf={(key) => `${key}º`} />
+            <DistributionChart
+              items={data.bySemester}
+              labelOf={(key) => `${key}º`}
+            />
           </ChartCard>
 
           <ChartCard title="Como conheceram a CIMATEC jr.">
             <DistributionChart
               items={data.byReferralSource}
-              labelOf={(key) => REFERRAL_SOURCE_LABELS[key as ReferralSource] ?? String(key)}
+              labelOf={(key) =>
+                REFERRAL_SOURCE_LABELS[key as ReferralSource] ?? String(key)
+              }
               horizontal
             />
           </ChartCard>
@@ -77,6 +101,7 @@ export function MetricsPanel({ query }: MetricsPanelProps) {
               <DistributionChart
                 items={data.byGender}
                 labelOf={(key) => GENDER_LABELS[key as Gender] ?? String(key)}
+                variant="pie"
               />
             </ChartCard>
           )}
@@ -85,8 +110,11 @@ export function MetricsPanel({ query }: MetricsPanelProps) {
             <ChartCard title="Etnia">
               <DistributionChart
                 items={data.byEthnicity}
-                labelOf={(key) => ETHNICITY_LABELS[key as Ethnicity] ?? String(key)}
+                labelOf={(key) =>
+                  ETHNICITY_LABELS[key as Ethnicity] ?? String(key)
+                }
                 horizontal
+                variant="pie"
               />
             </ChartCard>
           )}
@@ -124,7 +152,15 @@ function SummaryCards({ totals }: { totals: Metrics["totals"] }) {
   );
 }
 
-function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function SummaryCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -134,15 +170,25 @@ function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: str
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="font-heading text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
+        <p className="font-heading text-3xl font-semibold tracking-tight tabular-nums">
+          {value}
+        </p>
       </CardContent>
     </Card>
   );
 }
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartCard({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
@@ -154,7 +200,11 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 /** Títulos legíveis, corpo em skeleton — a tela não deve mudar de forma ao carregar. */
 function MetricsSkeleton() {
   return (
-    <section className="flex flex-col gap-6" aria-busy="true" aria-label="Carregando métricas">
+    <section
+      className="flex flex-col gap-6"
+      aria-busy="true"
+      aria-label="Carregando métricas"
+    >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
           <Skeleton key={index} className="h-[110px] w-full rounded-xl" />

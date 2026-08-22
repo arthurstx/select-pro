@@ -338,6 +338,74 @@ describe("Agregações", () => {
         expect(metrics.totals.candidates).toBe(0);
         expect(metrics.totals.coursesRepresented).toBe(0);
         expect(metrics.byCourse).toEqual([]);
+        expect(metrics.byDay).toEqual([]);
+    });
+});
+
+// ============================================================
+// Inscritos por dia
+// ============================================================
+
+describe("`byDay` — inscritos por dia", () => {
+    it("preenche com zero os dias sem inscrição entre o primeiro e o último dia com dado", async () => {
+        await insertCandidate({ createdAt: "2026-08-05 09:00:00" });
+        await insertCandidate({ createdAt: "2026-08-05 20:00:00" }); // mesmo dia, soma na mesma chave
+        await insertCandidate({ createdAt: "2026-08-08 09:00:00" });
+
+        const metrics = unwrap(await service().metrics({ mode: "sum" }, "admin", AGORA));
+
+        expect(metrics.byDay).toEqual([
+            { key: "2026-08-05", count: 2 },
+            { key: "2026-08-06", count: 0 },
+            { key: "2026-08-07", count: 0 },
+            { key: "2026-08-08", count: 1 },
+        ]);
+    });
+
+    it("não estende o intervalo até hoje — só até o último dia com inscrição", async () => {
+        await insertCandidate({ createdAt: "2026-08-05 09:00:00" });
+
+        // `AGORA` é 2026-08-15: se o preenchimento fosse até "hoje", a série
+        // teria 11 dias em vez de 1.
+        const metrics = unwrap(await service().metrics({ mode: "sum" }, "admin", AGORA));
+
+        expect(metrics.byDay).toEqual([{ key: "2026-08-05", count: 1 }]);
+    });
+
+    it("é visível para `avaliador` — data de inscrição não é dado demográfico", async () => {
+        await insertCandidate({ createdAt: "2026-08-05 09:00:00" });
+
+        const metrics = unwrap(await service().metrics({ mode: "sum" }, "avaliador", AGORA));
+
+        expect(metrics.byDay).toEqual([{ key: "2026-08-05", count: 1 }]);
+    });
+
+    it("`by_edition` quebra cada dia por edição, zero-preenchendo quem não inscreveu naquele dia", async () => {
+        await insertCandidate({ createdAt: "2026-08-05 09:00:00" }); // 2026.2
+        await insertCandidate({ createdAt: "2026-03-10 09:00:00" }); // 2026.1
+
+        const metrics = unwrap(await service().metrics({ process_id: "all", mode: "by_edition" }, "admin", AGORA));
+
+        // O intervalo cobre as duas edições: do primeiro dia com dado (2026.1) ao último (2026.2).
+        const primeiro = metrics.byDay[0];
+        const ultimo = metrics.byDay[metrics.byDay.length - 1];
+
+        expect(primeiro).toEqual({
+            key: "2026-03-10",
+            count: 1,
+            byEdition: [
+                { process: { id: EDICAO_2026_2, label: "2026.2" }, count: 0 },
+                { process: { id: EDICAO_2026_1, label: "2026.1" }, count: 1 },
+            ],
+        });
+        expect(ultimo).toEqual({
+            key: "2026-08-05",
+            count: 1,
+            byEdition: [
+                { process: { id: EDICAO_2026_2, label: "2026.2" }, count: 1 },
+                { process: { id: EDICAO_2026_1, label: "2026.1" }, count: 0 },
+            ],
+        });
     });
 });
 
@@ -349,10 +417,11 @@ describe("Listagem de inscritos", () => {
     const query = (overrides: Partial<DashboardCandidatesQuery> = {}): DashboardCandidatesQuery => ({
         page: 1,
         per_page: 25,
+        sort: "recent",
         ...overrides,
     });
 
-    it("ordena da inscrição mais recente para a mais antiga", async () => {
+    it("ordena da inscrição mais recente para a mais antiga por padrão", async () => {
         await insertCandidate({ name: "Primeira", createdAt: "2026-08-02 08:00:00" });
         await insertCandidate({ name: "Ultima", createdAt: "2026-08-20 08:00:00" });
         await insertCandidate({ name: "Meio", createdAt: "2026-08-10 08:00:00" });
@@ -360,6 +429,28 @@ describe("Listagem de inscritos", () => {
         const result = unwrap(await service().listCandidates(query(), "avaliador", AGORA));
 
         expect(result.items.map((item) => item.name)).toEqual(["Ultima", "Meio", "Primeira"]);
+    });
+
+    it("`sort: oldest` inverte para a mais antiga primeiro", async () => {
+        await insertCandidate({ name: "Primeira", createdAt: "2026-08-02 08:00:00" });
+        await insertCandidate({ name: "Ultima", createdAt: "2026-08-20 08:00:00" });
+        await insertCandidate({ name: "Meio", createdAt: "2026-08-10 08:00:00" });
+
+        const result = unwrap(await service().listCandidates(query({ sort: "oldest" }), "avaliador", AGORA));
+
+        expect(result.items.map((item) => item.name)).toEqual(["Primeira", "Meio", "Ultima"]);
+    });
+
+    it("`sort` diferente não reaproveita o cache de outro sort", async () => {
+        await insertCandidate({ name: "Primeira", createdAt: "2026-08-02 08:00:00" });
+        await insertCandidate({ name: "Ultima", createdAt: "2026-08-20 08:00:00" });
+        const cached = serviceWithCache();
+
+        const recente = unwrap(await cached.listCandidates(query({ sort: "recent" }), "admin", AGORA));
+        const antiga = unwrap(await cached.listCandidates(query({ sort: "oldest" }), "admin", AGORA));
+
+        expect(recente.items.map((item) => item.name)).toEqual(["Ultima", "Primeira"]);
+        expect(antiga.items.map((item) => item.name)).toEqual(["Primeira", "Ultima"]);
     });
 
     it("nunca traz demografia nem os textos longos, para papel nenhum", async () => {

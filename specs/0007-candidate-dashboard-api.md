@@ -2,10 +2,14 @@
 
 ID: FEAT-0007
 Módulo: Operação do processo seletivo — visão das inscrições
-Versão: 1.1
-Data: 2026-08-20
+Versão: 1.3
+Data: 2026-08-21
 Status: DRAFT
 
+> **v1.3 (2026-08-21):** acrescenta `sort` em `GET /dashboard/candidates` — `recent` (default) ou `oldest`, para o cabeçalho clicável da coluna "Inscrição" na UI (ver `0007-candidate-dashboard-ui.md`, v1.3). Observação do time. Entra na chave de cache junto dos demais parâmetros (seção 9), pelo mesmo motivo de `page`/`search`/`from`/`to`: sem isso, o segundo sort serviria a página em cache do primeiro.
+>
+> **v1.2 (2026-08-21):** acrescenta `byDay` em `GET /dashboard/metrics` — inscritos por dia, para o gráfico de linha da UI (ver `0007-candidate-dashboard-ui.md`, v1.1). Observação do time: os dois gráficos demográficos (gênero, etnia) viram pizza na UI, e o dado de origem não muda; a única mudança de contrato é `byDay`.
+>
 > **v1.1 (2026-08-20):** acrescenta `GET /dashboard/editions`. Lacuna encontrada na implementação: as três rotas originais apenas CONSOMEM `process_id`, e nenhuma o enumera — o front sabia qual era a edição corrente (vem em `scope.process`) mas não tinha o uuid da anterior para montar o seletor. Alternativas descartadas: embutir o catálogo em `metrics` (mistura catálogo com agregado, e a lista viajaria de novo a cada troca de filtro) e aceitar `label` além de `uuid` (duplicaria a regra de calendário no cliente, e faria aparecer no seletor edições que nunca existiram).
 
 > **Contexto:** o `/painel` é um placeholder desde a FEAT-0003 — um card com os dados da própria sessão e um botão de sair. Não há nenhuma visão de quem está se inscrevendo: para saber quantos são, de quais cursos, ou ler o que uma pessoa escreveu no questionário, é preciso consultar o D1 à mão.
@@ -195,8 +199,11 @@ Nenhuma tabela nova. Tudo sai de `candidates` e `candidate_applications`:
 | `search`     | —        | parcial, case-insensitive, sobre `name` |
 | `from`       | —        | data (`YYYY-MM-DD`), inclusive |
 | `to`         | —        | data (`YYYY-MM-DD`), inclusive |
+| `sort`       | `recent` | `recent` \| `oldest` (v1.3) |
 
 > `from`/`to` são **datas**, não timestamps. `to` é inclusive até o fim do dia — senão filtrar "de 12/08 a 12/08" não devolveria nada, que é o oposto do que a pessoa quis dizer.
+>
+> **`sort` (v1.3) ordena por `createdAt`, a mesma coluna do `from`/`to`.** `recent` é o comportamento de sempre — mais nova primeiro; `oldest` inverte. Não interage com busca nem com o intervalo de data: são filtros diferentes de uma mesma consulta, e a paginação preserva a ordem escolhida entre páginas.
 
 ### 8.3 Response — Sucesso
 
@@ -216,6 +223,11 @@ Nenhuma tabela nova. Tudo sai de `candidates` e `candidate_applications`:
     "byCourse":   [{ "key": "eng-computacao", "count": 25 }],
     "bySemester": [{ "key": 4, "count": 31 }],
     "byReferralSource": [{ "key": "instagram", "count": 62 }],
+    "byDay": [
+      { "key": "2026-08-01", "count": 4 },
+      { "key": "2026-08-02", "count": 0 },
+      { "key": "2026-08-03", "count": 7 }
+    ],
     "byGender":    [{ "key": "feminino", "count": 58 }],
     "byEthnicity": [{ "key": "parda", "count": 49 }]
   }
@@ -227,6 +239,10 @@ Nenhuma tabela nova. Tudo sai de `candidates` e `candidate_applications`:
 > **As chaves são os slugs, não os rótulos.** `eng-computacao`, não "Engenharia de Computação". Os mapas de rótulo (`COURSE_LABELS`, `GENDER_LABELS`, `ETHNICITY_LABELS`, `REFERRAL_SOURCE_LABELS`) já existem em `shared` e são aplicados na exibição — devolver rótulo pela API duplicaria a tradução e quebraria a ordenação estável das séries.
 >
 > Com `scope.kind = "all"`, `scope.process` é omitido e cada item das distribuições ganha `byEdition` quando `mode=by_edition`.
+>
+> **`byDay` (v1.2) é diferente das outras quatro distribuições em dois pontos.** Primeiro, `key` é uma data (`AAAA-MM-DD`), não um slug de domínio, e não é traduzida por nenhum `_LABELS` — a UI só formata a data. Segundo, e mais importante: **os dias sem inscrição entram com `count: 0`**, ao contrário de `byCourse`/`byGender`/etc., que simplesmente omitem uma chave sem dado. O motivo é o consumidor: um gráfico de linha com um buraco no meio lê como falha de leitura, não como "zero inscrições nesse dia" — um gráfico de barra ou pizza não tem esse problema, porque a ausência de uma fatia/barra já é visualmente um zero. O intervalo preenchido vai do primeiro ao último dia com QUALQUER inscrição no recorte, nunca até "hoje": numa edição encerrada isso estenderia a linha com uma cauda de zeros sem significado. É por isso, também, que `byDay` não é `.optional()` como `byGender`/`byEthnicity`: data de inscrição não é dado demográfico, e vale para os dois papéis.
+>
+> Em `mode=by_edition`, cada item de `byDay` ganha `byEdition` como as demais — mas TODAS as edições do comparativo aparecem em TODO dia do intervalo, com `count: 0` para quem não teve inscrição naquele dia. É a mesma lógica do zero-preenchimento aplicada por edição: numa linha por edição, uma edição ausente naquele ponto quebraria o traçado dela, e não existe "barra ausente" para disfarçar isso.
 
 **`GET /dashboard/candidates` (`200 OK`)**
 

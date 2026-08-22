@@ -75,6 +75,14 @@ export const DashboardMetricsQuerySchema = z.object({
 });
 export type DashboardMetricsQuery = z.infer<typeof DashboardMetricsQuerySchema>;
 
+/**
+ * Ordenação da listagem por data de inscrição. `recent` é o default de
+ * sempre (FEAT-0007, seção 4.3, "mais recente para a mais antiga") — o
+ * parâmetro só existe para inverter isso sob pedido de quem olha a tabela.
+ */
+export const DashboardCandidatesSortSchema = z.enum(["recent", "oldest"]);
+export type DashboardCandidatesSort = z.infer<typeof DashboardCandidatesSortSchema>;
+
 /** `GET /dashboard/candidates` (FEAT-0007, seção 8.2). Busca é só por `name`, como no check-in. */
 export const DashboardCandidatesQuerySchema = PaginationQuerySchema.extend({
     process_id: ProcessScopeSchema.optional(),
@@ -83,6 +91,7 @@ export const DashboardCandidatesQuerySchema = PaginationQuerySchema.extend({
     from: DateOnlySchema.optional(),
     /** Inclusive até o fim do dia — senão "de 12/08 a 12/08" não devolveria nada. */
     to: DateOnlySchema.optional(),
+    sort: DashboardCandidatesSortSchema.default("recent"),
 }).superRefine((query, ctx) => {
     if (isInvertedDateRange(query)) {
         ctx.addIssue({
@@ -149,6 +158,17 @@ export const DashboardMetricsSchema = z.object({
     byCourse: distributionOf(CourseSchema),
     bySemester: distributionOf(SemesterSchema),
     byReferralSource: distributionOf(ReferralSourceSchema),
+    /**
+     * Uma inscrição por dia (`AAAA-MM-DD`), para todo papel — data de
+     * inscrição não é dado demográfico. Ao contrário das demais
+     * distribuições, os dias SEM inscrição entram com `count: 0`: o gráfico
+     * de linha que consome isto precisa do intervalo contínuo para mostrar
+     * queda de ritmo, não só picos (FEAT-0007-UI, seção 5.1). O
+     * preenchimento vai do primeiro ao último dia com QUALQUER inscrição no
+     * recorte — nunca até "hoje", ou uma edição encerrada ganharia uma
+     * cauda de zeros sem significado.
+     */
+    byDay: distributionOf(z.string()),
     /** Só para `admin` — ausente para `avaliador`, ver nota do topo. */
     byGender: distributionOf(GenderSchema).optional(),
     /**

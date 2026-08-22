@@ -2,12 +2,19 @@
 
 ID: FEAT-0007-UI
 Módulo: Operação do processo seletivo — visão das inscrições / Camada de UI
-Versão: 1.1
-Data: 2026-08-20
+Versão: 1.3
+Data: 2026-08-21
 Status: DRAFT
-Depende de: FEAT-0007 (backend) v1.1
+Depende de: FEAT-0007 (backend) v1.3
 Design: Stitch — projeto "Design System Integration" (ID `15618719394726153851`)
 
+> **v1.3 (2026-08-21):** observação do time — cabeçalho "Inscrição" da tabela vira ordenável. Clicar alterna `sort` entre `recent` (default, mais nova primeiro) e `oldest`, com uma seta indicando a direção atual (ver seção 4.3). É um FILTRO da tabela, não uma métrica: não toca a query de `metrics`, mesma separação que já vale para busca e intervalo de data.
+>
+> **v1.2 (2026-08-21):** observação do time — dois ajustes nos gráficos, sem mudar o resto da tela.
+>
+> 1. **Gênero e etnia viram pizza**, mas só fora do comparativo entre edições: com uma série por edição não há fatia que represente isso, e o componente cai de volta para a barra deitada que já existia (ver seção 5.1).
+> 2. **Novo gráfico: "Inscritos por dia"**, em linha, consumindo `byDay` (FEAT-0007 v1.2). Ocupa a largura cheia do grid, no topo — antes dos demais, por ser o único que lê como linha do tempo.
+>
 > **Contexto:** esta tela substitui o placeholder de `/painel` e é a primeira do produto com **visualização de dados** — gráficos, não só listas e formulários. Também é a primeira em que o que aparece na tela depende do papel de quem olha.
 >
 > O ponto central da camada de UI aqui: **o front não decide o que esconder.** Ele desenha o que a API mandou. Se `byGender` não veio no payload, o gráfico não existe — não porque o componente checou o papel, mas porque não há dado. Ver seção 8.
@@ -67,9 +74,11 @@ Muda o recorte das **duas** queries. O controle "Soma / Comparar edições" só 
 
 ### 4.3 Filtros da tabela
 
-Busca por nome (debounce de ~300 ms) e intervalo de data de inscrição. Ambos afetam **apenas** a listagem.
+Busca por nome (debounce de ~300 ms), intervalo de data de inscrição e ordenação (`sort`, v1.3). Todos afetam **apenas** a listagem.
 
-**`page` volta para 1 sempre que a busca, o intervalo ou a edição mudam — no mesmo `setState` que altera o filtro, nunca num efeito separado.** Resetar depois dispara duas requisições, e a primeira é a errada. É a mesma armadilha documentada na FEAT-0005-UI, seção 8.4.
+**`page` volta para 1 sempre que a busca, o intervalo, a edição ou o `sort` mudam — no mesmo `setState` que altera o filtro, nunca num efeito separado.** Resetar depois dispara duas requisições, e a primeira é a errada. É a mesma armadilha documentada na FEAT-0005-UI, seção 8.4.
+
+**Ordenação (v1.3):** o cabeçalho "Inscrição" é um botão, não texto — clicar alterna `sort` entre `recent` (mais nova primeiro) e `oldest` (mais antiga primeiro), com uma seta indicando a direção ATUAL (não a que o clique vai produzir). Nenhum outro cabeçalho é clicável: as demais colunas (curso, semestre, telefone) não têm ordenação server-side, e fingir que têm seria pior que não ter a coluna clicável.
 
 ### 4.4 Detalhe
 
@@ -89,6 +98,21 @@ Clicar na linha abre o painel lateral e dispara `GET /dashboard/candidates/{id}`
 | Erro no detalhe | falha em `candidates/{id}` | O erro fica **dentro** do painel; a tabela atrás não é afetada |
 
 > **O "filtro de data sem resultado" merece copy própria porque tem uma causa que a pessoa não vê.** Edição e intervalo são dois recortes temporais sobrepostos: escolher `2026.1` (janeiro a julho) com datas de agosto devolve vazio corretamente (FEAT-0007, E8). A mensagem precisa dizer que o período selecionado está fora da edição — senão o usuário conclui que não há inscritos, e a tela mentiu por omissão.
+
+### 5.1 Gênero e etnia: pizza numa edição só, barra no comparativo
+
+Gênero e etnia (`byGender`/`byEthnicity`) são desenhados como gráfico de pizza quando o recorte é uma única edição — é a única situação em que múltiplas cores numa mesma série fazem sentido nesta tela (ver seção 12, "Cores das séries": lá a regra é sobre BARRA, e é sobre um problema diferente, uma série monocromática ganhando tons arbitrários que sugerem ranking).
+
+Em `mode=by_edition` com `process_id=all`, os itens ganham `byEdition` e viram várias séries — uma pizza não representa isso, então a tela cai de volta para a barra que já existia antes desta versão (etnia continua deitada, pelo mesmo motivo de rótulo longo). Não há mockup deste estado combinado (comparativo + demografia); a decisão foi manter o comportamento anterior em vez de inventar uma pizza segmentada sem referência de design.
+
+### 5.2 Inscritos por dia
+
+Gráfico de linha, full-width no grid, alimentado por `byDay` (FEAT-0007 v1.2). Sempre visível para os dois papéis — data de inscrição não é dado demográfico, então não segue a regra da seção 8.
+
+- Eixo X: uma data por ponto, formatada `DD/MM` (mesmo `formatDate` da tabela).
+- Os dias sem inscrição já chegam com `count: 0` do backend — **não é a UI quem preenche isso**. O componente só desenha o que veio.
+- Em `mode=by_edition` com `process_id=all`: uma linha por edição, cor = edição (mesma paleta e mesma legenda do comparativo das barras).
+- Segue a regra geral da seção 5: com `total: 0` este gráfico também não é desenhado — está coberto pela mensagem "Nenhuma inscrição nesta edição ainda" que já esconde a seção inteira de gráficos.
 
 ---
 
@@ -174,7 +198,7 @@ Tudo de `shared`, nada redeclarado (`front/AGENTS.md`, seção 1):
 | Telefone formatado | `formatPhone` |
 | Erros | `CheckinErrorCode`, `AuthErrorCode`, `ErrorResponseSchema` |
 
-**As chaves das séries vêm como slug e são traduzidas na exibição.** Os mapas de rótulo já existem em `shared/src/schemas/candidate.schema.ts` — nenhum rótulo é reescrito no componente de gráfico.
+**As chaves das séries vêm como slug e são traduzidas na exibição.** Os mapas de rótulo já existem em `shared/src/schemas/candidate.schema.ts` — nenhum rótulo é reescrito no componente de gráfico. **Exceção: `byDay`.** A chave já é uma data (`AAAA-MM-DD`), sem `_LABELS` correspondente — a tradução é só formatação (`DD/MM`), com `formatDate` (`front/app/painel/_lib/format.ts`).
 
 ---
 
@@ -192,6 +216,10 @@ Tudo de `shared`, nada redeclarado (`front/AGENTS.md`, seção 1):
 - [ ] Os textos do questionário aparecem na íntegra, sem truncar
 - [ ] A tela não exibe nenhuma noção de fase, aprovação ou presença
 - [ ] Alvo de toque de no mínimo 44px no mobile
+- [ ] Gênero e etnia aparecem como pizza numa edição só, e como barra no comparativo entre edições
+- [ ] "Inscritos por dia" aparece para os dois papéis, com os dias sem inscrição desenhados como zero, não como buraco na linha
+- [ ] Clicar em "Inscrição" inverte a ordem da tabela e reseta a página para 1, sem refazer a query de métricas
+- [ ] A seta do cabeçalho "Inscrição" reflete a direção atual, não a que o próximo clique produz
 
 ---
 

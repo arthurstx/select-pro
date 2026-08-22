@@ -34,6 +34,7 @@ function candidatesQueryString(query: DashboardCandidatesQuery): string {
   const params = new URLSearchParams({
     page: String(parsed.page),
     per_page: String(parsed.per_page),
+    sort: parsed.sort,
   });
   if (parsed.process_id) params.set("process_id", parsed.process_id);
   if (parsed.search) params.set("search", parsed.search);

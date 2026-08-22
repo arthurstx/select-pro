@@ -1,6 +1,6 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 
 import {
   ChartContainer,
@@ -24,6 +24,14 @@ interface DistributionChartProps {
   labelOf: (key: string | number) => string;
   /** Barras deitadas quando os rótulos são longos (curso, origem). */
   horizontal?: boolean;
+  /**
+   * "pie" só vale fora do comparativo entre edições: com uma série por
+   * edição não há como uma pizza representar as fatias, e a pizza cai de
+   * volta para barra — mesma postura do resto do componente diante de um
+   * estado sem mockup (observação do time, 2026-08-21): gênero e etnia só
+   * viram pizza quando a métrica é de uma edição só.
+   */
+  variant?: "bar" | "pie";
 }
 
 /**
@@ -35,9 +43,13 @@ interface DistributionChartProps {
  * No comparativo, cor = EDIÇÃO. É a única situação em que mais de uma cor
  * carrega informação.
  */
-export function DistributionChart({ items, labelOf, horizontal = false }: DistributionChartProps) {
+export function DistributionChart({ items, labelOf, horizontal = false, variant = "bar" }: DistributionChartProps) {
   const editions = editionsIn(items);
   const comparing = editions.length > 0;
+
+  if (variant === "pie" && !comparing) {
+    return <PieDistribution items={items} labelOf={labelOf} />;
+  }
 
   const config: ChartConfig = comparing
     ? Object.fromEntries(
@@ -101,11 +113,54 @@ export function DistributionChart({ items, labelOf, horizontal = false }: Distri
 }
 
 /**
+ * Uma cor por FATIA — ao contrário da barra em modo soma, que é
+ * monocromática de propósito (comentário acima). Numa pizza a cor por
+ * categoria não sugere ranking nenhum: é só a legenda visual da fatia,
+ * exatamente como cor por edição no comparativo das barras. Por isso
+ * `var(--chart-N)` cicla livremente aqui.
+ *
+ * `slug` (não o rótulo) é a chave de série: rótulos como "Prefiro não
+ * informar" têm espaço, o que quebraria `--color-${chave}` se ela fosse
+ * usada num nome de propriedade CSS. O `ChartConfig` só precisa do rótulo —
+ * a cor de cada fatia vem direto da `Cell`, e a legenda a herda do próprio
+ * gráfico, não do `ChartConfig`.
+ */
+function PieDistribution({
+  items,
+  labelOf,
+}: {
+  items: DistributionItem[];
+  labelOf: (key: string | number) => string;
+}) {
+  const data = items.map((item) => ({
+    slug: String(item.key),
+    label: labelOf(item.key),
+    count: item.count,
+  }));
+
+  const config: ChartConfig = Object.fromEntries(data.map((entry) => [entry.slug, { label: entry.label }]));
+
+  return (
+    <ChartContainer config={config} className="aspect-auto w-full [&_.recharts-pie-label-text]:fill-foreground" style={{ height: 260 }}>
+      <PieChart>
+        <ChartTooltip content={<ChartTooltipContent nameKey="slug" hideLabel />} />
+        <Pie data={data} dataKey="count" nameKey="slug" outerRadius={90} strokeWidth={2}>
+          {data.map((entry, index) => (
+            <Cell key={entry.slug} fill={`var(--chart-${(index % 5) + 1})`} />
+          ))}
+        </Pie>
+        <ChartLegend content={<ChartLegendContent nameKey="slug" />} />
+      </PieChart>
+    </ChartContainer>
+  );
+}
+
+/**
  * As edições saem dos próprios itens, na ordem em que a API as devolveu —
  * mais recente primeiro. Um `Map` porque a mesma edição aparece em todos os
  * itens, e a legenda precisa dela uma vez só.
  */
-function editionsIn(items: DistributionItem[]): { id: string; label: string }[] {
+export function editionsIn(items: DistributionItem[]): { id: string; label: string }[] {
   const editions = new Map<string, string>();
 
   for (const item of items) {
