@@ -16,13 +16,18 @@ import {
 /** Estado do boot: enquanto `/auth/refresh` não responde, nenhuma rota protegida decide nada. */
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
+/** `pending: true` quando o cadastro (FEAT-0008) virou solicitação — nenhuma sessão foi aberta. */
+export interface SignUpResult {
+  pending: boolean;
+}
+
 interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
   /** Só existe depois de um `GET /auth/me` — login/cadastro não devolvem perfil. */
   profile: MemberProfileSummary | null;
   signIn: (payload: LoginDTO) => Promise<void>;
-  signUp: (payload: RegisterMemberDTO) => Promise<void>;
+  signUp: (payload: RegisterMemberDTO) => Promise<SignUpResult>;
   signOut: () => Promise<void>;
 }
 
@@ -88,12 +93,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus("authenticated");
   }, []);
 
-  const signUp = useCallback(async (payload: RegisterMemberDTO) => {
-    const session = await registerMember(payload);
-    setAccessToken(session.accessToken);
-    setUser(session.user);
+  const signUp = useCallback(async (payload: RegisterMemberDTO): Promise<SignUpResult> => {
+    const result = await registerMember(payload);
+
+    if (result.kind === "pending_approval") {
+      // Nenhuma conta existe ainda (FEAT-0008) — não há sessão para abrir.
+      return { pending: true };
+    }
+
+    setAccessToken(result.session.accessToken);
+    setUser(result.session.user);
     setProfile(null);
     setStatus("authenticated");
+    return { pending: false };
   }, []);
 
   const signOut = useCallback(async () => {

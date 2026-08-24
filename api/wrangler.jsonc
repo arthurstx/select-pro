@@ -82,6 +82,10 @@
     // (é `Secure`); só o access token funciona localmente (ver env.staging).
     "FRONT_ORIGIN": "https://select-pro-front.vercel.app,http://localhost:3000",
     "RESEND_FROM_EMAIL": "inscricao@arthurstx.me",
+    // Destino do e-mail de solicitação de cadastro pendente (FEAT-0008,
+    // FR-020). Caixa institucional compartilhada, não a conta de um admin —
+    // é por isso que a decisão em si exige login (ver research.md da 008, R2).
+    "SIGNUP_APPROVAL_EMAIL": "gentegestao@cimatecjr.com.br",
   },
   /**
    * Service Bindings (communicate between multiple Workers)
@@ -146,6 +150,7 @@
         "FRONT_ORIGIN": "https://select-pro-front-git-develop-arthurstxs-projects.vercel.app,http://localhost:3000",
 
         "RESEND_FROM_EMAIL": "inscricao@arthurstx.me",
+        "SIGNUP_APPROVAL_EMAIL": "gentegestao@cimatecjr.com.br",
       },
     },
   },

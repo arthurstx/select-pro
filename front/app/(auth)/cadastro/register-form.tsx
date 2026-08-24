@@ -30,8 +30,15 @@ export function RegisterForm() {
 
   const mutation = useMutation({
     mutationFn: (values: RegisterFormValues) => signUp(RegisterMemberSchema.parse(values)),
-    // O cadastro já autentica — o membro entra direto, sem login.
-    onSuccess: () => router.replace(AFTER_LOGIN_ROUTE),
+    onSuccess: (result, values) => {
+      // FEAT-0008: pós-júnior/trainee não ganha sessão — vira solicitação
+      // pendente, sem login automático. Membro `active` continua entrando direto.
+      if (result.pending) {
+        router.replace(`${AUTH_ROUTES.pendingApproval}?email=${encodeURIComponent(values.email)}`);
+        return;
+      }
+      router.replace(AFTER_LOGIN_ROUTE);
+    },
     onError: (error) => {
       const view = describeRegisterError(error);
       if (view.field) form.setError(view.field, { message: view.message });

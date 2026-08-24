@@ -4,6 +4,8 @@ export const AUTH_ROUTES = {
   forgotPassword: "/recuperar-senha",
   resetPassword: "/redefinir-senha",
   privacy: "/privacidade",
+  /** Destino quando `POST /auth/register` responde 202 (FEAT-0008 — pós-júnior/trainee). */
+  pendingApproval: "/cadastro-em-analise",
 } as const;
 
 /** Destino após cadastro e login. */

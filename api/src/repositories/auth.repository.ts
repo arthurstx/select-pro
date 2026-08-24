@@ -128,6 +128,49 @@ export class AuthRepository {
         await this.db.batch([insertUser, insertProfile, insertSession]);
     }
 
+    /**
+     * Mesma lógica de `createMemberAccount`, porém **sem** sessão — usada na
+     * aprovação de uma solicitação de cadastro (FEAT-0008, R1). O membro não
+     * está com o navegador aberto no momento da aprovação (quem aprova é o
+     * admin); ele loga por conta própria depois, pelo fluxo normal.
+     */
+    async createApprovedMemberAccount(
+        user: NewUser,
+        profile: Omit<NewMemberProfile, "user_id">,
+    ): Promise<void> {
+        const insertUser = this.db
+            .prepare(
+                `INSERT INTO users (id, role_id, email, name, password)
+                      VALUES (?, ?, ?, ?, ?)`,
+            )
+            .bind(user.id, user.role_id, user.email, user.name, user.password);
+
+        const insertProfile = this.db
+            .prepare(
+                `INSERT INTO member_profiles
+                        (id, user_id, member_id, full_name, phone, birth_date,
+                         course, semester, gender, ethnicity, status, manager, synced_at)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .bind(
+                profile.id,
+                user.id,
+                profile.member_id,
+                profile.full_name,
+                profile.phone,
+                profile.birth_date,
+                profile.course,
+                profile.semester,
+                profile.gender,
+                profile.ethnicity,
+                profile.status,
+                profile.manager ? 1 : 0,
+                profile.synced_at,
+            );
+
+        await this.db.batch([insertUser, insertProfile]);
+    }
+
     async updateUserPassword(userId: string, passwordHash: string): Promise<void> {
         await this.db
             .prepare("UPDATE users SET password = ?, updated_at = ? WHERE id = ?")

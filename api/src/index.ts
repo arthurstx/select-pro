@@ -14,6 +14,7 @@ import { authRouter } from "./routes/auth.routes";
 import { candidatesRouter } from "./routes/candidates.routes";
 import { checkinRouter } from "./routes/checkin.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
+import { signupRequestsRouter } from "./routes/signup-requests.routes";
 import { SheetSyncService } from "./services/sheet-sync.service";
 
 const app = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
@@ -127,6 +128,7 @@ app.get("/message", (c) => {
 
 app.route("/candidate", candidatesRouter);
 app.route("/auth", authRouter);
+app.route("/auth/signup-requests", signupRequestsRouter);
 app.route("/candidates", checkinRouter);
 app.route("/dashboard", dashboardRouter);
 

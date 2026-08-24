@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import type { SignupRequestStatus } from "./database.schema";
+import { MemberStatusSchema } from "./member.schema";
+
 // Cadastro, login e sessão de membro (FEAT-0003).
 // Ver também `member.schema.ts` (elegibilidade) e `database.schema.ts`.
 
@@ -44,6 +47,12 @@ export const ResetPasswordSchema = z.object({
     password: PasswordSchema,
 });
 export type ResetPasswordDTO = z.infer<typeof ResetPasswordSchema>;
+
+/** `POST /auth/signup-requests/:id/decision` (FEAT-0008, US2/US3). */
+export const SignupDecisionSchema = z.object({
+    decision: z.enum(["approve", "reject"]),
+});
+export type SignupDecisionDTO = z.infer<typeof SignupDecisionSchema>;
 
 // ------------------------------------------------------------
 // Responses
@@ -103,6 +112,58 @@ export const ForgotPasswordResponseSchema = z.object({
 });
 export type ForgotPasswordResponse = z.infer<typeof ForgotPasswordResponseSchema>;
 
+/**
+ * `POST /auth/register` quando o membro precisa de aprovação (202, FEAT-0008
+ * FR-004). Distinta de `AuthSessionResponseSchema` — sem sessão, porque
+ * nenhuma conta foi criada ainda (ver `research.md` da 008, R1).
+ */
+export const RegisterPendingResponseSchema = z.object({
+    data: z.object({
+        status: z.literal("pending_approval"),
+        message: z.string(),
+    }),
+});
+export type RegisterPendingResponse = z.infer<typeof RegisterPendingResponseSchema>;
+
+// ------------------------------------------------------------
+// Solicitações de cadastro (FEAT-0008)
+// ------------------------------------------------------------
+
+export const SignupRequestStatusSchema = z.enum([
+    "pending",
+    "approved",
+    "rejected",
+]) satisfies z.ZodType<SignupRequestStatus>;
+
+/** Item de listagem (US3) — sem `password_hash`, sem `member_id` cru da tec. */
+export const SignupRequestSummarySchema = z.object({
+    id: z.string().uuid(),
+    fullName: z.string(),
+    email: z.string().email(),
+    memberStatus: MemberStatusSchema,
+    createdAt: z.string(),
+    /** FR-019 — quantas vezes essa pessoa já foi recusada antes. */
+    priorRejectionCount: z.number().int().min(0),
+});
+export type SignupRequestSummary = z.infer<typeof SignupRequestSummarySchema>;
+
+export const SignupRequestListResponseSchema = z.object({
+    data: z.array(SignupRequestSummarySchema),
+});
+export type SignupRequestListResponse = z.infer<typeof SignupRequestListResponseSchema>;
+
+/** Detalhe (US2) — o que `GET /auth/signup-requests/by-token/:token` devolve. */
+export const SignupRequestDetailSchema = SignupRequestSummarySchema.extend({
+    status: SignupRequestStatusSchema,
+    decidedAt: z.string().nullable(),
+});
+export type SignupRequestDetail = z.infer<typeof SignupRequestDetailSchema>;
+
+export const SignupRequestDetailResponseSchema = z.object({
+    data: SignupRequestDetailSchema,
+});
+export type SignupRequestDetailResponse = z.infer<typeof SignupRequestDetailResponseSchema>;
+
 // Códigos de erro — cenários E1-E15 de FEAT-0003 (seção 5).
 
 export const AuthErrorCode = {
@@ -120,6 +181,14 @@ export const AuthErrorCode = {
     WEAK_PASSWORD: "WEAK_PASSWORD", // E4, E15
     /** Primeiro código de autorização por papel do projeto — nasce em FEAT-0005 (E9), `requireRole`. */
     INSUFFICIENT_ROLE: "INSUFFICIENT_ROLE",
+
+    // FEAT-0008 — solicitações de cadastro pendentes de aprovação.
+    /** Token do link de decisão não existe. Mesma superfície de erro que expirado — não revela diferença. */
+    SIGNUP_REQUEST_NOT_FOUND: "SIGNUP_REQUEST_NOT_FOUND",
+    /** Token do link de decisão passou dos 7 dias de validade (FR-009). */
+    SIGNUP_REQUEST_EXPIRED: "SIGNUP_REQUEST_EXPIRED",
+    /** Alguém já decidiu esta solicitação — transição atômica, FR-010. */
+    SIGNUP_REQUEST_ALREADY_DECIDED: "SIGNUP_REQUEST_ALREADY_DECIDED",
 } as const;
 
 export type AuthErrorCode = (typeof AuthErrorCode)[keyof typeof AuthErrorCode];

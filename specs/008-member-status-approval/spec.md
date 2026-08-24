@@ -67,7 +67,7 @@ O admin tem, dentro do painel, uma lista das solicitações pendentes, onde pode
 ### Edge Cases
 
 - **Link aberto por engano ou por robô**: abrir o link nunca decide nada. A decisão exige ação explícita na tela.
-- **Link reutilizado**: cada link vale para uma única decisão. Depois de usado, deixa de funcionar.
+- **Link reaberto depois de decidido**: continua abrindo — mostra que já foi resolvida, sem oferecer os botões (US2, cenário 4). Quem decide de fato é sempre uma sessão de admin autenticada, então reabrir o link não é a superfície de risco (ver FR-009).
 - **Duas decisões ao mesmo tempo**: se dois admins decidirem a mesma solicitação simultaneamente, uma vence e a outra recebe aviso de que já foi resolvida — nunca duas decisões conflitantes gravadas.
 - **Solicitação duplicada**: um membro que já tem solicitação pendente e tenta se cadastrar de novo não gera uma segunda solicitação nem um segundo e-mail.
 - **Falha no envio do e-mail**: a solicitação é registrada mesmo assim e aparece na fila do painel. O cadastro não falha por causa do e-mail.
@@ -86,7 +86,7 @@ O admin tem, dentro do painel, uma lista das solicitações pendentes, onde pode
 - **FR-006**: O sistema MUST notificar o admin por e-mail quando uma solicitação for criada.
 - **FR-007**: O link do e-mail MUST apenas **exibir** a solicitação; abrir o link NÃO deve produzir decisão nem qualquer alteração de estado.
 - **FR-008**: O sistema MUST exigir ação explícita e deliberada do admin para aprovar ou recusar.
-- **FR-009**: Cada link de decisão MUST valer para uma única decisão e MUST expirar após um prazo definido.
+- **FR-009**: Cada link de decisão MUST expirar após um prazo definido. A decisão em si MUST exigir uma sessão de administrador autenticada — não o token do link — porque o e-mail chega a uma caixa institucional compartilhada, não à conta de uma pessoa, e SC-005 exige autoria registrada sem exceção. *(Redação original previa "uma única decisão" pelo link — revisto em 2026-08-24 ao implementar: sem esse ajuste, SC-005 não seria satisfazível. Ver `research.md`, R2.)*
 - **FR-010**: O sistema MUST impedir que uma solicitação já decidida seja decidida de novo, inclusive sob tentativas simultâneas.
 - **FR-011**: O sistema MUST conceder acesso ao membro assim que a solicitação for aprovada.
 - **FR-012**: O sistema MUST informar ao solicitante que seu cadastro aguarda análise, e informá-lo do resultado.
@@ -103,7 +103,7 @@ O admin tem, dentro do painel, uma lista das solicitações pendentes, onde pode
 ### Key Entities
 
 - **Situação do membro**: como a empresa classifica a pessoa — efetivado, pós-júnior ou trainee. Vem de um sistema externo, é lida no cadastro e novamente na decisão.
-- **Solicitação de cadastro**: o pedido de acesso de um pós-júnior ou trainee. Tem quem pediu, quando pediu, estado (pendente, aprovada, recusada, expirada) e — depois de decidida — quem decidiu e quando. Uma mesma pessoa pode ter várias ao longo do tempo, já que a recusa não é definitiva (FR-018); o histórico delas é o que alimenta FR-019.
+- **Solicitação de cadastro**: o pedido de acesso de um pós-júnior ou trainee. Tem quem pediu, quando pediu, estado (pendente, aprovada, recusada) e — depois de decidida — quem decidiu e quando. "Expirada" descreve o *link* de leitura (FR-009), não um estado da solicitação em si — uma solicitação sem link válido continua `pendente` e decidível pelo painel. Uma mesma pessoa pode ter várias solicitações ao longo do tempo, já que a recusa não é definitiva (FR-018); o histórico delas é o que alimenta FR-019.
 - **Link de decisão**: credencial de uso único e prazo limitado que dá ao admin acesso à tela de decisão de uma solicitação específica.
 
 ## Success Criteria *(mandatory)*
@@ -112,7 +112,7 @@ O admin tem, dentro do painel, uma lista das solicitações pendentes, onde pode
 
 - **SC-001**: 100% dos pós-juniores e trainees hoje barrados no cadastro conseguem registrar uma solicitação.
 - **SC-002**: Nenhuma solicitação muda de estado sem ação deliberada de um admin — verificável submetendo o link a carregamento automático e confirmando que segue pendente.
-- **SC-003**: O admin conclui uma decisão em menos de 1 minuto a partir do momento em que abre o e-mail.
+- **SC-003**: O admin conclui uma decisão em menos de 1 minuto a partir do momento em que abre o e-mail, supondo sessão de administrador já ativa — a exigência de login de FR-009 soma o tempo de autenticação quando não há sessão.
 - **SC-004**: Nenhuma solicitação termina com duas decisões conflitantes, mesmo com dois admins agindo simultaneamente.
 - **SC-005**: 100% das solicitações decididas têm registro de autor e horário.
 - **SC-006**: Uma falha no envio de e-mail não impede o cadastro nem a decisão — 100% das solicitações continuam decidíveis pelo painel.
