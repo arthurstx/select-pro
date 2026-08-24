@@ -21,7 +21,19 @@ kitty --detach --hold --title "wt: <nome>" --directory (git rev-parse --show-top
 - `--hold` mantém a janela aberta num shell depois que o Claude sai, em vez de ela sumir levando o output junto.
 - `--directory` com a raiz do repo garante que o worktree nasça do repositório certo, mesmo que o comando seja disparado de dentro de outro worktree.
 
-`git worktree list` mostra todos os worktrees ativos e em que branch cada um está.
+`git worktree list` mostra todos os worktrees ativos e em que branch cada um está. O worktree nasce em `.claude/worktrees/<nome>/`, **dentro do próprio repo**, numa branch `worktree-<nome>` e com lock. Por isso `.claude/worktrees/` está no `.gitignore`: são checkouts inteiros, e sem essa linha um `git add .` varreria um worktree completo para dentro do repositório.
+
+Para remover quando a feature acabar, **feche a janela primeiro** e então:
+
+```bash
+git worktree unlock .claude/worktrees/<nome>
+git worktree remove .claude/worktrees/<nome>
+git branch -D worktree-<nome>
+```
+
+O `unlock` é obrigatório: o lock é posto pela **sessão do Claude** (`lock reason: claude session <nome> (pid ...)`), e um `git worktree remove --force` simples **não** o vence — o git pede `remove -f -f`. Prefira o `unlock` explícito ao `-f -f`: se o lock não for stale, você quer descobrir isso em vez de atropelar uma sessão viva. Confira com `ps -p <pid>` antes.
+
+> O kitty herda `$SHELL` de quem o dispara. Rodando do seu fish, a janela abre em fish; disparado por um processo cujo `$SHELL` é bash (uma sessão do próprio Claude, por exemplo), ela abre em bash. Para tornar isso independente de quem dispara, fixe `shell /usr/bin/fish` em `~/.config/kitty/kitty.conf`.
 
 > **Sempre pelo terminal, nunca por dentro da sessão.** Um agente não deve criar worktree a partir de uma sessão já aberta (via ferramenta de isolamento ou subagente): worktree criado por dentro não abre janela, não aparece no terminal, e o fluxo dos processos deixa de ser visível. Quem abre worktree é o humano, no kitty.
 
