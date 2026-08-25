@@ -11,6 +11,9 @@
 
 export type EvaluationStatus = "RED" | "YELLOW" | "GREEN";
 
+/** Estado de uma solicitação de cadastro pendente de aprovação (FEAT-0008). */
+export type SignupRequestStatus = "pending" | "approved" | "rejected";
+
 // Candidato — enums definidos em FEAT-0001 (seção 8.1)
 
 /** `course` não tem CHECK no banco (FEAT-0001, seção 8.1) — este tipo e `CourseSchema` são a fonte de verdade. */
@@ -35,8 +38,18 @@ export type ReferralSource = "instagram" | "linkedin" | "campus" | "indicacao" |
 
 // Membro da CIMATEC jr — FEAT-0003 (seção 8.1)
 
-/** Status na tec. TEXT livre na origem, sem CHECK — `isEligibleMemberStatus` decide elegibilidade. */
-export type MemberStatus = "active" | "inactive" | "alumni" | "on_leave";
+/**
+ * Status na tec. TEXT livre na origem, sem CHECK — `isRecognizedMemberStatus`
+ * decide o que a aplicação reconhece.
+ *
+ * `"inactive"` significa **pós-júnior**, não "desligado" (FEAT-0008, decisão
+ * D3) — nome herdado da origem, mantido para não introduzir tradução própria
+ * do dado externo. `"alumni"` e `"on_leave"` saíram do domínio: nunca foram
+ * elegíveis (`ELIGIBLE_MEMBER_STATUSES` só continha `"active"`), e um status
+ * fora dos três reconhecidos cai no mesmo tratamento de sempre — recusado,
+ * sem exceção lançada (`isRecognizedMemberStatus`).
+ */
+export type MemberStatus = "active" | "inactive" | "trainee";
 
 // ------------------------------------------------------------
 // Tabelas de referência
@@ -123,6 +136,45 @@ export interface PasswordResetTokenRow {
     token_hash: string;
     expires_at: string;
     used_at: string | null;
+    created_at: string;
+}
+
+/**
+ * Pedido de acesso de pós-júnior/trainee (FEAT-0008). Guarda o snapshot da
+ * tec e a senha (já hasheada) até a decisão — a conta em `users`/
+ * `member_profiles` só existe depois de aprovada.
+ */
+export interface SignupRequestRow {
+    id: string;
+
+    email: string;
+    password_hash: string;
+
+    member_id: string;
+    full_name: string;
+    phone: string;
+    birth_date: string | null;
+    course: string;
+    semester: number;
+    gender: string;
+    ethnicity: string;
+    /** Cru, `"inactive"` ou `"trainee"` na prática — não é `MemberStatus` tipado, mesmo motivo de `MemberProfileRow.status`. */
+    member_status: string;
+    manager: boolean;
+
+    status: SignupRequestStatus;
+    decided_by: string | null;
+    decided_at: string | null;
+
+    created_at: string;
+}
+
+/** Uma linha por link de decisão emitido. Sem `used_at`: não é consumido por leitura (só expira). */
+export interface SignupApprovalTokenRow {
+    id: string;
+    signup_request_id: string;
+    token_hash: string;
+    expires_at: string;
     created_at: string;
 }
 
@@ -319,6 +371,20 @@ export type NewPasswordResetToken = Omit<PasswordResetTokenRow, "used_at" | "cre
     created_at?: string;
 };
 
+export type NewSignupRequest = Omit<
+    SignupRequestRow,
+    "status" | "decided_by" | "decided_at" | "created_at"
+> & {
+    status?: SignupRequestStatus;
+    decided_by?: string | null;
+    decided_at?: string | null;
+    created_at?: string;
+};
+
+export type NewSignupApprovalToken = Omit<SignupApprovalTokenRow, "created_at"> & {
+    created_at?: string;
+};
+
 export type NewCandidate = Omit<CandidateRow, "created_at" | "updated_at"> & {
     created_at?: string;
     updated_at?: string | null;
@@ -410,6 +476,8 @@ export interface DatabaseSchema {
     member_profiles: MemberProfileRow;
     sessions: SessionRow;
     password_reset_tokens: PasswordResetTokenRow;
+    signup_requests: SignupRequestRow;
+    signup_approval_tokens: SignupApprovalTokenRow;
     candidates: CandidateRow;
     candidate_applications: CandidateApplicationRow;
     groups: GroupRow;

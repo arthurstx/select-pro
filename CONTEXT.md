@@ -8,11 +8,52 @@ Este arquivo guarda contexto operacional/de estado que não vive no código nem 
 - O ponto de sincronização entre agentes/dispositivos é o **GitHub** (`origin`: `github.com/arthurstx/select-pro`). Qualquer contexto que precise sobreviver entre sessões/dispositivos deve estar commitado e enviado (`git push`).
 - Uma sessão do Claude Code na web (claude.ai/code) parte do zero: não tem acesso à memória local nem ao histórico de conversa de sessões de terminal. Ela só enxerga o que está no repositório remoto.
 
+### Sessões em paralelo: sempre via worktree, sempre no terminal
+
+Quando mais de uma sessão for trabalhar ao mesmo tempo, cada uma roda no **seu próprio git worktree**, e cada worktree abre numa **janela própria do kitty** — o objetivo é enxergar os processos de cada sessão lado a lado, em janelas separadas:
+
+```bash
+kitty --detach --hold --title "wt: <nome>" --directory (git rev-parse --show-toplevel) claude --worktree <nome>
+```
+
+- `claude --worktree <nome>` (ou `-w`) cria o git worktree e abre a sessão já dentro dele.
+- `--detach` solta a janela nova do terminal que a invocou, devolvendo o prompt de origem.
+- `--hold` mantém a janela aberta num shell depois que o Claude sai, em vez de ela sumir levando o output junto.
+- `--directory` com a raiz do repo garante que o worktree nasça do repositório certo, mesmo que o comando seja disparado de dentro de outro worktree.
+
+`git worktree list` mostra todos os worktrees ativos e em que branch cada um está. O worktree nasce em `.claude/worktrees/<nome>/`, **dentro do próprio repo**, numa branch `worktree-<nome>` e com lock. Por isso `.claude/worktrees/` está no `.gitignore`: são checkouts inteiros, e sem essa linha um `git add .` varreria um worktree completo para dentro do repositório.
+
+Para remover quando a feature acabar, **feche a janela primeiro** e então:
+
+```bash
+git worktree unlock .claude/worktrees/<nome>
+git worktree remove .claude/worktrees/<nome>
+git branch -D worktree-<nome>
+```
+
+O `unlock` é obrigatório: o lock é posto pela **sessão do Claude** (`lock reason: claude session <nome> (pid ...)`), e um `git worktree remove --force` simples **não** o vence — o git pede `remove -f -f`. Prefira o `unlock` explícito ao `-f -f`: se o lock não for stale, você quer descobrir isso em vez de atropelar uma sessão viva. Confira com `ps -p <pid>` antes.
+
+> O kitty herda `$SHELL` de quem o dispara. Rodando do seu fish, a janela abre em fish; disparado por um processo cujo `$SHELL` é bash (uma sessão do próprio Claude, por exemplo), ela abre em bash. Para tornar isso independente de quem dispara, fixe `shell /usr/bin/fish` em `~/.config/kitty/kitty.conf`.
+
+> **Sempre pelo terminal, nunca por dentro da sessão.** Um agente não deve criar worktree a partir de uma sessão já aberta (via ferramenta de isolamento ou subagente): worktree criado por dentro não abre janela, não aparece no terminal, e o fluxo dos processos deixa de ser visível. Quem abre worktree é o humano, no kitty.
+
+Quatro armadilhas deste monorepo, todas já verificadas:
+
+- **`npm install` por worktree.** `node_modules` não é compartilhado entre checkouts (~441 MB na raiz). Sem instalar, o worktree não roda.
+- **`node_modules/shared` é symlink relativo** (`-> ../shared`), então cada worktree resolve o `shared/` **do próprio checkout**. Consequência: um contrato só existe para os outros worktrees depois de **commitado** — escrever o schema não basta.
+- **`api/.dev.vars` não é commitado** (`api/.gitignore:35`). Um worktree novo nasce sem ele, e aí some o `MEMBER_DIRECTORY_BYPASS=true` — o cadastro local passa a bater no Supabase real. Copie o arquivo ao criar o worktree.
+- **`.specify/feature.json` é per-checkout e gitignored.** O worktree não herda qual feature do Spec Kit está ativa: rode `export SPECIFY_FEATURE=<dir-da-feature>` nele.
+
+Duas coisas que **nunca** vão em paralelo:
+
+- **`shared/src/schemas/`** — dois agentes editando contrato é conflito garantido, e é exatamente o que a Regra de Ouro dos Contratos existe para evitar. Contrato é fase sequencial: um agente escreve, commita, e só então os outros bifurcam.
+- **Migrations.** Dois worktrees criam o mesmo número de migration sem enxergar um ao outro. Features que tocam o banco vão uma de cada vez.
+
 ## Branches
 
 - `master`: produção.
 - `develop`: branch de integração ativa.
-- Branches de feature nascem de `develop` (ex: `feat/wizard-inscricao-6-etapas`, já mergeada; `feat/remover-otc-inscricao-passo-unico`, em PR; `feat/auth-membro`, com as specs do FEAT-0003 e nenhuma implementação ainda).
+- Branches de feature nascem de `develop`. Já mergeadas: `feat/wizard-inscricao-6-etapas` e `feat/remover-otc-inscricao-passo-unico`. `feat/auth-membro` ainda existe local e em `origin`, mas a FEAT-0003 já está em `develop` — a branch não aparece em `git branch --merged develop`, então confira antes de assumir que pode apagá-la.
 
 > ⚠️ Antes de assumir que `develop` e `master` estão sincronizados, rode `git log master..develop` e `git log develop..master` — historicamente já divergiram nas duas direções (features prontas em `develop` aguardando promoção, e commits de deploy direto em `master`).
 
@@ -20,10 +61,10 @@ Este arquivo guarda contexto operacional/de estado que não vive no código nem 
 
 - `api/wrangler.jsonc` define os bindings por ambiente (D1, vars). Ao alterar `database_name`/`database_id`, confirme qual ambiente (staging vs produção) está sendo afetado antes de commitar — esses valores têm mudado localmente sem commit correspondente em algumas sessões.
 - **O Worker roda no plano Free da Cloudflare.** O limite que importa é **10 ms de CPU por invocação** — tempo de I/O (fetch, D1, KV) não conta. Na prática quase nada esbarra nisso, exceto criptografia: o hash de senha do FEAT-0003 é o primeiro código do projeto que precisa ser calibrado para caber. Estourar o limite não é falha sob carga, é `Error 1102` determinístico, e `wrangler dev` **não** aplica o teto — só dá para medir em produção. Consequências no mesmo plano: **Cloudflare Queues indisponível** (exige plano pago) e apenas **uma** regra de Rate Limiting no WAF.
-- **Sem provedor de email desde FEAT-0001 v3.0, mas o Resend volta no FEAT-0003.** A remoção do OTC eliminou o mailer, a dependência e as vars `RESEND_*`; o fluxo de recuperação de senha o traz de volta, só que restrito a `/auth/forgot-password` e fora do caminho crítico (`waitUntil`). O secret `RESEND_API_KEY` pode continuar existindo nos Workers (`api`, `api-staging`), porque a v3.0 removeu o código sem rodar `wrangler secret delete` — **conferir com `wrangler secret list` antes de recriar.**
+- **O Resend já voltou, na FEAT-0003.** `api/src/lib/mailer.ts` define a interface `Mailer` e a implementação `ResendMailer`, que bate **direto no endpoint HTTP** (`https://api.resend.com/emails`) em vez de usar o SDK `resend` — de propósito, para não pagar bundle size no cold start. Por isso `resend` **não** aparece no `package.json`. O uso hoje é só `/auth/forgot-password`, fora do caminho crítico (`waitUntil`). Qualquer feature nova que precise enviar e-mail (ex.: a aprovação de cadastro da 008) **reusa essa interface**, não cria outra. `RESEND_API_KEY` já está no `api/.dev.vars`; nos Workers, **conferir com `wrangler secret list` antes de recriar.**
 - **Secrets e vars que o FEAT-0003 exige e ainda não existem:** secrets `JWT_SECRET` e `SUPABASE_SERVICE_ROLE_KEY`; vars `SUPABASE_URL` e `FRONT_ORIGIN` (origin explícita do front — o `cors()` atual reflete qualquer origin, o que é correto para `/candidate/*` e inaceitável em `/auth/*`, que trafega cookie). A `service_role` ignora RLS e dá acesso total ao banco da tec: nunca em `wrangler.jsonc`.
 - **KV `PENDING_REGISTRATIONS`:** não é mais referenciado no `wrangler.jsonc`. Os namespaces seguem existindo na conta Cloudflare (ids `c7ac7d5d…` produção e `0a7885b8…` staging) e podem ser deletados manualmente.
-- **Migrations do D1** precisam ser aplicadas por ambiente (`wrangler d1 migrations apply <DB> --env staging --remote`). A `0006-candidate-checkin.sql` é a mais recente. ⚠️ **Aplicar a migration não é opcional nem silencioso:** com o Worker novo no ar e o banco sem as tabelas, `GET /candidates` responde `409 NO_ACTIVE_SELECTION_PROCESS` — o erro parece de configuração de processo seletivo, mas a causa é a migration que faltou.
+- **Migrations do D1** precisam ser aplicadas por ambiente (`wrangler d1 migrations apply <DB> --env staging --remote`). A `0007-candidate-edition-uniqueness.sql` é a mais recente. ⚠️ **Aplicar a migration não é opcional nem silencioso:** com o Worker novo no ar e o banco sem as tabelas, `GET /candidates` responde `409 NO_ACTIVE_SELECTION_PROCESS` — o erro parece de configuração de processo seletivo, mas a causa é a migration que faltou.
 - **KV `CANDIDATES_KV`** (`51d028fb…` produção, `b904715d…` staging): cache da listagem do check-in. TTL de 60s — que é o **mínimo** que o KV aceita em `expirationTtl`; valores menores fazem `kv.put` falhar. A invalidação real é por geração (um contador por processo, incrementado a cada marcar/desmarcar), então o TTL só limita o pior caso.
 - **`MEMBER_DIRECTORY_BYPASS=true` em `api/.dev.vars`** pula a checagem de membro na Supabase no cadastro local, porque `wrangler dev` usa o bloco **raiz** do `wrangler.jsonc` (não existe env "development") e o `SUPABASE_URL` de lá aponta para um projeto real. O wrangler nunca aplica `.dev.vars` a `deploy`, então staging/produção continuam exigindo membro real sem depender de nenhuma mudança de código. Os testes fixam `MEMBER_DIRECTORY_BYPASS: "false"` no `testEnv()` — o `vitest-pool-workers` também lê `.dev.vars`, e a suíte não pode depender de como cada um configurou o próprio ambiente.
 - **Existe CD por push, e ele sobrescreve deploy manual.** `master` → produção e `develop` → staging, tanto na Cloudflare (Worker) quanto na Vercel (front). Consequência prática: um `wrangler deploy --var ...` feito à mão é substituído pelo deploy do CD se houver um push logo em seguida — foi o que aconteceu na 0004, com o CD revertendo `MAINTENANCE_MODE` para `"false"` 18s depois do deploy manual. **Faça o push antes**, e só então o deploy manual de manutenção.
@@ -34,19 +75,45 @@ Este arquivo guarda contexto operacional/de estado que não vive no código nem 
 ## Backlog conhecido (`task.md`)
 
 - [ ] Inscrição do candidato na plataforma
-- [ ] Inscrição dos avaliadores na plataforma — specs de backend e UI prontas (FEAT-0003), implementação não começou. Pendências que não são código: calibrar as iterações do PBKDF2 medindo em produção, criar a regra de Rate Limiting em `/auth/*`, e desenhar a tela "Definir Nova Senha" (sem ela o fluxo de recuperação de senha não fecha).
+- [x] Inscrição dos avaliadores na plataforma (FEAT-0003) — **implementada** em backend e UI: 8 rotas em `api/src/routes/auth.routes.ts` (commit `c74781f`) e as telas em `front/app/(auth)/` (`login`, `cadastro`, `recuperar-senha`, `redefinir-senha`). A tela "Definir Nova Senha", antes listada como pendente, existe: `front/app/(auth)/redefinir-senha/`.
+  - Pendências que **não são código** e não dá para verificar pelo repositório: calibrar as iterações do PBKDF2 medindo em produção (`wrangler dev` não aplica o teto de 10 ms de CPU) e criar a regra de Rate Limiting do WAF em `/auth/*` — lembrando que o plano Free dá **uma** regra só.
 
-## Próxima spec (FEAT-0006) — escopo já decidido
+## FEAT-0006 — feita, com um item órfão
 
-A FEAT-0005 (check-in) deixou três coisas explicitamente para a spec seguinte. As duas primeiras **precisam existir antes da abertura do segundo processo seletivo** — não são melhorias, são bloqueios.
+Dos três itens que a FEAT-0005 deixou para a spec seguinte, **dois foram implementados** na `0007-candidate-edition-uniqueness.sql`: unicidade de email/telefone por edição (`UNIQUE (process_id, email)` / `(process_id, phone)`, destravando a recandidatura entre semestres) e padronização do telefone para E.164.
 
-- [ ] 🔴 **Unicidade de email/telefone por edição.** Hoje `candidates.email` e `candidates.phone` são `UNIQUE` globais (`0004-normalize-course-slugs.sql`), então quem se inscreveu em 2026.1 **não consegue se reinscrever** em 2026.2 — a FEAT-0001 responde `EMAIL_ALREADY_REGISTERED`. Vira `UNIQUE (process_id, email)` / `UNIQUE (process_id, phone)`, o que exige `candidates.process_id` e, por tabela, que a inscrição (FEAT-0001) passe a carimbar a edição corrente.
-- [ ] **Padronização do telefone.** Os telefones estão gravados sem formato consistente. A UI do check-in foi escrita para tolerar isso e **não** reformatar no cliente, de propósito: mascarar no front esconderia justamente a inconsistência que esta spec vai corrigir.
-- [ ] **Tela de logs do admin, alimentada por webhook.** O dado **já está sendo gravado** desde a FEAT-0005 (`checkin_events`, append-only, com ator/ação/horário). Falta a tela e o webhook. Foi assim de propósito: a tela pode ser construída a qualquer momento, mas só enxerga o que já foi gravado enquanto acontecia.
+- [ ] **Tela de logs do admin, alimentada por webhook.** O dado **já está sendo gravado** desde a FEAT-0005 (`checkin_events`, append-only, com ator/ação/horário). Falta a tela e o webhook.
 
-> ⚠️ **Os dois primeiros itens vão na MESMA migration, numa reconstrução única de `candidates`** — essa é a decisão de maior valor herdada da FEAT-0005, e ela é sobre risco, não sobre esforço. Reconstruir `candidates` é o procedimento mais perigoso deste banco (ver "Ambientes / Infra"): escrever é barato, errar apaga as inscrições, e o `foreign_key_check` posterior volta limpo reportando sucesso sobre um banco destruído. Cada execução é uma aposta; fazer duas apostas para resolver dois problemas da mesma tabela é escolha ruim quando uma resolve os dois. Essa migration precisa de `MAINTENANCE_MODE` — diferente da `0006`, que é puramente aditiva.
+> ⚠️ Este item **não entrou** no backlog 008–016 abaixo — ele não estava na lista de tarefas que originou aquelas specs. Está aqui para não sumir.
 
-Fora de escopo da FEAT-0005 e ainda sem dono (menor urgência): CRUD de processos seletivos, check-in por grupo/sala, avaliação do candidato, contador "X de Y presentes" no cabeçalho, dark mode, e as duas telas de estado que faltam no Stitch ("nenhum candidato inscrito" e "sem processo corrente").
+## Backlog de specs 008–016 (organizado em 2026-08-24)
+
+Nove features derivadas de um backlog em texto livre sobre separação automática de grupos, avaliação de candidatos e papéis de host. Ordem por dependência:
+
+```
+011 (salas) ──────────────────┐
+008 (status) → 009 (host) → 010 (check-in) → 012 (grupos) → 013 (avaliação)
+
+014 (necessidades especiais), 015 (filtro por curso), 016 (exportação CSV) — sem dependência
+```
+
+**Decisões travadas antes de virarem spec** — devem entrar no texto do `/speckit.specify` de cada feature, porque contexto de conversa não sobrevive à sessão:
+
+| # | Decisão |
+|---|---|
+| D1 | Grupo tem 0 ou ≥2 mulheres, **nunca exatamente 1**. Sobra ímpar vira trio. Restrição forte. |
+| D2 | Veredito da avaliação: **qualquer VERMELHO reprova**. Sem empate possível. |
+| D3 | `MemberStatus` vira `active` \| `inactive` \| `trainee`, onde **`inactive` = pós-júnior**, não "desligado". `alumni` e `on_leave` saem. |
+| D4 | Host é atribuição **por edição do processo seletivo**, não papel global em `roles`. |
+| D5 | Salas: ≤50 → 1 host / 2 grupos (3 em falta de sala); 51–80 → 2 hosts / 3 grupos; >80 → 2 hosts / 4 grupos. |
+| D6 | Sem o mínimo de 2 avaliações, o candidato fica **pendente** e não recebe veredito. |
+| D7 | "Online" é derivado de `saturday_restriction` — um eixo só, nenhum campo novo em `candidates`. |
+
+> ⚠️ **D3 é a que mais engana.** Com `inactive` significando pós-júnior, a regra "trainee precisa de um `active` ou `inactive` ao lado" se lê ao contrário em inglês — por isso ela deve ser exposta no `shared` com nome próprio (ex.: `canQualifyTrainee(status)`), nunca como comparação de strings espalhada pelo código. D3 também é o motivo de a aprovação de cadastro (008) ser a **primeira** feature da cadeia: pós-júnior precisa conseguir entrar na plataforma para poder avaliar, e hoje `ELIGIBLE_MEMBER_STATUSES` só aceita `active`.
+
+**Janela que se fecha:** `rooms`, `groups`, `group_evaluators`, `group_candidates`, `evaluations` e `metrics` existem desde a `0001-schema.sql`, **vazias e sem nenhum código as referenciando**. Duas estão erradas para o requisito (`evaluations` repete cor e observação por critério; `groups` não tem `process_id`). Corrigir hoje é `DROP`/`CREATE` trivial, sem `MAINTENANCE_MODE`. Depois de povoadas, vira o procedimento perigoso da `0004`. **Confirmar que seguem vazias em staging e produção antes da 012.**
+
+Ainda sem dono e fora das nove: CRUD de processos seletivos, contador "X de Y presentes" no cabeçalho, dark mode, e as duas telas de estado que faltam no Stitch ("nenhum candidato inscrito" e "sem processo corrente").
 
 ## Onde procurar mais contexto
 

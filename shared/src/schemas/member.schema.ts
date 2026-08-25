@@ -9,30 +9,54 @@ import type { MemberStatus } from "./database.schema";
 export const MemberStatusSchema = z.enum([
     "active",
     "inactive",
-    "alumni",
-    "on_leave",
+    "trainee",
 ]) satisfies z.ZodType<MemberStatus>;
 
 /**
- * Quem pode criar conta. `on_leave` e `alumni` ficam de fora nesta versão
- * (FEAT-0003, seção 10, pergunta 3).
+ * Todo status que a aplicação sabe interpretar (FEAT-0008, D3). Não confundir
+ * com "quem pode entrar sem aprovação" — isso é `requiresApproval`. Um status
+ * fora desta lista (incluindo os removidos `alumni`/`on_leave`) é tratado
+ * como não reconhecido, nunca lança exceção (FR-002).
  */
-export const ELIGIBLE_MEMBER_STATUSES = ["active"] as const satisfies readonly MemberStatus[];
-
-export type EligibleMemberStatus = (typeof ELIGIBLE_MEMBER_STATUSES)[number];
+export const RECOGNIZED_MEMBER_STATUSES = [
+    "active",
+    "inactive",
+    "trainee",
+] as const satisfies readonly MemberStatus[];
 
 /**
  * Recebe `string | null` (não `MemberStatus`): a coluna é TEXT livre e
  * nullable na origem. Type predicate para que `null` desapareça do tipo após
  * a checagem.
  */
-export function isEligibleMemberStatus(
+export function isRecognizedMemberStatus(
     status: string | null,
-): status is EligibleMemberStatus {
+): status is MemberStatus {
     return (
         status !== null &&
-        (ELIGIBLE_MEMBER_STATUSES as readonly string[]).includes(status)
+        (RECOGNIZED_MEMBER_STATUSES as readonly string[]).includes(status)
     );
+}
+
+/**
+ * `false` só para `"active"` — quem cria conta sem aprovação (FEAT-0008,
+ * FR-003). `"inactive"` (pós-júnior) e `"trainee"` entram em fila de
+ * aprovação (FR-004). Assume `status` já reconhecido — chamar depois de
+ * `isRecognizedMemberStatus`.
+ */
+export function requiresApproval(status: MemberStatus): boolean {
+    return status !== "active";
+}
+
+/**
+ * Quem pode ser o avaliador "âncora" de um grupo com um trainee (feature 012,
+ * FR-017) — um trainee sozinho não conta como avaliador válido. `"active"` e
+ * `"inactive"` (pós-júnior) qualificam; `"trainee"` não. Nomeada pelo que a
+ * regra decide, não pelo valor comparado — com `"inactive"` significando
+ * pós-júnior, uma comparação de string solta se leria ao contrário.
+ */
+export function isEligibleToAnchorTrainee(status: MemberStatus): boolean {
+    return status !== "trainee";
 }
 
 /** Shape de uma linha de `members` na resposta do PostgREST — entrada não confiável. */

@@ -26,7 +26,7 @@ export class NotAMemberError extends Error {
     }
 }
 
-/** E3 — o membro existe, mas o status não está em `ELIGIBLE_MEMBER_STATUSES`. */
+/** E3 — o membro existe, mas o status não está em `RECOGNIZED_MEMBER_STATUSES`. */
 export class MemberNotActiveError extends Error {
     readonly code = AuthErrorCode.MEMBER_NOT_ACTIVE;
     readonly field = "email";
@@ -134,5 +134,41 @@ export class InvalidResetTokenError extends Error {
     ) {
         super(message);
         this.name = "InvalidResetTokenError";
+    }
+}
+
+// ------------------------------------------------------------
+// FEAT-0008 — Solicitações de cadastro pendentes de aprovação
+// ------------------------------------------------------------
+
+/** Token do link de decisão não existe. Mesma superfície de erro que expirado — não revela qual. */
+export class SignupRequestNotFoundError extends Error {
+    readonly code = AuthErrorCode.SIGNUP_REQUEST_NOT_FOUND;
+
+    constructor(message = "Solicitação não encontrada.") {
+        super(message);
+        this.name = "SignupRequestNotFoundError";
+    }
+}
+
+/** Link de decisão passou dos 7 dias de validade (FR-009). */
+export class SignupRequestExpiredError extends Error {
+    readonly code = AuthErrorCode.SIGNUP_REQUEST_EXPIRED;
+
+    constructor(
+        message = "Este link expirou. A solicitação pode ser decidida pelo painel administrativo.",
+    ) {
+        super(message);
+        this.name = "SignupRequestExpiredError";
+    }
+}
+
+/** Alguém já decidiu esta solicitação — transição atômica, FR-010/SC-004. */
+export class SignupRequestAlreadyDecidedError extends Error {
+    readonly code = AuthErrorCode.SIGNUP_REQUEST_ALREADY_DECIDED;
+
+    constructor(message = "Esta solicitação já foi decidida.") {
+        super(message);
+        this.name = "SignupRequestAlreadyDecidedError";
     }
 }

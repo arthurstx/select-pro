@@ -20,6 +20,7 @@ function testEnv(overrides: Record<string, unknown> = {}) {
         SUPABASE_SERVICE_ROLE_KEY: "service-role-de-teste",
         RESEND_API_KEY: "resend-de-teste",
         RESEND_FROM_EMAIL: "acesso@exemplo.test",
+        SIGNUP_APPROVAL_EMAIL: "gentegestao@cimatecjr.com.br",
         // Sempre "false" aqui, mesmo que o `.dev.vars` local tenha "true": os
         // testes E2/E3/E5 abaixo existem para exercitar a checagem real da
         // Supabase (via `stubDirectory`), e não podem depender de como quem
@@ -244,6 +245,40 @@ describe("POST /auth/register (HTTP)", () => {
         expect(response.status).toBe(409);
         const body = await response.json<{ error: { code: string } }>();
         expect(body.error.code).toBe("EMAIL_ALREADY_REGISTERED");
+    });
+});
+
+// FEAT-0008 — pós-júnior e trainee viram solicitação pendente, não conta direto.
+describe("POST /auth/register — solicitação pendente (HTTP)", () => {
+    it.each(["inactive", "trainee"])(
+        "status %s responde 202 com pending_approval, sem cookie de sessão",
+        async (status) => {
+            const member = tecMember({ status });
+            stubDirectory({ member });
+
+            const response = await call(
+                postJson("/auth/register", { email: member.email, password: "senha-de-teste" }),
+            );
+            const body = await response.json<{ data: { status: string; message: string } }>();
+
+            expect(response.status).toBe(202);
+            expect(body.data.status).toBe("pending_approval");
+            expect(body.data.message).toBeTruthy();
+            expect(response.headers.get("Set-Cookie")).toBeNull();
+        },
+    );
+
+    it("não cria usuário nem sessão para o email pendente", async () => {
+        const member = tecMember({ status: "inactive" });
+        stubDirectory({ member });
+
+        await call(postJson("/auth/register", { email: member.email, password: "senha-de-teste" }));
+
+        // Login com a mesma senha tem que falhar — nenhuma conta existe ainda.
+        const loginAttempt = await call(
+            postJson("/auth/login", { email: member.email, password: "senha-de-teste" }),
+        );
+        expect(loginAttempt.status).toBe(401);
     });
 });
 

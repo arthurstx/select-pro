@@ -12,6 +12,7 @@ import {
     MeResponseSchema,
     RefreshResponseSchema,
     RegisterMemberSchema,
+    RegisterPendingResponseSchema,
     ResetPasswordSchema,
 } from "shared";
 import type { ZodError } from "zod";
@@ -24,6 +25,8 @@ import { SupabaseMemberDirectory, type MemberDirectory } from "../lib/member-dir
 import { type AuthEnv, requireAuth } from "../middlewares/require-auth";
 import { AuthRepository } from "../repositories/auth.repository";
 import { AuthService, REFRESH_TOKEN_TTL_SECONDS } from "../services/auth.service";
+import { SignupRequestsRepository } from "../repositories/signup-requests.repository";
+import { PENDING_APPROVAL_MESSAGE, SignupRequestsService } from "../services/signup-requests.service";
 
 export const authRouter = new OpenAPIHono<AuthEnv>();
 
@@ -72,6 +75,22 @@ function buildMemberDirectory(env: CloudflareBindings): MemberDirectory {
     return new SupabaseMemberDirectory(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
+/**
+ * Composição reaproveitada por `signup-requests.routes.ts` também — o
+ * service é o mesmo, o que muda é qual rota chama qual método dele
+ * (FEAT-0008).
+ */
+export function buildSignupRequestsService(c: Context<AuthEnv>): SignupRequestsService {
+    return new SignupRequestsService({
+        repository: new SignupRequestsRepository(c.env.DB),
+        authRepository: new AuthRepository(c.env.DB),
+        mailer: new ResendMailer(c.env.RESEND_API_KEY, c.env.RESEND_FROM_EMAIL),
+        frontOrigin: c.env.FRONT_ORIGIN.split(",")[0].trim(),
+        signupApprovalEmail: c.env.SIGNUP_APPROVAL_EMAIL,
+        defer: (promise) => c.executionCtx.waitUntil(promise),
+    });
+}
+
 function buildService(c: Context<AuthEnv>): AuthService {
     return new AuthService({
         repository: new AuthRepository(c.env.DB),
@@ -79,6 +98,7 @@ function buildService(c: Context<AuthEnv>): AuthService {
         mailer: new ResendMailer(c.env.RESEND_API_KEY, c.env.RESEND_FROM_EMAIL),
         jwtSecret: c.env.JWT_SECRET,
         frontOrigin: c.env.FRONT_ORIGIN.split(",")[0].trim(),
+        signupRequests: buildSignupRequestsService(c),
         defer: (promise) => c.executionCtx.waitUntil(promise),
     });
 }
@@ -150,9 +170,9 @@ const registerRoute = createRoute({
     method: "post",
     path: "/register",
     tags: ["Auth"],
-    summary: "Cria a conta de um membro da CIMATEC jr",
+    summary: "Cria a conta de um membro da CIMATEC jr, ou solicita aprovação",
     description:
-        "Verifica se o email consta como membro ativo no banco da tec (Supabase) e só então cria usuário, perfil e sessão — os três no mesmo batch. O cadastro já autentica: responde com access token e cookie de refresh.",
+        "Verifica se o email consta como membro no banco da tec (Supabase). Membro efetivado (`active`) tem conta, perfil e sessão criados no mesmo batch — o cadastro já autentica. Pós-júnior (`inactive`) e trainee geram uma solicitação pendente (FEAT-0008): nenhuma conta é criada até um admin aprovar.",
     request: {
         body: {
             required: true,
@@ -161,8 +181,13 @@ const registerRoute = createRoute({
     },
     responses: {
         201: {
-            description: "Conta criada e sessão iniciada",
+            description: "Conta criada e sessão iniciada (membro `active`)",
             content: { "application/json": { schema: AuthSessionResponseSchema } },
+        },
+        202: {
+            description:
+                "Solicitação de cadastro registrada, aguardando aprovação (membro `inactive`/`trainee` — FEAT-0008)",
+            content: { "application/json": { schema: RegisterPendingResponseSchema } },
         },
         400: {
             description: "Senha fora da política ou payload inválido (E4)",
@@ -192,7 +217,14 @@ authRouter.openapi(
             throwDomainError(result.value);
         }
 
-        const { refreshToken, ...session } = result.value;
+        if (result.value.kind === "pending_approval") {
+            return c.json(
+                { data: { status: "pending_approval" as const, message: PENDING_APPROVAL_MESSAGE } },
+                202,
+            );
+        }
+
+        const { refreshToken, ...session } = result.value.session;
         setRefreshCookie(c, refreshToken);
 
         return c.json({ data: session }, 201);
