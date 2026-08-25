@@ -74,7 +74,12 @@ Duas coisas que **nunca** vão em paralelo:
 
 ## Backlog conhecido (`task.md`)
 
-- [ ] Inscrição do candidato na plataforma
+`task.md` na raiz é a fonte única do backlog — inclusive o que sobrou fora do 008–016 (itens
+órfãos, pendências operacionais). Resumo do que mudou de estado:
+
+- [x] Inscrição do candidato na plataforma (FEAT-0001) — **implementada**: wizard de 6 etapas
+  (commit `c267fd0`). Esta linha ficou marcada como pendente por engano depois da feature
+  pronta; corrigida em 2026-08-24.
 - [x] Inscrição dos avaliadores na plataforma (FEAT-0003) — **implementada** em backend e UI: 8 rotas em `api/src/routes/auth.routes.ts` (commit `c74781f`) e as telas em `front/app/(auth)/` (`login`, `cadastro`, `recuperar-senha`, `redefinir-senha`). A tela "Definir Nova Senha", antes listada como pendente, existe: `front/app/(auth)/redefinir-senha/`.
   - Pendências que **não são código** e não dá para verificar pelo repositório: calibrar as iterações do PBKDF2 medindo em produção (`wrangler dev` não aplica o teto de 10 ms de CPU) e criar a regra de Rate Limiting do WAF em `/auth/*` — lembrando que o plano Free dá **uma** regra só.
 
