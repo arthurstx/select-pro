@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ClipboardCheckIcon, LayoutDashboardIcon, UserCheckIcon } from "lucide-react";
+import { ClipboardCheckIcon, DoorOpenIcon, LayoutDashboardIcon, UserCheckIcon } from "lucide-react";
 
 /**
  * Só os itens que têm rota de verdade. O mockup do Stitch (Check-in de
@@ -20,4 +20,6 @@ export const PAINEL_NAV_ITEMS: PainelNavItem[] = [
   // FEAT-0008 — restrita a admin na própria página; aparece pra todos aqui
   // pelo mesmo motivo dos outros itens (o guard real é a API, não o menu).
   { href: "/painel/solicitacoes", label: "Solicitações", icon: UserCheckIcon },
+  // FEAT-0011 — mesmo motivo.
+  { href: "/painel/salas", label: "Salas", icon: DoorOpenIcon },
 ];
