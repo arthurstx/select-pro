@@ -14,6 +14,7 @@ import { authRouter } from "./routes/auth.routes";
 import { candidatesRouter } from "./routes/candidates.routes";
 import { checkinRouter } from "./routes/checkin.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
+import { roomsRouter } from "./routes/rooms.routes";
 import { SheetSyncService } from "./services/sheet-sync.service";
 
 const app = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
@@ -74,6 +75,20 @@ app.use("/dashboard/*", (c, next) =>
 );
 
 /**
+ * `/rooms/*` (FEAT-0011) — inteiramente admin-only, inclusive leitura.
+ * `allowMethods` precisa de PUT/DELETE (editar e excluir sala).
+ */
+app.use("/rooms/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
  * Modo de manutenção — fecha a janela de escrita durante migrations de
  * banco. Fica depois do CORS para que o 503 chegue com os headers de
  * origin, e não como erro de CORS.
@@ -121,6 +136,13 @@ app.use(
   ),
 );
 
+app.use(
+  "/rooms/*",
+  maintenanceGuard(
+    "O cadastro de salas está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
@@ -129,6 +151,7 @@ app.route("/candidate", candidatesRouter);
 app.route("/auth", authRouter);
 app.route("/candidates", checkinRouter);
 app.route("/dashboard", dashboardRouter);
+app.route("/rooms", roomsRouter);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",
