@@ -64,7 +64,7 @@ Duas coisas que **nunca** vão em paralelo:
 - **O Resend já voltou, na FEAT-0003.** `api/src/lib/mailer.ts` define a interface `Mailer` e a implementação `ResendMailer`, que bate **direto no endpoint HTTP** (`https://api.resend.com/emails`) em vez de usar o SDK `resend` — de propósito, para não pagar bundle size no cold start. Por isso `resend` **não** aparece no `package.json`. O uso hoje é só `/auth/forgot-password`, fora do caminho crítico (`waitUntil`). Qualquer feature nova que precise enviar e-mail (ex.: a aprovação de cadastro da 008) **reusa essa interface**, não cria outra. `RESEND_API_KEY` já está no `api/.dev.vars`; nos Workers, **conferir com `wrangler secret list` antes de recriar.**
 - **Secrets e vars que o FEAT-0003 exige e ainda não existem:** secrets `JWT_SECRET` e `SUPABASE_SERVICE_ROLE_KEY`; vars `SUPABASE_URL` e `FRONT_ORIGIN` (origin explícita do front — o `cors()` atual reflete qualquer origin, o que é correto para `/candidate/*` e inaceitável em `/auth/*`, que trafega cookie). A `service_role` ignora RLS e dá acesso total ao banco da tec: nunca em `wrangler.jsonc`.
 - **KV `PENDING_REGISTRATIONS`:** não é mais referenciado no `wrangler.jsonc`. Os namespaces seguem existindo na conta Cloudflare (ids `c7ac7d5d…` produção e `0a7885b8…` staging) e podem ser deletados manualmente.
-- **Migrations do D1** precisam ser aplicadas por ambiente (`wrangler d1 migrations apply <DB> --env staging --remote`). A `0007-candidate-edition-uniqueness.sql` é a mais recente. ⚠️ **Aplicar a migration não é opcional nem silencioso:** com o Worker novo no ar e o banco sem as tabelas, `GET /candidates` responde `409 NO_ACTIVE_SELECTION_PROCESS` — o erro parece de configuração de processo seletivo, mas a causa é a migration que faltou.
+- **Migrations do D1** precisam ser aplicadas por ambiente (`wrangler d1 migrations apply <DB> --env staging --remote`). A `0009-rooms-unique-name.sql` é a mais recente — **aplicada só localmente** (feita a partir do merge de `feat/status-membro-aprovacao` e `feat/cadastro-de-salas`, staging/produção ainda pendentes). ⚠️ **Aplicar a migration não é opcional nem silencioso:** com o Worker novo no ar e o banco sem as tabelas, `GET /candidates` responde `409 NO_ACTIVE_SELECTION_PROCESS` — o erro parece de configuração de processo seletivo, mas a causa é a migration que faltou.
 - **KV `CANDIDATES_KV`** (`51d028fb…` produção, `b904715d…` staging): cache da listagem do check-in. TTL de 60s — que é o **mínimo** que o KV aceita em `expirationTtl`; valores menores fazem `kv.put` falhar. A invalidação real é por geração (um contador por processo, incrementado a cada marcar/desmarcar), então o TTL só limita o pior caso.
 - **`MEMBER_DIRECTORY_BYPASS=true` em `api/.dev.vars`** pula a checagem de membro na Supabase no cadastro local, porque `wrangler dev` usa o bloco **raiz** do `wrangler.jsonc` (não existe env "development") e o `SUPABASE_URL` de lá aponta para um projeto real. O wrangler nunca aplica `.dev.vars` a `deploy`, então staging/produção continuam exigindo membro real sem depender de nenhuma mudança de código. Os testes fixam `MEMBER_DIRECTORY_BYPASS: "false"` no `testEnv()` — o `vitest-pool-workers` também lê `.dev.vars`, e a suíte não pode depender de como cada um configurou o próprio ambiente.
 - **Existe CD por push, e ele sobrescreve deploy manual.** `master` → produção e `develop` → staging, tanto na Cloudflare (Worker) quanto na Vercel (front). Consequência prática: um `wrangler deploy --var ...` feito à mão é substituído pelo deploy do CD se houver um push logo em seguida — foi o que aconteceu na 0004, com o CD revertendo `MAINTENANCE_MODE` para `"false"` 18s depois do deploy manual. **Faça o push antes**, e só então o deploy manual de manutenção.
@@ -91,11 +91,24 @@ Dos três itens que a FEAT-0005 deixou para a spec seguinte, **dois foram implem
 Nove features derivadas de um backlog em texto livre sobre separação automática de grupos, avaliação de candidatos e papéis de host. Ordem por dependência:
 
 ```
-011 (salas) ──────────────────┐
-008 (status) → 009 (host) → 010 (check-in) → 012 (grupos) → 013 (avaliação)
+011 (salas) ── ✅ feita ──────┐
+008 (status) ── ✅ feita ──→ 009 (host) → 010 (check-in) → 012 (grupos) → 013 (avaliação)
 
 014 (necessidades especiais), 015 (filtro por curso), 016 (exportação CSV) — sem dependência
 ```
+
+**008 e 011 implementadas e mescladas em `develop`** (2026-08-24) — specs completas em
+`specs/008-member-status-approval/` e `specs/011-cadastro-de-salas/`. 272/272 testes `api` +
+20/20 `shared` passando com as duas juntas. **Pendente de ambas: aplicar as migrations `0008`
+e `0009` em staging e produção** — só locais até agora.
+
+Duas correções ao que este documento previa antes de implementar:
+- A função de senioridade (D3) chama-se `isEligibleToAnchorTrainee`, não `canQualifyTrainee`
+  como especulado abaixo — nome decidido durante o `/speckit-plan`, não antes.
+- **A janela das tabelas órfãs (`rooms`, `groups`, `evaluations`...) já fechou parcialmente**:
+  `rooms` deixou de estar órfã com a 011 (ganhou CRUD e um índice único de nome, migration
+  `0009`). `groups`/`evaluations`/`metrics` continuam vazias e órfãs — a nota abaixo sobre
+  `DROP`/`CREATE` trivial antes da 012 ainda vale para essas três.
 
 **Decisões travadas antes de virarem spec** — devem entrar no texto do `/speckit.specify` de cada feature, porque contexto de conversa não sobrevive à sessão:
 
@@ -109,7 +122,7 @@ Nove features derivadas de um backlog em texto livre sobre separação automáti
 | D6 | Sem o mínimo de 2 avaliações, o candidato fica **pendente** e não recebe veredito. |
 | D7 | "Online" é derivado de `saturday_restriction` — um eixo só, nenhum campo novo em `candidates`. |
 
-> ⚠️ **D3 é a que mais engana.** Com `inactive` significando pós-júnior, a regra "trainee precisa de um `active` ou `inactive` ao lado" se lê ao contrário em inglês — por isso ela deve ser exposta no `shared` com nome próprio (ex.: `canQualifyTrainee(status)`), nunca como comparação de strings espalhada pelo código. D3 também é o motivo de a aprovação de cadastro (008) ser a **primeira** feature da cadeia: pós-júnior precisa conseguir entrar na plataforma para poder avaliar, e hoje `ELIGIBLE_MEMBER_STATUSES` só aceita `active`.
+> ⚠️ **D3 é a que mais engana.** Com `inactive` significando pós-júnior, a regra "trainee precisa de um `active` ou `inactive` ao lado" se lê ao contrário em inglês — por isso ela é exposta no `shared` com nome próprio, `isEligibleToAnchorTrainee(status)` (`shared/src/schemas/member.schema.ts`), nunca como comparação de strings espalhada pelo código. D3 também foi o motivo de a aprovação de cadastro (008, já feita) ter sido a **primeira** feature da cadeia: pós-júnior precisava conseguir entrar na plataforma para poder avaliar, e antes da 008 `ELIGIBLE_MEMBER_STATUSES` só aceitava `active`.
 
 **Janela que se fecha:** `rooms`, `groups`, `group_evaluators`, `group_candidates`, `evaluations` e `metrics` existem desde a `0001-schema.sql`, **vazias e sem nenhum código as referenciando**. Duas estão erradas para o requisito (`evaluations` repete cor e observação por critério; `groups` não tem `process_id`). Corrigir hoje é `DROP`/`CREATE` trivial, sem `MAINTENANCE_MODE`. Depois de povoadas, vira o procedimento perigoso da `0004`. **Confirmar que seguem vazias em staging e produção antes da 012.**
 
