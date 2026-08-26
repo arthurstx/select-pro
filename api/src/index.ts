@@ -16,6 +16,7 @@ import { checkinRouter } from "./routes/checkin.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
 import { evaluatorsRouter } from "./routes/evaluators.routes";
 import { exportsRouter } from "./routes/exports.routes";
+import { groupRouter } from "./routes/group.routes";
 import { memberCheckinRouter } from "./routes/member-checkin.routes";
 import { roomsRouter } from "./routes/rooms.routes";
 import { signupRequestsRouter } from "./routes/signup-requests.routes";
@@ -122,6 +123,34 @@ app.use("/exports/*", (c, next) =>
 );
 
 /**
+ * `/member-checkins/*` (FEAT-0010) — inteiramente admin-only. `allowMethods`
+ * precisa de PUT/DELETE (marcar/desmarcar check-in de membro).
+ */
+app.use("/member-checkins/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/groups/*` (FEAT-0012) — inteiramente admin-only. `allowMethods` precisa
+ * de POST (`organize`) e PATCH (mover candidato/avaliador entre grupos).
+ */
+app.use("/groups/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
  * Modo de manutenção — fecha a janela de escrita durante migrations de
  * banco. Fica depois do CORS para que o 503 chegue com os headers de
  * origin, e não como erro de CORS.
@@ -190,6 +219,20 @@ app.use(
   ),
 );
 
+app.use(
+  "/member-checkins/*",
+  maintenanceGuard(
+    "O check-in de membros está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/groups/*",
+  maintenanceGuard(
+    "A organização de grupos está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
@@ -203,6 +246,7 @@ app.route("/rooms", roomsRouter);
 app.route("/evaluators", evaluatorsRouter);
 app.route("/exports", exportsRouter);
 app.route("/member-checkins", memberCheckinRouter);
+app.route("/groups", groupRouter);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",

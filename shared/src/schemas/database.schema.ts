@@ -227,9 +227,14 @@ export interface CandidateApplicationRow {
     updated_at: string | null;
 }
 
+// Organização automática de grupos — FEAT-0012 (migration 0014)
+
 export interface GroupRow {
     id: string;
-    room_id: string;
+    process_id: string;
+    /** `null` = grupo online (FEAT-0012, FR-007). */
+    room_id: string | null;
+    modality: "presencial" | "online";
     name: string;
     created_at: string;
     updated_at: string | null;

@@ -1,8 +1,10 @@
 "use client";
 
-import { CircleAlertIcon, ServerCrashIcon, UsersIcon } from "lucide-react";
+import { CircleAlertIcon, SearchIcon, ServerCrashIcon, UsersIcon } from "lucide-react";
+import { useMemo, useState } from "react";
 import { CheckinErrorCode, MemberCheckinErrorCode } from "shared";
 
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api/api-error";
 import { useMemberCheckinsQuery } from "@/lib/member-checkin/queries";
@@ -11,10 +13,23 @@ import { StateMessage } from "../_components/state-message";
 import { MemberRow } from "./_components/member-row";
 import { SummaryBar } from "./_components/summary-bar";
 
-/** FEAT-0010, US1/US2 — check-in de avaliadores/hosts da edição corrente. Sem filtro/paginação (dezenas de pessoas, não milhares). */
+/**
+ * FEAT-0010, US1/US2 — check-in de avaliadores/hosts da edição corrente.
+ * Sem paginação (dezenas de pessoas, não milhares) — a busca por nome
+ * filtra a lista já carregada, no cliente, sem round-trip à API.
+ */
 export default function CheckInMembrosPage() {
   const query = useMemberCheckinsQuery();
   const { data, isPending, isError, error, refetch } = query;
+  const [search, setSearch] = useState("");
+
+  const filteredItems = useMemo(() => {
+    if (!data) return [];
+    const term = search.trim().toLowerCase();
+    if (!term) return data.items;
+
+    return data.items.filter((item) => item.name.toLowerCase().includes(term));
+  }, [data, search]);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8 md:py-10">
@@ -33,11 +48,35 @@ export default function CheckInMembrosPage() {
       ) : data ? (
         <>
           <SummaryBar summary={data.summary} />
-          <div className="flex flex-col gap-2">
-            {data.items.map((item) => (
-              <MemberRow key={item.userId} member={item} />
-            ))}
+
+          <div className="relative w-full md:w-[400px]">
+            <SearchIcon
+              className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+              aria-hidden
+            />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar avaliador ou host pelo nome…"
+              className="pl-9"
+              aria-label="Buscar avaliador ou host pelo nome"
+            />
           </div>
+
+          {filteredItems.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {filteredItems.map((item) => (
+                <MemberRow key={item.userId} member={item} />
+              ))}
+            </div>
+          ) : (
+            <StateMessage
+              icon={<SearchIcon className="text-muted-foreground size-8" aria-hidden />}
+              title="Nenhum avaliador ou host encontrado."
+              description="Verifique o nome digitado e tente novamente."
+              compact
+            />
+          )}
         </>
       ) : null}
     </div>

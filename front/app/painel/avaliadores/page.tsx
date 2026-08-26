@@ -1,12 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { UsersIcon } from "lucide-react";
-import { useState } from "react";
+import { SearchIcon, UsersIcon } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { EvaluatorRole, EvaluatorRoleFilter, MemberStatus } from "shared";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { listEvaluators, setEvaluatorRole } from "@/lib/evaluators/evaluators-api";
@@ -32,6 +33,7 @@ const ROLE_FILTER_OPTIONS: { value: EvaluatorRoleFilter; label: string }[] = [
 export default function AvaliadoresPage() {
   const queryClient = useQueryClient();
   const [roleFilter, setRoleFilter] = useState<EvaluatorRoleFilter>("all");
+  const [search, setSearch] = useState("");
 
   const query = useQuery({
     queryKey: ["evaluators", roleFilter],
@@ -43,6 +45,16 @@ export default function AvaliadoresPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["evaluators"] }),
   });
 
+  // Sem paginação (dezenas de avaliadores, não milhares) — busca filtra a lista já
+  // carregada, no cliente, sem round-trip à API (mesmo padrão de check-in-membros).
+  const filteredEvaluators = useMemo(() => {
+    if (!query.data) return [];
+    const term = search.trim().toLowerCase();
+    if (!term) return query.data;
+
+    return query.data.filter((evaluator) => evaluator.name.toLowerCase().includes(term));
+  }, [query.data, search]);
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8 md:py-10">
       <div>
@@ -50,6 +62,20 @@ export default function AvaliadoresPage() {
         <p className="text-muted-foreground mt-1 text-sm">
           Cargo na edição corrente do processo seletivo. Alterar aqui não afeta edições anteriores.
         </p>
+      </div>
+
+      <div className="relative w-full md:w-[400px]">
+        <SearchIcon
+          className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+          aria-hidden
+        />
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar avaliador pelo nome…"
+          className="pl-9"
+          aria-label="Buscar avaliador pelo nome"
+        />
       </div>
 
       <div role="group" aria-label="Filtrar por cargo" className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -95,7 +121,14 @@ export default function AvaliadoresPage() {
         </div>
       )}
 
-      {query.isSuccess && query.data.length > 0 && (
+      {query.isSuccess && query.data.length > 0 && filteredEvaluators.length === 0 && (
+        <div className="border-border flex flex-col items-center gap-3 rounded-xl border border-dashed py-16 text-center">
+          <SearchIcon className="text-muted-foreground size-8" aria-hidden />
+          <p className="text-muted-foreground text-sm">Nenhum avaliador encontrado para &ldquo;{search}&rdquo;.</p>
+        </div>
+      )}
+
+      {query.isSuccess && filteredEvaluators.length > 0 && (
         <div className="border-border overflow-x-auto rounded-xl border">
           <Table>
             <TableHeader>
@@ -108,7 +141,7 @@ export default function AvaliadoresPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {query.data.map((evaluator) => {
+              {filteredEvaluators.map((evaluator) => {
                 const isHost = evaluator.role === "host";
                 const isPending =
                   roleMutation.isPending && roleMutation.variables?.userId === evaluator.userId;
@@ -125,7 +158,7 @@ export default function AvaliadoresPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
-                        variant="ghost"
+                        variant={isHost ? "ghost" : "destructive"}
                         size="sm"
                         disabled={isPending}
                         onClick={() =>

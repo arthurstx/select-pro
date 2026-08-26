@@ -1,5 +1,13 @@
 import type { LucideIcon } from "lucide-react";
-import { ClipboardCheckIcon, DoorOpenIcon, LayoutDashboardIcon, UserCheckIcon, UserRoundCheckIcon, UsersIcon } from "lucide-react";
+import {
+  ClipboardCheckIcon,
+  DoorOpenIcon,
+  LayoutDashboardIcon,
+  UserCheckIcon,
+  UserRoundCheckIcon,
+  UsersIcon,
+  UsersRoundIcon,
+} from "lucide-react";
 
 /**
  * Só os itens que têm rota de verdade. O mockup do Stitch (Check-in de
@@ -26,4 +34,6 @@ export const PAINEL_NAV_ITEMS: PainelNavItem[] = [
   { href: "/painel/avaliadores", label: "Avaliadores", icon: UsersIcon },
   // FEAT-0010 — mesmo motivo.
   { href: "/painel/check-in-membros", label: "Check-in de Membros", icon: UserRoundCheckIcon },
+  // FEAT-0012 — mesmo motivo.
+  { href: "/painel/grupos", label: "Grupos", icon: UsersRoundIcon },
 ];

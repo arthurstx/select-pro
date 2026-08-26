@@ -97,26 +97,48 @@ Nove features derivadas de um backlog em texto livre sobre separação automáti
 
 ```
 011 (salas) ── ✅ feita ──────┐
-008 (status) ── ✅ feita ──→ 009 (host) ── ✅ feita ──→ 010 (check-in) ✅ feita → 012 (grupos) → 013 (avaliação)
+008 (status) ── ✅ feita ──→ 009 (host) ── ✅ feita ──→ 010 (check-in) ✅ feita → 012 (grupos) ✅ feita → 013 (avaliação)
 
 014 (necessidades especiais) ✅, 015 (filtro por curso) ✅, 016 (exportação CSV) ✅ — sem dependência
 ```
 
-**Todas as features 008, 009, 011, 014, 015 e 016 estão implementadas e mescladas em
-`develop`** (2026-08-26). 340/340 testes `api` + 20/20 `shared` passando com todas juntas,
-`tsc`/build limpos em `shared`/`api`/`front`. **Pendente: aplicar as migrations `0008` a `0012`
+**Todas as features 008, 009, 010, 011, 014, 015 e 016 estão implementadas e mescladas em
+`develop`** (2026-08-26). 366/366 testes `api` + 20/20 `shared` passando com todas juntas,
+`tsc`/build limpos em `shared`/`api`/`front`. **Pendente: aplicar as migrations `0008` a `0013`
 em staging e produção** — só locais até agora (ver "Ambientes / Infra" acima).
 
-**010 (check-in de membros) implementada na branch `claude/feat-0010-checkin-membros-u259pj`**
-(ainda não mesclada em `develop` no momento desta nota). 366/366 testes `api` (21 novos),
-`tsc`/build limpos em `shared`/`api`/`front`. Migration `0013` (`member_checkins`/
-`member_checkin_events`, espelhando `candidate_checkins`/`checkin_events` da FEAT-0005), só
-local. Tela nova `front/app/painel/check-in-membros/`, item de nav próprio. A US3 (sinalização
-online/presencial) mexeu em código já existente da FEAT-0005 (`checkin.repository/service.ts`
-e `check-in/_components/candidate-row.tsx`), não numa tela nova. **Achado durante a
+**010 (check-in de membros) mesclada via PR #10**. Migration `0013` (`member_checkins`/
+`member_checkin_events`, espelhando `candidate_checkins`/`checkin_events` da FEAT-0005). Tela
+`front/app/painel/check-in-membros/`, item de nav próprio. A US3 (sinalização online/presencial)
+mexeu em código já existente da FEAT-0005 (`checkin.repository/service.ts` e
+`check-in/_components/candidate-row.tsx`), não numa tela nova. **Achado durante a
 implementação**: o `PUT .../checkin` de candidato não devolve `attendance` no envelope — a
 atualização otimista do front (`lib/checkin/queries.ts`) por isso invalida a lista em
 `onSettled` depois do patch local, em vez de tentar adivinhar a modalidade no cliente.
+
+**012 (organização automática de grupos) implementada na branch
+`claude/feat-0012-organizacao-grupos`** (ainda não mesclada em `develop` no momento desta
+nota). 405/405 testes `api` (39 novos: 15 do algoritmo puro D1/D5 sem D1 real, 12 de service
+com D1 real, 12 de rota HTTP), 20/20 `shared`, `tsc`/build limpos em `shared`/`api`/`front`.
+Migration `0014` reconstrói `groups`/`group_evaluators`/`group_candidates` (órfãs desde a
+`0001`) com `process_id NOT NULL`, `room_id` agora nullable (`NULL` = grupo online) e
+`modality`. Tela nova `front/app/painel/grupos/`, item de nav próprio.
+
+**Decisão tomada durante a spec da 012** (ambiguidade real do backlog, não travada antes):
+candidatos presentes online (D7) formam grupos próprios, separados dos presenciais, seguindo
+D1, mas **sem alocação automática de avaliador/host** nesta versão — o modelo de avaliação
+remota (quem avalia, por qual canal) ainda não foi decidido, fica para uma iteração futura.
+
+**Dois achados de design durante a implementação da 012**:
+- `GroupCandidate` (contrato de resposta) **não inclui `gender`** — mesma postura de
+  `CandidateCheckinItemSchema` (FEAT-0005): dado sensível de inscrição, nunca exposto por
+  pessoa numa listagem comum. D1 é verificado só no backend; uma violação chega ao front como
+  o aviso `GENDER_RULE_VIOLATED` do `PATCH .../candidates|evaluators/{id}` (US2), sem
+  identificar quem.
+- Avaliadores/hosts são alocados aos grupos presenciais em round-robin entre **todos** os
+  grupos formados, não "por sala" — `member_checkins`/`edition_hosts` não carregam `room_id`,
+  então não existe, no modelo de dados, nenhuma associação prévia de avaliador a uma sala
+  específica antes da organização em si.
 
 **D7 esclarecido nesta feature**: a linha original do `task.md` amarrava "check-in de
 membros" e "sessão online por restrição de sábado" como a mesma coisa — mas
@@ -154,10 +176,11 @@ todos resolvidos manualmente:
 Duas correções ao que este documento previa antes de implementar:
 - A função de senioridade (D3) chama-se `isEligibleToAnchorTrainee`, não `canQualifyTrainee`
   como especulado abaixo — nome decidido durante o `/speckit-plan`, não antes.
-- **A janela das tabelas órfãs (`rooms`, `groups`, `evaluations`...) já fechou parcialmente**:
+- **A janela das tabelas órfãs (`rooms`, `groups`, `evaluations`...) já fechou quase toda**:
   `rooms` deixou de estar órfã com a 011 (ganhou CRUD e um índice único de nome, migration
-  `0009`). `groups`/`evaluations`/`metrics` continuam vazias e órfãs — a nota abaixo sobre
-  `DROP`/`CREATE` trivial antes da 012 ainda vale para essas três.
+  `0009`). `groups`/`group_evaluators`/`group_candidates` deixaram de estar órfãs com a 012
+  (migration `0014` — ver acima). `evaluations`/`metrics` continuam vazias e órfãs — a nota
+  abaixo sobre `DROP`/`CREATE` trivial ainda vale para essas duas, agora antes da 013.
 
 **Decisões travadas antes de virarem spec** — devem entrar no texto do `/speckit.specify` de cada feature, porque contexto de conversa não sobrevive à sessão:
 
@@ -167,13 +190,13 @@ Duas correções ao que este documento previa antes de implementar:
 | D2 | Veredito da avaliação: **qualquer VERMELHO reprova**. Sem empate possível. |
 | D3 | `MemberStatus` vira `active` \| `inactive` \| `trainee`, onde **`inactive` = pós-júnior**, não "desligado". `alumni` e `on_leave` saem. |
 | D4 | Host é atribuição **por edição do processo seletivo**, não papel global em `roles`. |
-| D5 | Salas: ≤50 → 1 host / 2 grupos (3 em falta de sala); 51–80 → 2 hosts / 3 grupos; >80 → 2 hosts / 4 grupos. |
+| D5 | Salas: ≤50 → 1 host / 2 grupos; 51–80 → 2 hosts / 3 grupos; >80 → 2 hosts / 4 grupos. `deriveRoomCapacity` (FEAT-0011) é a única fonte disso. A FEAT-0012 optou por **não** reimplementar o "3 grupos em falta de sala" da formulação original — trata capacidade insuficiente avisando o admin (quantos candidatos ficaram sem grupo), não inflando `maxGroups` além do cadastrado. |
 | D6 | Sem o mínimo de 2 avaliações, o candidato fica **pendente** e não recebe veredito. |
 | D7 | "Online" é derivado de `saturday_restriction` do **candidato** — um eixo só, nenhum campo novo em `candidates`. Confirmado na FEAT-0010: não é atributo do membro/avaliador. |
 
 > ⚠️ **D3 é a que mais engana.** Com `inactive` significando pós-júnior, a regra "trainee precisa de um `active` ou `inactive` ao lado" se lê ao contrário em inglês — por isso ela é exposta no `shared` com nome próprio, `isEligibleToAnchorTrainee(status)` (`shared/src/schemas/member.schema.ts`), nunca como comparação de strings espalhada pelo código. D3 também foi o motivo de a aprovação de cadastro (008, já feita) ter sido a **primeira** feature da cadeia: pós-júnior precisava conseguir entrar na plataforma para poder avaliar, e antes da 008 `ELIGIBLE_MEMBER_STATUSES` só aceitava `active`.
 
-**Janela que se fecha:** `rooms`, `groups`, `group_evaluators`, `group_candidates`, `evaluations` e `metrics` existem desde a `0001-schema.sql`, **vazias e sem nenhum código as referenciando**. Duas estão erradas para o requisito (`evaluations` repete cor e observação por critério; `groups` não tem `process_id`). Corrigir hoje é `DROP`/`CREATE` trivial, sem `MAINTENANCE_MODE`. Depois de povoadas, vira o procedimento perigoso da `0004`. **Confirmar que seguem vazias em staging e produção antes da 012.**
+**Janela que se fecha:** `rooms`, `groups`, `group_evaluators`, `group_candidates`, `evaluations` e `metrics` existiam desde a `0001-schema.sql`, vazias e sem nenhum código as referenciando. `rooms` deixou de estar órfã na 011; `groups`/`group_evaluators`/`group_candidates` deixaram de estar órfãs na 012 (migration `0014` — `DROP`/`CREATE` trivial, tabelas confirmadas vazias, sem `MAINTENANCE_MODE`; ver research.md D-tech1 da FEAT-0012). Restam `evaluations` e `metrics`, ainda vazias e órfãs — `evaluations` está errada para o requisito (repete cor e observação por critério). Corrigir antes da 013 continua sendo `DROP`/`CREATE` trivial; depois de povoadas, vira o procedimento perigoso da `0004`. **Confirmar que seguem vazias em staging e produção antes da 013.**
 
 Ainda sem dono e fora das nove: CRUD de processos seletivos, contador "X de Y presentes" no cabeçalho, dark mode, e as duas telas de estado que faltam no Stitch ("nenhum candidato inscrito" e "sem processo corrente").
 

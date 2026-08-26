@@ -134,9 +134,11 @@ describe("RoomsService", () => {
             const created = await service.create({ name: uniqueName(), size: 40 });
             if (!created.isRight()) throw new Error("setup falhou");
 
-            // Seed direto via SQL: a feature 012 (que popularia `groups` de
-            // verdade) ainda não existe — simula o vínculo que ela criaria.
-            await env.DB.prepare("INSERT INTO groups (id, room_id, name) VALUES (?, ?, ?)")
+            // Seed direto via SQL — simula o vínculo que a FEAT-0012 cria de verdade.
+            // `process_id NOT NULL`: qualquer linha semeada da migration serve aqui.
+            await env.DB.prepare(
+                "INSERT INTO groups (id, process_id, room_id, modality, name) VALUES (?, (SELECT id FROM selection_processes LIMIT 1), ?, 'presencial', ?)",
+            )
                 .bind(crypto.randomUUID(), created.value.id, "Grupo de teste")
                 .run();
 
