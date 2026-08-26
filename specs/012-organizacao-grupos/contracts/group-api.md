@@ -1,5 +1,11 @@
 # Contrato HTTP — FEAT-0012 Organização automática de grupos
 
+`GroupCandidate` **não inclui `gender`** — mesma postura de `CandidateCheckinItemSchema`
+(FEAT-0005): gênero é dado sensível de inscrição, nunca exposto por pessoa numa listagem
+comum. O algoritmo usa gênero só internamente, no backend, para aplicar D1; o resultado de
+uma violação chega ao front como o aviso `GENDER_RULE_VIOLATED` (sem identificar quem),
+igual a como `attendanceSummary` já agrega em vez de expor `saturday_restriction` por linha.
+
 Todas as rotas abaixo são **admin-only** (`ADMIN_ONLY = [requireAuth,
 requireRole(ROLES.ADMIN)]`, mesmo padrão de `member-checkin.routes.ts`/`rooms.routes.ts`).
 Schemas Zod completos vivem em `shared/src/schemas/group.schema.ts` — este documento é a
@@ -22,7 +28,7 @@ anterior (FR-011) e grava a nova.
         "modality": "presencial",
         "room": { "id": "uuid", "name": "Sala 1" },
         "candidates": [
-          { "id": "uuid", "name": "Fulana", "gender": "feminino", "attendance": "presencial" }
+          { "id": "uuid", "name": "Fulana", "attendance": "presencial" }
         ],
         "evaluators": [{ "userId": "uuid", "name": "Beltrano", "role": "avaliador" }]
       },
@@ -31,7 +37,7 @@ anterior (FR-011) e grava a nova.
         "modality": "online",
         "room": null,
         "candidates": [
-          { "id": "uuid", "name": "Ciclana", "gender": "feminino", "attendance": "online" }
+          { "id": "uuid", "name": "Ciclana", "attendance": "online" }
         ],
         "evaluators": []
       }

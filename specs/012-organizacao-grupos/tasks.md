@@ -17,19 +17,19 @@ prioridade da spec.
 
 ## Phase 1: Setup
 
-- [ ] T001 Criar migration `api/migrations/0014-group-organization.sql` recriando `groups`
+- [X] T001 Criar migration `api/migrations/0014-group-organization.sql` recriando `groups`
       (com `process_id`, `room_id` nullable, `modality`, CHECK cruzado), `group_evaluators`
       e `group_candidates` (ambas com `UNIQUE` extra) — schema exato em `data-model.md`.
       **Antes de aplicar em staging/produção** (fora desta sessão), confirmar que as três
       tabelas seguem vazias nesses ambientes (research.md D-tech1) — deixar essa checagem
       documentada como comentário no topo da migration.
-- [ ] T002 [P] Criar `shared/src/schemas/group.schema.ts`: `GroupModalitySchema`,
+- [X] T002 [P] Criar `shared/src/schemas/group.schema.ts`: `GroupModalitySchema`,
       `GroupCandidateSchema`, `GroupEvaluatorSchema`, `GroupSummarySchema`,
       `OrganizeResultResponseSchema`, `GroupListResponseSchema`, `MoveResultResponseSchema`,
       `GroupErrorCode` (`NO_CANDIDATES_PRESENT`, `NO_ROOMS_AVAILABLE`, `GROUP_NOT_FOUND`,
       `CANDIDATE_NOT_ALLOCATED`, `EVALUATOR_NOT_ALLOCATED`, `GROUP_MODALITY_MISMATCH`) —
       shapes exatos em `contracts/group-api.md`.
-- [ ] T003 [P] Exportar `group.schema` em `shared/src/index.ts`.
+- [X] T003 [P] Exportar `group.schema` em `shared/src/index.ts`.
 
 **Checkpoint**: contratos existem; `npm run build --workspace=shared` limpo.
 
@@ -37,40 +37,41 @@ prioridade da spec.
 
 ## Phase 2: Foundational (bloqueia todas as user stories)
 
-- [ ] T004 Criar `api/src/core/errors/group-errors.ts`: `NoCandidatesPresentError`,
+- [X] T004 Criar `api/src/core/errors/group-errors.ts`: `NoCandidatesPresentError`,
       `NoRoomsAvailableError`, `GroupNotFoundError`, `CandidateNotAllocatedError`,
       `EvaluatorNotAllocatedError`, `GroupModalityMismatchError` (mesmo padrão de
       `member-checkin-errors.ts`/`room-errors.ts`, `Either`/`left`/`right`).
-- [ ] T005 Criar `api/src/repositories/group.repository.ts` com os métodos de leitura:
+- [X] T005 Criar `api/src/repositories/group.repository.ts` com os métodos de leitura:
       `listPresentCandidates(processId)` (join `candidate_checkins`/`candidates`/
       `candidate_applications`, retornando `id`, `name`, `gender`, `attendance`, ordenado por
       `checked_in_at ASC` — data-model.md, ordem de desempate FR-013),
       `listPresentMembers(processId)` (join `member_checkins`/`users`/`edition_hosts`,
       retornando `userId`, `name`, `role`), `listRoomsOrdered()` (`rooms` por
-      `created_at ASC`, reaproveitando `deriveRoomCapacity` do `shared`).
-- [ ] T006 [P] Criar `api/src/services/group-organization.ts`: função pura
+      `name ASC` — rooms não tem `created_at`, mesma ordem já usada por
+      `RoomsRepository.list()` — reaproveitando `deriveRoomCapacity` do `shared`).
+- [X] T006 [P] Criar `api/src/services/group-organization.ts`: função pura
       `organizeGroups(candidates, rooms, presentMembers)` implementando o algoritmo de duas
       fases (research.md D-tech4/D-tech5) **só para candidatos presenciais** nesta task —
       separação online fica para a task da US3. Sem I/O, sem D1: recebe arrays já
       carregados, devolve a estrutura de grupos a persistir. Cobre D1 (nunca 1 mulher),
       mapeamento sala→grupos via `deriveRoomCapacity`, alocação round-robin de
       avaliadores/hosts por sala.
-- [ ] T007 [P] `api/test/group-organization.test.ts`: testes unitários (sem D1 real) da
+- [X] T007 [P] `api/test/group-organization.test.ts`: testes unitários (sem D1 real) da
       função pura de T006 — casos: número par/ímpar de mulheres, mais candidatos que
       capacidade das salas (retorna lista de não-alocados), sem sala nenhuma, distribuição
       de avaliadores por sala.
-- [ ] T008 Criar `api/src/repositories/group.repository.ts` (continuação de T005): método de
+- [X] T008 Criar `api/src/repositories/group.repository.ts` (continuação de T005): método de
       escrita transacional `replaceOrganization(processId, groups)` — `db.batch` que primeiro
       `DELETE FROM groups WHERE process_id = ?` (cascade limpa as duas tabelas de junção) e
       depois insere os grupos/alocações novos, nunca estado parcial.
-- [ ] T009 Criar `api/src/services/group.service.ts`: `organize(processId, actorId)`
+- [X] T009 Criar `api/src/services/group.service.ts`: `organize(processId, actorId)`
       (resolve edição corrente, chama T005 + T006 + `NoCandidatesPresentError`/
       `NoRoomsAvailableError` quando aplicável, persiste via T008, monta `OrganizeResult`),
       `list(processId)` (lê a organização atual sem recalcular).
-- [ ] T010 Criar `api/src/routes/group.routes.ts`: `POST /groups/organize` e `GET /groups`,
+- [X] T010 Criar `api/src/routes/group.routes.ts`: `POST /groups/organize` e `GET /groups`,
       admin-only (`ADMIN_ONLY`, mesmo padrão de `member-checkin.routes.ts`), mapeando os
       erros de T004 para status HTTP conforme `contracts/group-api.md`.
-- [ ] T011 Registrar `app.route("/groups", groupRouter)` em `api/src/index.ts`.
+- [X] T011 Registrar `app.route("/groups", groupRouter)` em `api/src/index.ts`.
 
 **Checkpoint**: `POST /groups/organize`/`GET /groups` funcionam para candidatos presenciais
 (sem separação online ainda) — base pronta para as user stories.
@@ -88,21 +89,21 @@ mulher, nenhuma sala excede `maxGroups`.
 
 ### Tests
 
-- [ ] T012 [P] [US1] `api/test/group.service.test.ts`: `organize()` com D1 real
+- [X] T012 [P] [US1] `api/test/group.service.test.ts`: `organize()` com D1 real
       (`vitest-pool-workers`) — aloca todos os candidatos presenciais presentes, respeita D1
       (nunca 1 mulher), respeita `maxGroups` por sala (D5), aloca avaliadores/hosts
       presentes às salas corretas, `NO_CANDIDATES_PRESENT` quando ninguém presente,
       `NO_ROOMS_AVAILABLE` quando há presencial presente e nenhuma sala.
-- [ ] T013 [P] [US1] `api/test/group.routes.test.ts`: `POST /groups/organize` (200 com
+- [X] T013 [P] [US1] `api/test/group.routes.test.ts`: `POST /groups/organize` (200 com
       shape correto, 409 nos dois erros de domínio, 401/403 fora de admin) e `GET /groups`
       (200, vazio antes de organizar).
 
 ### Implementation
 
-- [ ] T014 [US1] Reorganizar `organizeGroups` (T006) para aceitar o resultado de
+- [X] T014 [US1] Reorganizar `organizeGroups` (T006) para aceitar o resultado de
       `listRoomsOrdered` e devolver também `unallocatedCandidateCount` quando a capacidade
       total das salas for menor que o total de presenciais presentes (FR-013).
-- [ ] T015 [US1] Ajustar `group.service.ts#organize` para propagar
+- [X] T015 [US1] Ajustar `group.service.ts#organize` para propagar
       `unallocatedCandidateCount` no `OrganizeResult` (T009 revisitada).
 - [ ] T016 [P] [US1] Criar `front/lib/group/api.ts`: `organizeGroups()`, `listGroups()`
       (mesmo padrão de `front/lib/member-checkin/api.ts`, `authFetch` + `toApiError`).
@@ -110,8 +111,9 @@ mulher, nenhuma sala excede `maxGroups`.
       `useOrganizeGroupsMutation` (invalida a query de grupos em `onSuccess`, mesmo padrão
       de `useMarkMemberPresentMutation`).
 - [ ] T018 [US1] Criar `front/app/painel/grupos/_components/group-card.tsx`: um grupo
-      (nome/sala ou "Online", lista de candidatos com gênero e modalidade, lista de
-      avaliadores/hosts com cargo).
+      (nome/sala ou "Online", lista de candidatos com nome e modalidade — sem gênero, mesma
+      postura de `CandidateCheckinItemSchema`/FEAT-0005 — lista de avaliadores/hosts com
+      cargo).
 - [ ] T019 [US1] Criar `front/app/painel/grupos/_components/organize-button.tsx`: aciona
       `useOrganizeGroupsMutation`, trata `GroupErrorCode.NO_CANDIDATES_PRESENT` e
       `NO_ROOMS_AVAILABLE` com mensagens específicas (reaproveitar `StateMessage`).
@@ -137,16 +139,16 @@ nunca mistura modalidade no mesmo grupo; grupos online seguem D1 e não têm `ro
 
 ### Tests
 
-- [ ] T022 [P] [US3] Estender `api/test/group-organization.test.x` (T007): candidatos online
+- [X] T022 [P] [US3] Estender `api/test/group-organization.test.x` (T007): candidatos online
       formam grupos próprios respeitando D1, número de grupos online derivado do tamanho
       médio de grupo presencial (ou 25, sem sala cadastrada — data-model.md Assumptions).
-- [ ] T023 [P] [US3] Estender `api/test/group.service.test.ts` (T012): `organize()` com
+- [X] T023 [P] [US3] Estender `api/test/group.service.test.ts` (T012): `organize()` com
       mistura online/presencial — nenhum grupo resultante mistura modalidade, grupos online
       com `room: null` e `evaluators: []`.
 
 ### Implementation
 
-- [ ] T024 [US3] Estender `organizeGroups` (T006/T014) para separar `candidates` por
+- [X] T024 [US3] Estender `organizeGroups` (T006/T014) para separar `candidates` por
       `attendance` antes de tudo, rodando as fases de D1/preenchimento duas vezes
       (presencial com salas, online sem salas, número de grupos conforme
       data-model.md Assumptions) e concatenando o resultado.

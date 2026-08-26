@@ -16,6 +16,7 @@ import { checkinRouter } from "./routes/checkin.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
 import { evaluatorsRouter } from "./routes/evaluators.routes";
 import { exportsRouter } from "./routes/exports.routes";
+import { groupRouter } from "./routes/group.routes";
 import { memberCheckinRouter } from "./routes/member-checkin.routes";
 import { roomsRouter } from "./routes/rooms.routes";
 import { signupRequestsRouter } from "./routes/signup-requests.routes";
@@ -203,6 +204,7 @@ app.route("/rooms", roomsRouter);
 app.route("/evaluators", evaluatorsRouter);
 app.route("/exports", exportsRouter);
 app.route("/member-checkins", memberCheckinRouter);
+app.route("/groups", groupRouter);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",

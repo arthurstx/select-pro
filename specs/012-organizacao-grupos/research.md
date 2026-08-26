@@ -51,8 +51,9 @@ colide num fluxo correto. Ele existe como cinto de segurança contra bug de impl
 modalidade (online e presencial, FR-003), cada uma assim:
 
 1. **Determinar o número de grupos-alvo** dessa modalidade:
-   - Presencial: percorre as salas cadastradas em ordem de cadastro (`created_at ASC`,
-     mesma ordem que `RoomsRepository` já usa para listagem), acumulando salas uma a uma
+   - Presencial: percorre as salas cadastradas em ordem alfabética de nome (`name ASC` —
+     `rooms` não tem `created_at`; é a mesma ordem que `RoomsRepository.list()` já usa),
+     acumulando salas uma a uma
      até que a soma das capacidades (`size`) cubra o total de candidatos presenciais
      presentes, ou até esgotar as salas cadastradas. O número de grupos-alvo é a soma de
      `deriveRoomCapacity(sala.size).maxGroups` (já implementado, `room.schema.ts`) das
@@ -73,9 +74,12 @@ modalidade (online e presencial, FR-003), cada uma assim:
    acumuladas no passo 1, na ordem, preenchendo o `maxGroups` de cada sala antes de passar
    para a próxima.
 5. **Alocar avaliadores/hosts** (só presencial, FR-006): avaliadores/hosts com check-in de
-   membro feito (FEAT-0010) são distribuídos em round-robin entre os grupos da mesma sala a
-   que pertencem — sem tentativa de balanceamento por carga/histórico (Assumption já travada
-   na spec).
+   membro feito (FEAT-0010) são distribuídos em round-robin entre **todos** os grupos
+   presenciais formados — não há, no modelo de dados existente, nenhuma associação prévia
+   de avaliador/host a uma sala específica (`member_checkins`/`edition_hosts` não carregam
+   `room_id`); a única afinidade de sala é a do grupo em si, que só existe depois de
+   formado no passo 4. Sem tentativa de balanceamento por carga/histórico (Assumption já
+   travada na spec).
 
 **Rationale**: separar "quantos grupos" de "quem entra em cada grupo" torna o D1
 verificável isoladamente (é só contagem de mulheres por grupo) e mantém o algoritmo

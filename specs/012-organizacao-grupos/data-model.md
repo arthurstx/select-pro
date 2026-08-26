@@ -79,7 +79,8 @@ Entradas, todas lidas no início da execução (uma "foto" da edição corrente)
 3. Avaliadores/hosts presentes: `member_checkins` `INNER JOIN users` `LEFT JOIN
    edition_hosts` — traz `userId`, `role` (mesma query-base de
    `MemberCheckinRepository.listWithCheckin`, mas filtrando só quem tem check-in feito).
-4. Salas cadastradas (`RoomsRepository.list()`), ordenadas por `created_at ASC`.
+4. Salas cadastradas (`RoomsRepository.list()`), ordenadas por `name ASC` (`rooms` não tem
+   `created_at`).
 
 Saída: `groups` + `group_candidates` + `group_evaluators` novos, gravados numa única
 transação (`db.batch`) que primeiro apaga a organização anterior da edição (`DELETE FROM
@@ -93,7 +94,7 @@ GroupSummary {
   id: string
   modality: "presencial" | "online"
   room: { id, name } | null
-  candidates: [{ id, name, gender, attendance }]
+  candidates: [{ id, name, attendance }]   // sem `gender` — mesma postura de CandidateCheckinItemSchema (FEAT-0005)
   evaluators: [{ userId, name, role }]   // sempre [] para modality = "online"
 }
 

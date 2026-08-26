@@ -37,6 +37,14 @@ export const SelectionProcessSummarySchema = z.object({
 export type SelectionProcessSummary = z.infer<typeof SelectionProcessSummarySchema>;
 
 /**
+ * FEAT-0010 (D7). Extraído como schema nomeado (em vez de inline) para a
+ * FEAT-0012 poder reaproveitar o mesmo tipo em `group.schema.ts` sem
+ * duplicar o enum (Princípio I).
+ */
+export const AttendanceSchema = z.enum(["online", "presencial"]);
+export type Attendance = z.infer<typeof AttendanceSchema>;
+
+/**
  * Item da listagem. Deliberadamente SEM `gender` nem `ethnicity` — dado
  * sensível de inscrição, e esta tela é aberta num celular na porta de um
  * evento (FEAT-0005, seção 8.3). `phone` sai como está, sem formato
@@ -56,7 +64,7 @@ export const CandidateCheckinItemSchema = z.object({
      * nunca persistido como campo novo do candidato. `null` sempre que
      * `checkedInAt` também é `null`: quem está ausente não tem modalidade.
      */
-    attendance: z.enum(["online", "presencial"]).nullable(),
+    attendance: AttendanceSchema.nullable(),
 });
 export type CandidateCheckinItem = z.infer<typeof CandidateCheckinItemSchema>;
 

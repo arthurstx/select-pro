@@ -298,7 +298,10 @@ describe("DELETE /rooms/:id (HTTP)", () => {
         const admin = await tokenFor("admin");
         const room = await createRoom(admin);
 
-        await env.DB.prepare("INSERT INTO groups (id, room_id, name) VALUES (?, ?, ?)")
+        // FEAT-0012: `groups` ganhou `process_id NOT NULL` — qualquer linha semeada da migration serve aqui.
+        await env.DB.prepare(
+            "INSERT INTO groups (id, process_id, room_id, modality, name) VALUES (?, (SELECT id FROM selection_processes LIMIT 1), ?, 'presencial', ?)",
+        )
             .bind(crypto.randomUUID(), room.id, "Grupo de teste")
             .run();
 
