@@ -50,26 +50,37 @@ export class CheckinRepository {
    */
   async listCandidates(
     params: ListCandidatesParams,
-  ): Promise<{ items: CandidateWithCheckinRow[]; total: number; attendance: { online: number; presencial: number } }> {
-    const conditions: string[] = ["c.created_at BETWEEN ? AND ?"];
+  ): Promise<{
+    items: CandidateWithCheckinRow[];
+    total: number;
+    /** Contador "X de Y presentes" do cabeçalho — mesmo recorte de busca/curso do `total`, mas nunca filtrado por status (senão "Y" mudaria de aba pra aba). */
+    totalCandidates: number;
+    attendance: { online: number; presencial: number };
+  }> {
+    // Sem o filtro de status — reaproveitado pelo `total` (que adiciona status
+    // embaixo) e por `totalCandidates` (que nunca adiciona), assim os dois
+    // nascem do mesmo recorte de busca/curso/data.
+    const baseConditions: string[] = ["c.created_at BETWEEN ? AND ?"];
     const bindings: unknown[] = [params.startsAt, params.endsAt];
 
     if (params.search) {
-      conditions.push("LOWER(c.name) LIKE ? ESCAPE '\\'");
+      baseConditions.push("LOWER(c.name) LIKE ? ESCAPE '\\'");
       bindings.push(`%${escapeLikeTerm(params.search.toLowerCase())}%`);
     }
 
+    if (params.course) {
+      baseConditions.push("c.course = ?");
+      bindings.push(params.course);
+    }
+
+    const conditions = [...baseConditions];
     if (params.status === "presentes") {
       conditions.push("cc.checked_in_at IS NOT NULL");
     } else if (params.status === "ausentes") {
       conditions.push("cc.checked_in_at IS NULL");
     }
 
-    if (params.course) {
-      conditions.push("c.course = ?");
-      bindings.push(params.course);
-    }
-
+    const baseWhereClause = baseConditions.join(" AND ");
     const whereClause = conditions.join(" AND ");
     // LEFT JOIN, não INNER: em produção toda inscrição nasce com questionário
     // no mesmo `db.batch` (FEAT-0001), mas usar INNER aqui excluiria
@@ -108,17 +119,25 @@ export class CheckinRepository {
       )
       .bind(params.processId, ...bindings);
 
-    const [listResult, countResult, attendanceResult] = await this.db.batch<
+    // `status` nunca gera bind (as duas condições são literais), então `bindings` serve
+    // tanto para `whereClause` quanto para `baseWhereClause` sem ajuste nenhum.
+    const totalCandidatesStatement = this.db
+      .prepare(`SELECT COUNT(*) AS total ${joinClause} WHERE ${baseWhereClause}`)
+      .bind(params.processId, ...bindings);
+
+    const [listResult, countResult, attendanceResult, totalCandidatesResult] = await this.db.batch<
       CandidateWithCheckinRow | { total: number } | { online: number; presencial: number }
-    >([listStatement, countStatement, attendanceStatement]);
+    >([listStatement, countStatement, attendanceStatement, totalCandidatesStatement]);
 
     const items = (listResult.results ?? []) as CandidateWithCheckinRow[];
     const total = ((countResult.results?.[0] as { total: number } | undefined)?.total) ?? 0;
+    const totalCandidates = ((totalCandidatesResult.results?.[0] as { total: number } | undefined)?.total) ?? 0;
     const attendanceRow = attendanceResult.results?.[0] as { online: number; presencial: number } | undefined;
 
     return {
       items,
       total,
+      totalCandidates,
       attendance: { online: attendanceRow?.online ?? 0, presencial: attendanceRow?.presencial ?? 0 },
     };
   }

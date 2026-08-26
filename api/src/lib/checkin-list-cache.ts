@@ -15,6 +15,8 @@ export interface CachedListParams {
 export interface CachedListResult {
     items: CandidateWithCheckinRow[];
     total: number;
+    /** Contador "X de Y presentes" do cabeçalho — nunca filtrado por status, ver checkin.repository.ts. */
+    totalCandidates: number;
     /** FEAT-0010, US3. Cacheado junto — recalcular à parte duplicaria a consulta a cada leitura. */
     attendance: { online: number; presencial: number };
 }

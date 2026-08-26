@@ -284,6 +284,34 @@ describe("CheckinService.listCandidates — busca, filtro e paginação", () => 
         }
     });
 
+    it("totalCandidates (contador 'X de Y presentes' do cabeçalho) nunca muda com a aba de status, só com busca/curso", async () => {
+        const svc = service();
+        const actorId = await insertUser();
+        const marca = crypto.randomUUID();
+
+        const alice = await insertCandidate({ name: `Contador ${marca} Um` });
+        const bruno = await insertCandidate({ name: `Contador ${marca} Dois` });
+        await insertCandidate({ name: `Contador ${marca} Tres` });
+
+        await svc.markPresent(alice.id, actorId, NOW);
+        await svc.markPresent(bruno.id, actorId, NOW);
+
+        for (const status of ["todos", "presentes", "ausentes"] as const) {
+            const result = await svc.listCandidates({ page: 1, per_page: 25, status, search: marca }, NOW);
+            expect(result.isRight()).toBe(true);
+            if (result.isRight()) {
+                // 3 candidatos no total, independente de qual aba está selecionada.
+                expect(result.value.totalCandidates).toBe(3);
+            }
+        }
+
+        // "X" (presentes) é sempre a soma do attendanceSummary, coerente com totalCandidates = 3.
+        const todos = await svc.listCandidates({ page: 1, per_page: 25, status: "todos", search: marca }, NOW);
+        if (todos.isRight()) {
+            expect(todos.value.attendanceSummary.online + todos.value.attendanceSummary.presencial).toBe(2);
+        }
+    });
+
     it("paginação: perPage limita os itens da página, mas totalPages reflete o total real", async () => {
         const svc = service();
         for (let i = 0; i < 3; i += 1) {

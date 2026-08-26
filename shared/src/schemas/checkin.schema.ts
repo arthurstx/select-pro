@@ -80,6 +80,13 @@ export const ListCandidatesResponseSchema = z.object({
         process: SelectionProcessSummarySchema,
         items: z.array(CandidateCheckinItemSchema),
         attendanceSummary: AttendanceSummarySchema,
+        /**
+         * Contador "X de Y presentes" do cabeçalho — total de candidatos no
+         * mesmo recorte de busca/curso de `pagination.total`, mas NUNCA
+         * filtrado por status (senão "Y" mudaria de aba pra aba). "X" é
+         * `attendanceSummary.online + attendanceSummary.presencial`.
+         */
+        totalCandidates: z.number().int(),
         pagination: PaginationMetaSchema,
     }),
 });

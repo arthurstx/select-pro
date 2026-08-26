@@ -25,6 +25,7 @@ function list(items: ReturnType<typeof item>[], total = items.length): ListData 
     process: { id: "11111111-1111-4111-8111-111111111111", label: "2026.2" },
     items,
     attendanceSummary: { online: 0, presencial: 0 },
+    totalCandidates: total,
     pagination: { page: 1, perPage: 25, total, totalPages: Math.ceil(total / 25) },
   };
 }

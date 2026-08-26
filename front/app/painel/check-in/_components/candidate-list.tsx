@@ -45,6 +45,9 @@ export function CandidateList({ query, search, status, onPageChange }: Candidate
     <div className="flex flex-col gap-4">
       {isError && <InlineErrorBanner onRetry={() => refetch()} />}
 
+      {/* Contador "X de Y presentes" — sempre visível, mesmo com a lista da aba atual vazia (ex.: aba "ausentes" com todo mundo já presente). */}
+      <PresenceCounter attendanceSummary={data.attendanceSummary} totalCandidates={data.totalCandidates} />
+
       {data.items.length === 0 ? (
         <EmptyState search={search} status={status} />
       ) : (
@@ -62,6 +65,30 @@ export function CandidateList({ query, search, status, onPageChange }: Candidate
           <PaginationBar pagination={data.pagination} onPageChange={onPageChange} disabled={isFetching} />
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * "X de Y presentes" no cabeçalho — X é a soma de `attendanceSummary` (só
+ * quem tem `checked_in_at`), Y é `totalCandidates` (nunca filtrado por
+ * status, senão mudaria de aba pra aba — ver ListCandidatesResponseSchema).
+ */
+function PresenceCounter({
+  attendanceSummary,
+  totalCandidates,
+}: {
+  attendanceSummary: ListCandidatesResponse["data"]["attendanceSummary"];
+  totalCandidates: number;
+}) {
+  const present = attendanceSummary.online + attendanceSummary.presencial;
+
+  return (
+    <div className="border-border bg-card flex items-center justify-between rounded-xl border px-4 py-3">
+      <span className="text-sm font-medium">Presença confirmada</span>
+      <span className="font-heading text-lg font-semibold tabular-nums">
+        {present} <span className="text-muted-foreground font-sans text-sm font-normal">de {totalCandidates}</span>
+      </span>
     </div>
   );
 }

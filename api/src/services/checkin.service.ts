@@ -23,6 +23,8 @@ type ListResult = {
     process: SelectionProcessSummary;
     items: CandidateCheckinItem[];
     attendanceSummary: AttendanceSummary;
+    /** Contador "X de Y presentes" do cabeçalho — nunca filtrado por status, ver checkin.repository.ts. */
+    totalCandidates: number;
     pagination: PaginationMeta;
 };
 
@@ -62,7 +64,7 @@ export class CheckinService {
         };
 
         const cached = await this.listCache?.get(process.id, cacheParams);
-        const { items, total, attendance } = cached ?? (await this.fetchAndCacheList(process, cacheParams));
+        const { items, total, totalCandidates, attendance } = cached ?? (await this.fetchAndCacheList(process, cacheParams));
 
         return right({
             process: { id: process.id, label: process.label },
@@ -78,6 +80,7 @@ export class CheckinService {
                 attendance: row.checked_in_at === null ? null : row.saturday_restriction === 1 ? "online" : "presencial",
             })),
             attendanceSummary: attendance,
+            totalCandidates,
             pagination: {
                 page: query.page,
                 perPage: query.per_page,

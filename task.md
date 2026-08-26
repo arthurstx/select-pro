@@ -112,7 +112,13 @@ staging/produção (ver "Pendências operacionais").
       gravado desde a FEAT-0005 (`checkin_events`, append-only). Falta a tela e o webhook.
       Não entrou no backlog 008–016 — fica aqui para não sumir de novo.
 - [ ] CRUD de processos seletivos.
-- [ ] Contador "X de Y presentes" no cabeçalho do check-in.
+- [x] Contador "X de Y presentes" no cabeçalho do check-in — implementado direto em
+      `develop` (tarefa pequena, extensão óbvia do contrato existente, sem ciclo completo
+      do spec-kit — ver "Convenção" acima). `ListCandidatesResponseSchema.data` ganha
+      `totalCandidates` (total no recorte de busca/curso, nunca filtrado por status — senão
+      "Y" mudaria de aba pra aba); "X" é `attendanceSummary.online + .presencial`, que já
+      existia. `checkin.repository.ts#listCandidates` ganha uma 4ª query no mesmo `db.batch`
+      reaproveitando as condições de busca/curso sem o filtro de status.
 - [ ] Dark mode.
 - [ ] Duas telas de estado no Stitch: "nenhum candidato inscrito" e "sem processo corrente".
 - [ ] UI para incluir gênero/etnia na exportação CSV (`include_sensitive=true`) — a FEAT-0016
