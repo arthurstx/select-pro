@@ -149,6 +149,9 @@ export class DashboardService {
             query.from ?? "",
             query.to ?? "",
             query.sort,
+            // FEAT-0015 — precisa estar na chave, senão cursos diferentes
+            // reaproveitariam a mesma entrada de cache um do outro.
+            query.course ?? "",
         ]);
 
         const cached = await this.cache?.get<ListResult>(cacheKey);
@@ -164,6 +167,7 @@ export class DashboardService {
             page: query.page,
             perPage: query.per_page,
             sort: query.sort,
+            course: query.course,
         });
 
         const result: ListResult = {

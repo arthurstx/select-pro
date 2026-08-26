@@ -222,6 +222,18 @@ describe("Validação de parâmetros", () => {
         expect(response.status).toBe(400);
     });
 
+    it("FEAT-0015 — curso inválido em /dashboard/candidates responde 400 com VALIDATION_ERROR", async () => {
+        const token = await tokenFor("admin");
+
+        const response = await call(
+            new Request("http://local.test/dashboard/candidates?course=medicina", { headers: authed(token) }),
+        );
+
+        expect(response.status).toBe(400);
+        const body = await response.json<{ error: { code: string } }>();
+        expect(body.error.code).toBe("VALIDATION_ERROR");
+    });
+
     it("data inexistente responde 400", async () => {
         const token = await tokenFor("admin");
 

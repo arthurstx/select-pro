@@ -40,6 +40,7 @@ function candidatesQueryString(query: DashboardCandidatesQuery): string {
   if (parsed.search) params.set("search", parsed.search);
   if (parsed.from) params.set("from", parsed.from);
   if (parsed.to) params.set("to", parsed.to);
+  if (parsed.course) params.set("course", parsed.course);
 
   return params.toString();
 }

@@ -68,16 +68,16 @@ Nenhuma tarefa de setup de infraestrutura — a stack, os workspaces e as ferram
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T013 [P] [US2] Adicionar casos de teste em `api/test/dashboard.service.test.ts`: filtro por `course` na listagem; combinação com `process_id`/`search`/`from`/`to`/`sort`; confirmar que `metrics()` não aceita nem é afetado por `course`
-- [ ] T014 [P] [US2] Adicionar caso de teste em `api/test/dashboard.routes.test.ts`: `GET /dashboard/candidates?course=<inválido>` retorna `400`
+- [x] T013 [P] [US2] Adicionar casos de teste em `api/test/dashboard.service.test.ts`: filtro por `course` na listagem; combinação com `process_id`/`search`/`from`/`to`/`sort`; confirmar que `metrics()` não aceita nem é afetado por `course`
+- [x] T014 [P] [US2] Adicionar caso de teste em `api/test/dashboard.routes.test.ts`: `GET /dashboard/candidates?course=<inválido>` retorna `400`
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Adicionar `course?: Course` a `ListCandidatesFilters` em `api/src/repositories/dashboard.repository.ts`; incluir a condição de `course` em `listCandidates` junto de `processId`/`search`/`from`/`to` (depende de T002)
-- [ ] T016 [US2] Repassar `query.course` de `DashboardService.listCandidates` (`api/src/services/dashboard.service.ts`) para `DashboardRepository.listCandidates` e incluir `query.course ?? ""` no array de `keyFor("candidates", role, [...])` (depende de T015)
-- [ ] T017 [US2] Rodar `npm run test --workspace=api -- dashboard` e confirmar que T013/T014 passam
-- [ ] T018 [US2] Integrar o mesmo `CourseFilter` (`front/components/painel/course-filter.tsx`, de T010) em `front/app/painel/dashboard-screen.tsx`: novo campo `course` em `Filters`, resetando `page` para 1 ao mudar, repassado só para `useDashboardCandidatesQuery` — nunca para `useDashboardMetricsQuery` (depende de T010)
-- [ ] T019 [US2] `npx tsc --noEmit --project front/tsconfig.json` para confirmar tipos de US2
+- [x] T015 [US2] Adicionar `course?: Course` a `ListCandidatesFilters` em `api/src/repositories/dashboard.repository.ts`; incluir a condição de `course` em `listCandidates` junto de `processId`/`search`/`from`/`to` (depende de T002)
+- [x] T016 [US2] Repassar `query.course` de `DashboardService.listCandidates` (`api/src/services/dashboard.service.ts`) para `DashboardRepository.listCandidates` e incluir `query.course ?? ""` no array de `keyFor("candidates", role, [...])` (depende de T015)
+- [x] T017 [US2] Rodar `npm run test --workspace=api -- dashboard` e confirmar que T013/T014 passam
+- [x] T018 [US2] Integrar o mesmo `CourseFilter` (`front/components/painel/course-filter.tsx`, de T010) em `front/app/painel/dashboard-screen.tsx`: novo campo `course` em `Filters`, resetando `page` para 1 ao mudar, repassado só para `useDashboardCandidatesQuery` — nunca para `useDashboardMetricsQuery` (depende de T010). Também ajustado `front/lib/dashboard/queries.ts` (comparação de `sameFilter` do `placeholderData`) e `front/lib/dashboard/api.ts` (`candidatesQueryString`) para incluir `course` — não estavam listados nominalmente em T018, mas são o mesmo padrão já aplicado a `search`/`from`/`to`/`sort` e ficariam quebrados sem o ajuste.
+- [x] T019 [US2] `npx tsc --noEmit --project front/tsconfig.json` para confirmar tipos de US2
 
 **Checkpoint**: Ambas as telas filtram por curso, com o mesmo componente e o mesmo contrato de query param.
 

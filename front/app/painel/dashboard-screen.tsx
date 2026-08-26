@@ -6,11 +6,13 @@ import { toast } from "sonner";
 import {
   ALL_EDITIONS,
   CheckinErrorCode,
+  type Course,
   type DashboardCandidateItem,
   type DashboardCandidatesSort,
   type DashboardMetricsMode,
 } from "shared";
 
+import { CourseFilter } from "@/components/painel/course-filter";
 import { Input } from "@/components/ui/input";
 import {
   useCandidateDetailQuery,
@@ -38,6 +40,8 @@ interface Filters {
   to: string;
   page: number;
   sort: DashboardCandidatesSort;
+  /** FEAT-0015. `undefined` = todos os cursos — filtra só a tabela, nunca `useDashboardMetricsQuery`. */
+  course: Course | undefined;
 }
 
 const INITIAL_FILTERS: Filters = {
@@ -47,6 +51,7 @@ const INITIAL_FILTERS: Filters = {
   to: "",
   page: 1,
   sort: "recent",
+  course: undefined,
 };
 
 export function DashboardScreen() {
@@ -84,6 +89,7 @@ export function DashboardScreen() {
     from: filters.from || undefined,
     to: filters.to || undefined,
     sort: filters.sort,
+    course: filters.course,
   });
   const detailQuery = useCandidateDetailQuery(selected?.id ?? null);
 
@@ -162,6 +168,10 @@ export function DashboardScreen() {
     updateFilters({ sort });
   }
 
+  function handleCourseChange(course: Course | undefined) {
+    updateFilters({ course });
+  }
+
   const scopeLabel =
     metricsQuery.data?.scope.kind === "edition" ? metricsQuery.data.scope.process.label : "todas as edições";
   const hasDateFilter = filters.from !== "" || filters.to !== "";
@@ -224,7 +234,10 @@ export function DashboardScreen() {
                   />
                 </div>
 
-                <DateRangeFilter value={{ from: filters.from, to: filters.to }} onApply={handleDateRangeApply} />
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <DateRangeFilter value={{ from: filters.from, to: filters.to }} onApply={handleDateRangeApply} />
+                  <CourseFilter value={filters.course} onValueChange={handleCourseChange} />
+                </div>
               </div>
 
               <CandidatesTable
