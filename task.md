@@ -24,18 +24,21 @@ torna este arquivo confiável em vez de mais um registro que ninguém confere.
       cadastro de pós-júnior/trainee. Migration `0008`. `specs/008-member-status-approval/`.
 - [x] **FEAT-0011** — Cadastro de salas, com hosts/limite de grupos derivados da capacidade
       (D5). Migration `0009`. `specs/011-cadastro-de-salas/`.
+- [x] **FEAT-0009** — Papel de host por edição do processo seletivo + painel de avaliadores
+      (toggle host↔avaliador, filtro por cargo). Migration `0010`. `specs/009-papel-de-host/`.
+      Implementada na branch `feat/papel-host`, ainda não mesclada em `develop`.
 
-Ambas as features 008 e 011 estão mescladas em `develop`. **Migrations `0008` e `0009`
-aplicadas só localmente** — staging e produção pendentes (ver "Pendências operacionais").
+Features 008 e 011 estão mescladas em `develop`. A 009 está implementada e testada
+(287 testes passando, quickstart validado manualmente contra `wrangler dev` local) mas segue
+na própria branch — sem merge automático, mesmo padrão de 008/011. **Migrations `0008`, `0009`
+e `0010` aplicadas só localmente** — staging e produção pendentes (ver "Pendências operacionais").
 
 ## Backlog 008–016 — cadeia ainda não fechada
 
 Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. Resumo do que falta:
 
-- [ ] **FEAT-0009** — Papel de host por edição do processo seletivo + painel de avaliadores
-      (toggle host↔avaliador, filtro por cargo). Depende da 008 (feita).
 - [ ] **FEAT-0010** — Check-in de membros (avaliadores/hosts) + sessão online para quem tem
-      restrição de sábado (D7). Depende da 009.
+      restrição de sábado (D7). Depende da 009 (feita, aguardando merge).
 - [ ] **FEAT-0012** — Organização automática de grupos. Depende de 009, 010 e 011 (feita).
       Reconstrói `groups`/`group_evaluators`/`group_candidates` (hoje vazias e órfãs desde a
       `0001`) — `DROP`/`CREATE` trivial agora, procedimento perigoso depois de povoadas.
@@ -59,8 +62,9 @@ Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. 
 
 ## Pendências operacionais (não são código)
 
-- [ ] Aplicar migrations `0008` e `0009` em staging, depois produção (staging sempre primeiro
-      — Princípio III da constitution).
+- [ ] Aplicar migrations `0008`, `0009` e `0010` em staging, depois produção (staging sempre
+      primeiro — Princípio III da constitution).
+- [ ] Mesclar `feat/papel-host` (FEAT-0009) em `develop`.
 - [ ] Calibrar as iterações do PBKDF2 (FEAT-0003) medindo CPU em produção — `wrangler dev`
       não aplica o teto de 10 ms.
 - [ ] Criar a regra de Rate Limiting do WAF em `/auth/*` (FEAT-0003) — o plano Free só dá
