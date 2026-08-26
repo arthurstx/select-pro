@@ -83,7 +83,13 @@ export type DashboardMetricsQuery = z.infer<typeof DashboardMetricsQuerySchema>;
 export const DashboardCandidatesSortSchema = z.enum(["recent", "oldest"]);
 export type DashboardCandidatesSort = z.infer<typeof DashboardCandidatesSortSchema>;
 
-/** `GET /dashboard/candidates` (FEAT-0007, seção 8.2). Busca é só por `name`, como no check-in. */
+/**
+ * `GET /dashboard/candidates` (FEAT-0007, seção 8.2; filtro por curso na
+ * FEAT-0015). Busca é só por `name`, como no check-in. `course` ausente =
+ * todos os cursos — mesmo contrato usado em `ListCandidatesQuerySchema`, e
+ * NUNCA em `DashboardMetricsQuerySchema`: o filtro é só da tabela paginada,
+ * não dos agregados.
+ */
 export const DashboardCandidatesQuerySchema = PaginationQuerySchema.extend({
     process_id: ProcessScopeSchema.optional(),
     search: z.string().trim().min(1).optional(),
@@ -92,6 +98,7 @@ export const DashboardCandidatesQuerySchema = PaginationQuerySchema.extend({
     /** Inclusive até o fim do dia — senão "de 12/08 a 12/08" não devolveria nada. */
     to: DateOnlySchema.optional(),
     sort: DashboardCandidatesSortSchema.default("recent"),
+    course: CourseSchema.optional(),
 }).superRefine((query, ctx) => {
     if (isInvertedDateRange(query)) {
         ctx.addIssue({

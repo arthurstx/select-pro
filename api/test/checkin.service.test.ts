@@ -28,14 +28,14 @@ function serviceWithCache(): CheckinService {
     );
 }
 
-async function insertCandidate(overrides: { name?: string; createdAt?: string } = {}) {
+async function insertCandidate(overrides: { name?: string; createdAt?: string; course?: string } = {}) {
     counter += 1;
     const row = {
         id: crypto.randomUUID(),
         name: overrides.name ?? `Candidato Svc ${counter}`,
         email: `candidato-svc-${counter}@example.com`,
         phone: `+557198888${String(counter).padStart(4, "0")}`,
-        course: "eng-computacao",
+        course: overrides.course ?? "eng-computacao",
         semester: 3,
         gender: "outro",
         ethnicity: "nao-informado",
@@ -297,6 +297,86 @@ describe("CheckinService.listCandidates — busca, filtro e paginação", () => 
         expect(result.isRight()).toBe(true);
         if (result.isRight()) {
             expect(result.value.items).toHaveLength(0);
+        }
+    });
+
+    // FEAT-0015 — filtro por curso.
+    it("filtro por curso: retorna só candidatos do curso pedido", async () => {
+        const svc = service();
+        const marca = crypto.randomUUID();
+        await insertCandidate({ name: `Curso Comp ${marca}`, course: "eng-computacao" });
+        await insertCandidate({ name: `Curso Civil ${marca}`, course: "eng-civil" });
+
+        const result = await svc.listCandidates(
+            { page: 1, per_page: 25, status: "todos", search: marca, course: "eng-computacao" },
+            NOW,
+        );
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) {
+            expect(result.value.items).toHaveLength(1);
+            expect(result.value.items[0]?.course).toBe("eng-computacao");
+        }
+    });
+
+    it("filtro por curso combina por E lógico com status e busca", async () => {
+        const svc = service();
+        const actorId = await insertUser();
+        const marca = crypto.randomUUID();
+        const presenteComp = await insertCandidate({ name: `Combo Presente Comp ${marca}`, course: "eng-computacao" });
+        await insertCandidate({ name: `Combo Ausente Comp ${marca}`, course: "eng-computacao" });
+        await insertCandidate({ name: `Combo Presente Civil ${marca}`, course: "eng-civil" });
+        await svc.markPresent(presenteComp.id, actorId, NOW);
+
+        const result = await svc.listCandidates(
+            { page: 1, per_page: 25, status: "presentes", search: marca, course: "eng-computacao" },
+            NOW,
+        );
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) {
+            expect(result.value.pagination.total).toBe(1);
+            expect(result.value.items[0]?.name).toBe(presenteComp.name);
+        }
+    });
+
+    it("sem `course` no filtro, o comportamento é idêntico ao atual (todos os cursos)", async () => {
+        const svc = service();
+        const marca = crypto.randomUUID();
+        await insertCandidate({ name: `Sem Filtro Comp ${marca}`, course: "eng-computacao" });
+        await insertCandidate({ name: `Sem Filtro Civil ${marca}`, course: "eng-civil" });
+
+        const result = await svc.listCandidates({ page: 1, per_page: 25, status: "todos", search: marca }, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) {
+            expect(result.value.items).toHaveLength(2);
+        }
+    });
+});
+
+describe("CheckinService.listCandidates — cache em KV inclui `course` na chave (FEAT-0015)", () => {
+    it("filtrar por cursos diferentes não reaproveita o cache do outro curso", async () => {
+        const svc = serviceWithCache();
+        const marca = crypto.randomUUID();
+        await insertCandidate({ name: `Cache Curso Comp ${marca}`, course: "eng-computacao" });
+        await insertCandidate({ name: `Cache Curso Civil ${marca}`, course: "eng-civil" });
+
+        const comp = await svc.listCandidates(
+            { page: 1, per_page: 25, status: "todos", search: marca, course: "eng-computacao" },
+            NOW,
+        );
+        const civil = await svc.listCandidates(
+            { page: 1, per_page: 25, status: "todos", search: marca, course: "eng-civil" },
+            NOW,
+        );
+
+        expect(comp.isRight() && civil.isRight()).toBe(true);
+        if (comp.isRight() && civil.isRight()) {
+            expect(comp.value.items).toHaveLength(1);
+            expect(comp.value.items[0]?.course).toBe("eng-computacao");
+            expect(civil.value.items).toHaveLength(1);
+            expect(civil.value.items[0]?.course).toBe("eng-civil");
         }
     });
 });

@@ -146,6 +146,31 @@ describe("GET /candidates (HTTP)", () => {
 
         expect(response.status).toBe(400);
     });
+
+    it("FEAT-0015 — curso inválido responde 400 com VALIDATION_ERROR no campo course", async () => {
+        const { token } = await avaliador();
+
+        const response = await call(new Request("http://local.test/candidates?course=medicina", { headers: authed(token) }));
+
+        expect(response.status).toBe(400);
+        const body = await response.json<{ error: { code: string; field?: string } }>();
+        expect(body.error.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("FEAT-0015 — filtro por curso válido retorna só candidatos daquele curso", async () => {
+        const { token } = await avaliador();
+        await insertCandidate({ name: "Http Curso Comp Um" });
+        await insertCandidate({ name: "Http Curso Comp Dois" });
+
+        const response = await call(
+            new Request("http://local.test/candidates?course=eng-computacao&search=Http+Curso", { headers: authed(token) }),
+        );
+
+        expect(response.status).toBe(200);
+        const body = await response.json<{ data: { items: Array<{ course: string }> } }>();
+        expect(body.data.items).toHaveLength(2);
+        for (const item of body.data.items) expect(item.course).toBe("eng-computacao");
+    });
 });
 
 describe("PUT /candidates/{id}/checkin (HTTP)", () => {

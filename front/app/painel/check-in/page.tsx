@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CheckinStatusFilter } from "shared";
+import type { CheckinStatusFilter, Course } from "shared";
 
 import { useCandidatesQuery } from "@/lib/checkin/queries";
 
@@ -15,6 +15,8 @@ interface Filters {
   page: number;
   search: string;
   status: CheckinStatusFilter;
+  /** FEAT-0015. `undefined` = todos os cursos. */
+  course: Course | undefined;
 }
 
 export default function CheckInPage() {
@@ -22,10 +24,10 @@ export default function CheckInPage() {
   const [searchInput, setSearchInput] = useState("");
 
   // O que de fato compõe a chave da query. `page` só muda aqui, nunca num
-  // efeito separado que observe `search`/`status`: resetar depois faria a
-  // query disparar duas vezes — uma com a página velha, outra com a
+  // efeito separado que observe `search`/`status`/`course`: resetar depois
+  // faria a query disparar duas vezes — uma com a página velha, outra com a
   // corrigida (FEAT-0005-UI, seção 4.4/8.4).
-  const [filters, setFilters] = useState<Filters>({ page: 1, search: "", status: "todos" });
+  const [filters, setFilters] = useState<Filters>({ page: 1, search: "", status: "todos", course: undefined });
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -41,6 +43,10 @@ export default function CheckInPage() {
     setFilters((current) => (current.status === status ? current : { ...current, status, page: 1 }));
   }
 
+  function handleCourseChange(course: Course | undefined) {
+    setFilters((current) => (current.course === course ? current : { ...current, course, page: 1 }));
+  }
+
   function handlePageChange(page: number) {
     setFilters((current) => ({ ...current, page }));
   }
@@ -50,6 +56,7 @@ export default function CheckInPage() {
     per_page: PER_PAGE,
     status: filters.status,
     search: filters.search || undefined,
+    course: filters.course,
   });
 
   return (
@@ -67,6 +74,8 @@ export default function CheckInPage() {
         onSearchInputChange={setSearchInput}
         status={filters.status}
         onStatusChange={handleStatusChange}
+        course={filters.course}
+        onCourseChange={handleCourseChange}
         disabled={query.isPending}
       />
 
