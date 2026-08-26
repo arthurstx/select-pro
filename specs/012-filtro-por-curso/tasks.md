@@ -87,11 +87,11 @@ Nenhuma tarefa de setup de infraestrutura — a stack, os workspaces e as ferram
 
 **Purpose**: Verificação de ponta a ponta e fechamento do ciclo SDD.
 
-- [ ] T020 Rodar `npm run test --workspace=api` completo (suíte inteira, não só os arquivos tocados) e confirmar 0 falhas
-- [ ] T021 [P] Rodar `npx tsc --noEmit --project shared/tsconfig.json`, `npx tsc --noEmit --project api/tsconfig.json`, `npx tsc --noEmit --project front/tsconfig.json`
-- [ ] T022 Rodar `npm run build --workspace=front` e confirmar build limpo
-- [ ] T023 Validar manualmente os comandos `curl` de `specs/012-filtro-por-curso/quickstart.md` contra `wrangler dev` local (sem abrir o Browser pane sem autorização prévia)
-- [ ] T024 Revisar `specs/012-filtro-por-curso/spec.md`/`plan.md` contra o código final — confirmar que nenhuma Assumption documentada foi invalidada pela implementação
+- [x] T020 Rodar `npm run test --workspace=api` completo (suíte inteira, não só os arquivos tocados) e confirmar 0 falhas — 284/284 passando (15 arquivos de teste)
+- [x] T021 [P] Rodar `npx tsc --noEmit --project shared/tsconfig.json`, `npx tsc --noEmit --project api/tsconfig.json`, `npx tsc --noEmit --project front/tsconfig.json` — os três limpos
+- [x] T022 Rodar `npm run build --workspace=front` e confirmar build limpo — build de produção OK, 18 rotas geradas
+- [x] T023 Validar manualmente os comandos `curl` de `specs/012-filtro-por-curso/quickstart.md` contra `wrangler dev` local (sem abrir o Browser pane sem autorização prévia) — migrations aplicadas no D1 local, usuário/candidatos de teste inseridos via `wrangler d1 execute --local`, JWT assinado com o mesmo `JWT_SECRET` do `.dev.vars`; os 4 cenários do quickstart bateram: filtro de curso isolado no check-in, curso inválido → 400, filtro de curso isolado no dashboard, e `GET /dashboard/metrics` inalterado (retorna todos os cursos representados, sem aceitar/sofrer o filtro)
+- [x] T024 Revisar `specs/012-filtro-por-curso/spec.md`/`plan.md` contra o código final — nenhuma Assumption foi invalidada: (1) check-in + dashboard são de fato as únicas duas telas tocadas; (2) seleção única implementada (`course?: Course`, nunca lista); (3) nenhuma migration criada; (4) `GET /dashboard/metrics` confirmado inalterado por teste automatizado e por `curl` manual; (5) `CourseFilter` é um componente único, reaproveitado nas duas telas
 
 ---
 
