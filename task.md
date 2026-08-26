@@ -52,22 +52,45 @@ torna este arquivo confiável em vez de mais um registro que ninguém confere.
       aviso — não bloqueio — para violação de D1. Migration `0014` reconstrói
       `groups`/`group_evaluators`/`group_candidates` (órfãs desde a `0001`, ganham
       `process_id`, `room_id` nullable, `modality`). `specs/012-organizacao-grupos/`.
-      `front/app/painel/grupos/`. Implementada na branch `claude/feat-0012-organizacao-grupos`,
-      ainda não mesclada em `develop` no momento desta nota.
+      `front/app/painel/grupos/`. Mesclada em `develop` **localmente** (merge sem push, a
+      pedido do usuário — ver nota abaixo).
+- [x] **FEAT-0013** — Avaliação dos candidatos: avaliador/host dá 5 notas (0-5, pesos fixos
+      25/25/20/15/15%) + 1 cor geral (RED/YELLOW/GREEN) + comentário opcional, só para
+      candidatos do próprio grupo presencial (FEAT-0012). Veredito (pendente/aprovado/
+      reprovado) calculado a partir das avaliações: D2 (qualquer vermelha reprova, veto
+      imediato, não espera D6) + D6 (mínimo de 2 para sair de pendente). Admin vê lista
+      agregada com veredito/pontuação ponderada de referência e o detalhe de cada avaliação;
+      avaliador nunca vê a avaliação de outra pessoa sobre o mesmo candidato. Migration
+      `0015` dropa `metrics` (sem substituta) e reconstrói `evaluations`/`evaluation_scores`
+      (órfãs/erradas desde a `0001`). `specs/013-avaliacao-candidatos/`.
+      `front/app/painel/minhas-avaliacoes/` (avaliador) e `front/app/painel/avaliacoes/`
+      (admin). Implementada na branch `claude/feat-0013-avaliacao-candidatos` (em cima da
+      `claude/feat-0012-organizacao-grupos` — dependência real), ainda não mesclada em
+      `develop`. **Limitações registradas na spec como Assumption, não bloqueantes**: a
+      FEAT-0012 não garante a composição operacional planejada de avaliadores por grupo
+      (1 host + 1-2 avaliadores); avaliação de candidatos em grupos online fica fora de
+      escopo (FEAT-0012 não aloca avaliador a eles ainda).
 
-Todas as features acima, **exceto a FEAT-0012**, estão **mescladas em `develop`**
-(2026-08-26), com a suíte completa passando (366 testes `api`, 20 `shared`, `tsc`/build
-limpos em `shared`/`api`/`front`). **Migrations `0008` a `0013` aplicadas só localmente** —
-staging e produção pendentes (ver "Pendências operacionais").
+Todas as features acima, **exceto a FEAT-0013**, estão **mescladas em `develop`**
+(2026-08-26) — a FEAT-0012 foi mesclada **localmente** nesta sessão (merge commit, sem
+`git push`, a pedido do usuário: "não precisa subir nada no momento"). Com FEAT-0012
+mesclada, a suíte local de `develop` tem 405 testes `api`, 20 `shared`, `tsc`/build limpos
+em `shared`/`api`/`front`. **Migrations `0008` a `0014` aplicadas só localmente** — staging
+e produção pendentes, e **`develop` local está à frente do `origin/develop` remoto** (ver
+"Pendências operacionais").
 
-**FEAT-0012 implementada na branch `claude/feat-0012-organizacao-grupos`** (ainda não
-mesclada em `develop` no momento desta nota) — 405 testes `api` passando (39 novos: 15 do
-algoritmo puro D1/D5, 12 de service com D1 real, 12 de rota HTTP), 20 `shared`, `tsc`/build
-limpos em `shared`/`api`/`front`. Migration `0014` só local. **Achado durante a
-implementação**: `GroupCandidate` não expõe `gender` na resposta HTTP — mesma postura de
-`CandidateCheckinItemSchema` (FEAT-0005): dado sensível de inscrição, nunca por pessoa numa
-listagem comum; D1 é verificado só no backend, uma violação chega ao front como o aviso
-`GENDER_RULE_VIOLATED`, sem identificar quem.
+**FEAT-0012 — achado durante a implementação**: `GroupCandidate` não expõe `gender` na
+resposta HTTP — mesma postura de `CandidateCheckinItemSchema` (FEAT-0005): dado sensível de
+inscrição, nunca por pessoa numa listagem comum; D1 é verificado só no backend, uma
+violação chega ao front como o aviso `GENDER_RULE_VIOLATED`, sem identificar quem.
+
+**FEAT-0013 implementada na branch `claude/feat-0013-avaliacao-candidatos`** (ainda não
+mesclada em `develop`) — 436 testes `api` passando (31 novos: 6 unitários de `computeVerdict`,
+11 de service com D1 real, 14 de rota HTTP), 20 `shared`, `tsc`/build limpos em
+`shared`/`api`/`front`. Migration `0015` só local. **Achado durante a implementação**: o
+scaffolding morto de `database.schema.ts` (`MetricRow`, `EvaluationRow`, `EvaluationStatus`
+— zero uso em código de produção desde sempre) foi removido ao reconstruir as tabelas, em
+vez de mantido apontando para um schema que não existe mais.
 
 ## Convenção: quando pular o ciclo do spec-kit
 
@@ -76,13 +99,12 @@ Tarefas pequenas (um botão, um ajuste pontual, sem schema/migration novos ou co
 implementar direto e documentar de forma leve (comentário no código, uma linha aqui). O ciclo
 completo é reservado para features relevantes de verdade.
 
-## Backlog 008–016 — cadeia ainda não fechada
+## Backlog 008–016 — cadeia fechada
 
-Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. Resumo do que falta:
-
-- [ ] **FEAT-0013** — Avaliação dos candidatos (5 critérios ponderados, veredito por veto de
-      vermelho — D2). Depende da 012 (feita — ver "Concluído" acima). Reconstrói
-      `evaluations`/`metrics` (mesma janela órfã das tabelas de grupo).
+Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. As nove
+features do backlog organizado em 2026-08-24 estão todas implementadas (ver "Concluído"
+acima) — falta só mesclar FEAT-0012/0013 em `develop` e aplicar as migrations em
+staging/produção (ver "Pendências operacionais").
 
 ## Órfãos — sem spec, sem dono
 
@@ -99,10 +121,14 @@ Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. 
 
 ## Pendências operacionais (não são código)
 
-- [ ] Aplicar migrations `0008` a `0014` em staging, depois produção (staging sempre primeiro
+- [ ] Empurrar o merge local de `develop` (FEAT-0012) para `origin/develop`, e mesclar
+      `claude/feat-0013-avaliacao-candidatos` em seguida — nenhum dos dois foi enviado ainda
+      (sessão trabalhou só local, a pedido do usuário).
+- [ ] Aplicar migrations `0008` a `0015` em staging, depois produção (staging sempre primeiro
       — Princípio III da constitution). Migration `0014` reconstrói `groups`/`group_evaluators`/
-      `group_candidates` — confirmar que seguem vazias nesses ambientes antes de aplicar
-      (research.md D-tech1 da FEAT-0012).
+      `group_candidates`; `0015` dropa `metrics` e reconstrói `evaluations`/`evaluation_scores`
+      — confirmar que todas seguem vazias nesses ambientes antes de aplicar (research.md
+      D-tech1 da FEAT-0012 e da FEAT-0013).
 - [ ] Calibrar as iterações do PBKDF2 (FEAT-0003) medindo CPU em produção — `wrangler dev`
       não aplica o teto de 10 ms.
 - [ ] Criar a regra de Rate Limiting do WAF em `/auth/*` (FEAT-0003) — o plano Free só dá

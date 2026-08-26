@@ -97,15 +97,22 @@ Nove features derivadas de um backlog em texto livre sobre separação automáti
 
 ```
 011 (salas) ── ✅ feita ──────┐
-008 (status) ── ✅ feita ──→ 009 (host) ── ✅ feita ──→ 010 (check-in) ✅ feita → 012 (grupos) ✅ feita → 013 (avaliação)
+008 (status) ── ✅ feita ──→ 009 (host) ── ✅ feita ──→ 010 (check-in) ✅ feita → 012 (grupos) ✅ feita → 013 (avaliação) ✅ feita
 
 014 (necessidades especiais) ✅, 015 (filtro por curso) ✅, 016 (exportação CSV) ✅ — sem dependência
 ```
 
-**Todas as features 008, 009, 010, 011, 014, 015 e 016 estão implementadas e mescladas em
-`develop`** (2026-08-26). 366/366 testes `api` + 20/20 `shared` passando com todas juntas,
-`tsc`/build limpos em `shared`/`api`/`front`. **Pendente: aplicar as migrations `0008` a `0013`
-em staging e produção** — só locais até agora (ver "Ambientes / Infra" acima).
+**As nove features do backlog 008–016 estão todas implementadas.** 008, 009, 010, 011, 014,
+015 e 016 estão mescladas em `develop` (2026-08-26). **012 foi mesclada em `develop`
+LOCALMENTE nesta sessão** (merge commit, sem `git push` — a pedido do usuário: "não precisa
+subir nada no momento"); **013 está implementada na branch `claude/feat-0013-avaliacao-candidatos`
+(em cima da 012), ainda não mesclada.** ⚠️ **`develop` local está à frente do
+`origin/develop` remoto** — antes de qualquer outra sessão/dispositivo continuar a partir de
+`origin/develop`, empurrar o merge da 012 primeiro, senão o trabalho local desta sessão fica
+invisível para quem só vê o remoto. Com 012 mesclada, a suíte local de `develop` tem 405/405
+testes `api` + 20/20 `shared`, `tsc`/build limpos em `shared`/`api`/`front`. **Pendente:
+aplicar as migrations `0008` a `0015` em staging e produção** — só locais até agora (ver
+"Ambientes / Infra" acima).
 
 **010 (check-in de membros) mesclada via PR #10**. Migration `0013` (`member_checkins`/
 `member_checkin_events`, espelhando `candidate_checkins`/`checkin_events` da FEAT-0005). Tela
@@ -139,6 +146,44 @@ remota (quem avalia, por qual canal) ainda não foi decidido, fica para uma iter
   grupos formados, não "por sala" — `member_checkins`/`edition_hosts` não carregam `room_id`,
   então não existe, no modelo de dados, nenhuma associação prévia de avaliador a uma sala
   específica antes da organização em si.
+
+**013 (avaliação dos candidatos) implementada na branch
+`claude/feat-0013-avaliacao-candidatos`** (em cima da `claude/feat-0012-organizacao-grupos`
+— dependência real, ainda não em `develop`). 436/436 testes `api` (31 novos: 6 unitários de
+`computeVerdict`, 11 de service com D1 real, 14 de rota HTTP), 20/20 `shared`, `tsc`/build
+limpos em `shared`/`api`/`front`. Migration `0015` dropa `metrics` (sem substituta, zero uso
+em código de produção) e reconstrói `evaluations` (uma linha por par avaliador/candidato) +
+`evaluation_scores` (uma nota 0-5 por critério) — design antigo de `evaluations` (cor por
+critério em vez de cor geral + notas) não servia ao requisito. Telas novas
+`front/app/painel/minhas-avaliacoes/` (avaliador/host) e `front/app/painel/avaliacoes/`
+(admin), itens de nav próprios.
+
+Critérios e pesos fixos no código (`shared/src/schemas/evaluation.schema.ts`, não
+editáveis por admin nesta versão): Raciocínio lógico 25%, Trabalho em equipe 25%,
+Liderança 20%, Proatividade 15%, Comunicação 15%. Notas 0-5 por critério; 1 cor geral
+(RED/YELLOW/GREEN) por avaliação, escolhida pelo avaliador — não derivada das notas.
+
+**Veredito (D2 + D6) é calculado na leitura, nunca persistido**: qualquer avaliação `RED`
+reprova o candidato imediatamente (D2, veto — não espera atingir o mínimo de avaliações de
+D6); sem `RED` e com menos de 2 avaliações, fica pendente (D6); com 2+ e nenhuma `RED`, é
+aprovado. Os pesos dos critérios viram uma **pontuação ponderada de referência** exibida ao
+admin (`deriveWeightedScore`), mas nunca decidem o veredito.
+
+**Elegibilidade reaproveita a FEAT-0012 sem tabela nova**: um avaliador só pode avaliar
+candidatos do próprio grupo presencial — checado via `GroupRepository.findEvaluatorGroup`/
+`findCandidateGroup` (já existentes), comparando o `id` do grupo. Nenhum vínculo
+avaliador↔candidato duplicado numa tabela própria.
+
+**Limitações registradas como Assumption na spec, não bloqueantes**: a FEAT-0012 não
+garante a composição operacional planejada de avaliadores por grupo (1 host + 1-2
+avaliadores, D6 min 2/max 3) — quem estiver no grupo avalia, sejam quantos forem; avaliação
+de candidatos em grupos **online** fica fora de escopo (FEAT-0012 não aloca avaliador a
+esses grupos ainda).
+
+**Achado de limpeza durante a implementação**: `MetricRow`/`EvaluationRow`/`EvaluationStatus`
+em `database.schema.ts` eram scaffolding morto desde a `0001-schema.sql` (zero uso em código
+de produção, confirmado por busca) — removidos ao reconstruir as tabelas, em vez de deixados
+apontando para um schema que não existe mais.
 
 **D7 esclarecido nesta feature**: a linha original do `task.md` amarrava "check-in de
 membros" e "sessão online por restrição de sábado" como a mesma coisa — mas

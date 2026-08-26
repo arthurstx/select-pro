@@ -1,8 +1,10 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheckIcon,
+  ClipboardListIcon,
   DoorOpenIcon,
   LayoutDashboardIcon,
+  StarIcon,
   UserCheckIcon,
   UserRoundCheckIcon,
   UsersIcon,
@@ -36,4 +38,8 @@ export const PAINEL_NAV_ITEMS: PainelNavItem[] = [
   { href: "/painel/check-in-membros", label: "Check-in de Membros", icon: UserRoundCheckIcon },
   // FEAT-0012 — mesmo motivo.
   { href: "/painel/grupos", label: "Grupos", icon: UsersRoundIcon },
+  // FEAT-0013 — mesmo motivo. Tela do avaliador/host (não do admin), mas o
+  // guard real segue sendo a API, não o menu (mesma nota acima).
+  { href: "/painel/minhas-avaliacoes", label: "Minhas Avaliações", icon: StarIcon },
+  { href: "/painel/avaliacoes", label: "Avaliações", icon: ClipboardListIcon },
 ];
