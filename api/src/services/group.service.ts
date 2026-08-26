@@ -169,6 +169,7 @@ function toSummary(
 ): GroupSummary {
     return {
         id: group.id,
+        name: group.name,
         modality: group.modality,
         room: group.room_id && group.room_name ? { id: group.room_id, name: group.room_name } : null,
         candidates: candidateAllocations

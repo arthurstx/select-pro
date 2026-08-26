@@ -238,3 +238,125 @@ describe("GroupService.organize — fluxo principal", () => {
         expect(presencialGroup?.candidates.some((c) => c.id === onlineId)).toBe(false);
     });
 });
+
+describe("GroupService.moveCandidate / moveEvaluator (US2, FR-009/FR-010)", () => {
+    /** 2 mulheres + 2 homens, 1 sala de 50 (2 slots): distribuição determinística
+     * (`distributeByGender`) — grupo A fica com as 2 mulheres, grupo B com os 2 homens. */
+    async function setupTwoPresencialGroups(now: Date) {
+        const process = await new SelectionProcessRepository(env.DB).resolveCurrent(now);
+        const actorId = await insertActor();
+        await insertRoom(50);
+
+        const women = [
+            await insertCheckedCandidate(process.id, actorId, { gender: "feminino" }),
+            await insertCheckedCandidate(process.id, actorId, { gender: "feminino" }),
+        ];
+        const men = [
+            await insertCheckedCandidate(process.id, actorId, { gender: "masculino" }),
+            await insertCheckedCandidate(process.id, actorId, { gender: "masculino" }),
+        ];
+
+        const organized = await service().organize(now);
+        if (!organized.isRight()) throw new Error("setup falhou");
+
+        const groupA = organized.value.groups.find((g) => g.candidates.some((c) => c.id === women[0]))!;
+        const groupB = organized.value.groups.find((g) => g.candidates.some((c) => c.id === men[0]))!;
+
+        return { women, men, groupA, groupB };
+    }
+
+    it("move com sucesso não gera aviso quando nenhum grupo fica com exatamente 1 mulher", async () => {
+        const NOW = new Date("2106-08-10T12:00:00.000Z");
+        const { men, groupA, groupB } = await setupTwoPresencialGroups(NOW);
+
+        const result = await service().moveCandidate(men[0], groupA.id, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (!result.isRight()) return;
+        expect(result.value.warning).toBeNull();
+        expect(result.value.groups.find((g) => g.id === groupA.id)?.candidates.some((c) => c.id === men[0])).toBe(true);
+        expect(result.value.groups.find((g) => g.id === groupB.id)?.candidates.some((c) => c.id === men[0])).toBe(false);
+    });
+
+    it("move violando D1 gera aviso GENDER_RULE_VIOLATED, mas ainda move (FR-010)", async () => {
+        const NOW = new Date("2107-08-10T12:00:00.000Z");
+        const { women, groupA, groupB } = await setupTwoPresencialGroups(NOW);
+
+        // groupA tinha as 2 mulheres; tirar uma deixa 1 lá e cria 1 no destino — os dois violam D1.
+        const result = await service().moveCandidate(women[0], groupB.id, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (!result.isRight()) return;
+        expect(result.value.warning).toBe("GENDER_RULE_VIOLATED");
+    });
+
+    it("mover entre modalidades diferentes é bloqueado (FR-003, invariante rígida)", async () => {
+        const NOW = new Date("2108-08-10T12:00:00.000Z");
+        const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
+        const actorId = await insertActor();
+        await insertRoom(50);
+        const presencialId = await insertCheckedCandidate(process.id, actorId, { online: false });
+        const onlineId = await insertCheckedCandidate(process.id, actorId, { online: true });
+
+        const organized = await service().organize(NOW);
+        if (!organized.isRight()) throw new Error("setup falhou");
+        const onlineGroup = organized.value.groups.find((g) => g.candidates.some((c) => c.id === onlineId))!;
+
+        const result = await service().moveCandidate(presencialId, onlineGroup.id, NOW);
+
+        expect(result.isLeft()).toBe(true);
+        if (result.isLeft()) expect(result.value.code).toBe("GROUP_MODALITY_MISMATCH");
+    });
+
+    it("GROUP_NOT_FOUND quando o grupo de destino não existe na edição corrente", async () => {
+        const NOW = new Date("2109-08-10T12:00:00.000Z");
+        const { women } = await setupTwoPresencialGroups(NOW);
+
+        const result = await service().moveCandidate(women[0], crypto.randomUUID(), NOW);
+
+        expect(result.isLeft()).toBe(true);
+        if (result.isLeft()) expect(result.value.code).toBe("GROUP_NOT_FOUND");
+    });
+
+    it("CANDIDATE_NOT_ALLOCATED quando o candidato não está em nenhum grupo da edição", async () => {
+        const NOW = new Date("2110-08-10T12:00:00.000Z");
+        const { groupA } = await setupTwoPresencialGroups(NOW);
+
+        const result = await service().moveCandidate(crypto.randomUUID(), groupA.id, NOW);
+
+        expect(result.isLeft()).toBe(true);
+        if (result.isLeft()) expect(result.value.code).toBe("CANDIDATE_NOT_ALLOCATED");
+    });
+
+    it("moveEvaluator: sucesso, sem aviso (D1 é só sobre candidatos)", async () => {
+        const NOW = new Date("2111-08-10T12:00:00.000Z");
+        const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
+        const actorId = await insertActor();
+        await insertRoom(50);
+        await insertCheckedCandidate(process.id, actorId);
+        await insertCheckedCandidate(process.id, actorId);
+        const evaluatorId = await insertCheckedMember(process.id, actorId);
+
+        const organized = await service().organize(NOW);
+        if (!organized.isRight()) throw new Error("setup falhou");
+        const fromGroup = organized.value.groups.find((g) => g.evaluators.some((e) => e.userId === evaluatorId))!;
+        const toGroup = organized.value.groups.find((g) => g.id !== fromGroup.id)!;
+
+        const result = await service().moveEvaluator(evaluatorId, toGroup.id, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (!result.isRight()) return;
+        expect(result.value.warning).toBeNull();
+        expect(result.value.groups.find((g) => g.id === toGroup.id)?.evaluators.some((e) => e.userId === evaluatorId)).toBe(true);
+    });
+
+    it("EVALUATOR_NOT_ALLOCATED quando o avaliador/host não está em nenhum grupo da edição", async () => {
+        const NOW = new Date("2112-08-10T12:00:00.000Z");
+        const { groupA } = await setupTwoPresencialGroups(NOW);
+
+        const result = await service().moveEvaluator(crypto.randomUUID(), groupA.id, NOW);
+
+        expect(result.isLeft()).toBe(true);
+        if (result.isLeft()) expect(result.value.code).toBe("EVALUATOR_NOT_ALLOCATED");
+    });
+});

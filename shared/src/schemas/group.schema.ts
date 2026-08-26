@@ -37,6 +37,7 @@ export type GroupEvaluator = z.infer<typeof GroupEvaluatorSchema>;
 /** `room: null` sempre que `modality === "online"` (FR-007) — nunca as duas coisas. */
 export const GroupSummarySchema = z.object({
     id: z.string().uuid(),
+    name: z.string(),
     modality: GroupModalitySchema,
     room: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
     candidates: z.array(GroupCandidateSchema),

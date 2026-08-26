@@ -157,3 +157,78 @@ describe("POST /groups/organize (HTTP)", () => {
         expect(body.data.groups.length).toBeGreaterThan(0);
     });
 });
+
+// ============================================================
+// PATCH /groups/{groupId}/candidates/{candidateId} e .../evaluators/{userId}
+// ============================================================
+
+describe("PATCH /groups/:groupId/candidates|evaluators/:id (HTTP)", () => {
+    async function organizeWithOneCandidateOneEvaluator(admin: { userId: string; token: string }) {
+        await insertRoom();
+        await insertCheckedCandidate(admin.userId);
+        await insertCheckedCandidate(admin.userId);
+
+        const response = await call(
+            new Request("http://local.test/groups/organize", { method: "POST", headers: authed(admin.token) }),
+        );
+        return (await response.json()) as { data: { groups: { id: string }[] } };
+    }
+
+    it("401 sem Authorization", async () => {
+        const response = await call(
+            new Request(`http://local.test/groups/${crypto.randomUUID()}/candidates/${crypto.randomUUID()}`, {
+                method: "PATCH",
+            }),
+        );
+        expect(response.status).toBe(401);
+    });
+
+    it("403 para avaliador", async () => {
+        const token = await tokenFor("avaliador");
+        const response = await call(
+            new Request(`http://local.test/groups/${crypto.randomUUID()}/candidates/${crypto.randomUUID()}`, {
+                method: "PATCH",
+                headers: authed(token),
+            }),
+        );
+        expect(response.status).toBe(403);
+    });
+
+    it("404 GROUP_NOT_FOUND quando o grupo de destino não existe", async () => {
+        const admin = await userAndTokenFor("admin");
+        const organized = await organizeWithOneCandidateOneEvaluator(admin);
+        const groups = organized.data.groups as { candidates: { id: string }[] }[];
+        const candidateId = groups.flatMap((g) => g.candidates)[0]!.id;
+
+        const response = await call(
+            new Request(`http://local.test/groups/${crypto.randomUUID()}/candidates/${candidateId}`, {
+                method: "PATCH",
+                headers: authed(admin.token),
+            }),
+        );
+
+        expect(response.status).toBe(404);
+        const body = (await response.json()) as { error: { code: string } };
+        expect(body.error.code).toBe("GROUP_NOT_FOUND");
+    });
+
+    it("200 move um candidato entre os dois grupos existentes", async () => {
+        const admin = await userAndTokenFor("admin");
+        const organized = await organizeWithOneCandidateOneEvaluator(admin);
+        const groups = organized.data.groups as { id: string; candidates: { id: string }[] }[];
+        const [groupWithCandidate] = groups.filter((g) => g.candidates.length > 0);
+        const targetGroup = groups.find((g) => g.id !== groupWithCandidate!.id)!;
+        const candidateId = groupWithCandidate!.candidates[0]!.id;
+
+        const response = await call(
+            new Request(`http://local.test/groups/${targetGroup.id}/candidates/${candidateId}`, {
+                method: "PATCH",
+                headers: authed(admin.token),
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as { data: { groups: unknown[]; warning: string | null } };
+        expect(body.data.groups).toHaveLength(2);
+    });
+});

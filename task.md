@@ -41,16 +41,33 @@ torna este arquivo confiável em vez de mais um registro que ninguém confere.
       `saturday_restriction` (D7), sem campo novo. Migration `0013`. `front/app/painel/check-in-membros/`.
       `specs/010-checkin-membros/`. D7 esclarecido durante a spec: a modalidade é do
       **candidato**, não do membro — `task.md`/`CONTEXT.md` amarravam os dois por engano.
+      Mesclada em `develop` via PR #10.
+- [x] **FEAT-0012** — Organização automática de grupos: admin aciona "organizar grupos" na
+      edição corrente, o sistema distribui candidatos presenciais presentes entre salas
+      (D5, via `deriveRoomCapacity`) e aloca avaliadores/hosts com check-in de membro feito;
+      nunca deixa um grupo com exatamente 1 mulher (D1); candidatos online (D7) formam
+      grupos próprios, separados dos presenciais, sem sala nem avaliador alocado
+      automaticamente (decisão tomada durante a spec — ver `specs/012-organizacao-grupos/spec.md`,
+      US3). Ajuste manual pós-organização (mover candidato/avaliador entre grupos), com
+      aviso — não bloqueio — para violação de D1. Migration `0014` reconstrói
+      `groups`/`group_evaluators`/`group_candidates` (órfãs desde a `0001`, ganham
+      `process_id`, `room_id` nullable, `modality`). `specs/012-organizacao-grupos/`.
+      `front/app/painel/grupos/`. Implementada na branch `claude/feat-0012-organizacao-grupos`,
+      ainda não mesclada em `develop` no momento desta nota.
 
-Todas as features acima estão **mescladas em `develop`** (2026-08-26), com a suíte completa
-passando (340 testes `api`, 20 `shared`, `tsc`/build limpos em `shared`/`api`/`front`).
-**Migrations `0008` a `0012` aplicadas só localmente** — staging e produção pendentes (ver
-"Pendências operacionais").
+Todas as features acima, **exceto a FEAT-0012**, estão **mescladas em `develop`**
+(2026-08-26), com a suíte completa passando (366 testes `api`, 20 `shared`, `tsc`/build
+limpos em `shared`/`api`/`front`). **Migrations `0008` a `0013` aplicadas só localmente** —
+staging e produção pendentes (ver "Pendências operacionais").
 
-**FEAT-0010 implementada na branch `claude/feat-0010-checkin-membros-u259pj`** (ainda não
-mesclada em `develop` no momento desta nota) — 366 testes `api` passando (21 novos: US1/US2
-de membro + US3 de candidato), `tsc`/build limpos em `shared`/`api`/`front`. Migration `0013`
-só local.
+**FEAT-0012 implementada na branch `claude/feat-0012-organizacao-grupos`** (ainda não
+mesclada em `develop` no momento desta nota) — 405 testes `api` passando (39 novos: 15 do
+algoritmo puro D1/D5, 12 de service com D1 real, 12 de rota HTTP), 20 `shared`, `tsc`/build
+limpos em `shared`/`api`/`front`. Migration `0014` só local. **Achado durante a
+implementação**: `GroupCandidate` não expõe `gender` na resposta HTTP — mesma postura de
+`CandidateCheckinItemSchema` (FEAT-0005): dado sensível de inscrição, nunca por pessoa numa
+listagem comum; D1 é verificado só no backend, uma violação chega ao front como o aviso
+`GENDER_RULE_VIOLATED`, sem identificar quem.
 
 ## Convenção: quando pular o ciclo do spec-kit
 
@@ -63,12 +80,9 @@ completo é reservado para features relevantes de verdade.
 
 Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. Resumo do que falta:
 
-- [ ] **FEAT-0012** — Organização automática de grupos. Depende de 009 (feita), 010 (feita —
-      ver "Concluído" acima) e 011 (feita).
-      Reconstrói `groups`/`group_evaluators`/`group_candidates` (hoje vazias e órfãs desde a
-      `0001`) — `DROP`/`CREATE` trivial agora, procedimento perigoso depois de povoadas.
 - [ ] **FEAT-0013** — Avaliação dos candidatos (5 critérios ponderados, veredito por veto de
-      vermelho — D2). Depende da 012. Reconstrói `evaluations`/`metrics` (mesma janela acima).
+      vermelho — D2). Depende da 012 (feita — ver "Concluído" acima). Reconstrói
+      `evaluations`/`metrics` (mesma janela órfã das tabelas de grupo).
 
 ## Órfãos — sem spec, sem dono
 
@@ -85,8 +99,10 @@ Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. 
 
 ## Pendências operacionais (não são código)
 
-- [ ] Aplicar migrations `0008` a `0012` em staging, depois produção (staging sempre primeiro
-      — Princípio III da constitution).
+- [ ] Aplicar migrations `0008` a `0014` em staging, depois produção (staging sempre primeiro
+      — Princípio III da constitution). Migration `0014` reconstrói `groups`/`group_evaluators`/
+      `group_candidates` — confirmar que seguem vazias nesses ambientes antes de aplicar
+      (research.md D-tech1 da FEAT-0012).
 - [ ] Calibrar as iterações do PBKDF2 (FEAT-0003) medindo CPU em produção — `wrangler dev`
       não aplica o teto de 10 ms.
 - [ ] Criar a regra de Rate Limiting do WAF em `/auth/*` (FEAT-0003) — o plano Free só dá

@@ -92,6 +92,7 @@ nova — nunca um estado parcialmente escrito.
 ```
 GroupSummary {
   id: string
+  name: string
   modality: "presencial" | "online"
   room: { id, name } | null
   candidates: [{ id, name, attendance }]   // sem `gender` — mesma postura de CandidateCheckinItemSchema (FEAT-0005)

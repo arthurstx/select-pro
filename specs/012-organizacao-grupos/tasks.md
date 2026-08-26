@@ -105,21 +105,21 @@ mulher, nenhuma sala excede `maxGroups`.
       total das salas for menor que o total de presenciais presentes (FR-013).
 - [X] T015 [US1] Ajustar `group.service.ts#organize` para propagar
       `unallocatedCandidateCount` no `OrganizeResult` (T009 revisitada).
-- [ ] T016 [P] [US1] Criar `front/lib/group/api.ts`: `organizeGroups()`, `listGroups()`
+- [X] T016 [P] [US1] Criar `front/lib/group/api.ts`: `organizeGroups()`, `listGroups()`
       (mesmo padrão de `front/lib/member-checkin/api.ts`, `authFetch` + `toApiError`).
-- [ ] T017 [P] [US1] Criar `front/lib/group/queries.ts`: `useGroupsQuery`,
+- [X] T017 [P] [US1] Criar `front/lib/group/queries.ts`: `useGroupsQuery`,
       `useOrganizeGroupsMutation` (invalida a query de grupos em `onSuccess`, mesmo padrão
       de `useMarkMemberPresentMutation`).
-- [ ] T018 [US1] Criar `front/app/painel/grupos/_components/group-card.tsx`: um grupo
+- [X] T018 [US1] Criar `front/app/painel/grupos/_components/group-card.tsx`: um grupo
       (nome/sala ou "Online", lista de candidatos com nome e modalidade — sem gênero, mesma
       postura de `CandidateCheckinItemSchema`/FEAT-0005 — lista de avaliadores/hosts com
       cargo).
-- [ ] T019 [US1] Criar `front/app/painel/grupos/_components/organize-button.tsx`: aciona
+- [X] T019 [US1] Criar `front/app/painel/grupos/_components/organize-button.tsx`: aciona
       `useOrganizeGroupsMutation`, trata `GroupErrorCode.NO_CANDIDATES_PRESENT` e
       `NO_ROOMS_AVAILABLE` com mensagens específicas (reaproveitar `StateMessage`).
-- [ ] T020 [US1] Criar `front/app/painel/grupos/page.tsx`: lista os grupos via
+- [X] T020 [US1] Criar `front/app/painel/grupos/page.tsx`: lista os grupos via
       `useGroupsQuery`, botão de organizar, trata `CheckinErrorCode.NO_ACTIVE_SELECTION_PROCESS`.
-- [ ] T021 [US1] Adicionar item de navegação "Grupos" em
+- [X] T021 [US1] Adicionar item de navegação "Grupos" em
       `front/components/painel/painel-nav.tsx` (mesmo padrão do item de check-in de
       membros).
 
@@ -152,7 +152,7 @@ nunca mistura modalidade no mesmo grupo; grupos online seguem D1 e não têm `ro
       `attendance` antes de tudo, rodando as fases de D1/preenchimento duas vezes
       (presencial com salas, online sem salas, número de grupos conforme
       data-model.md Assumptions) e concatenando o resultado.
-- [ ] T025 [US3] Garantir em `group-card.tsx` (T018) que grupos online aparecem
+- [X] T025 [US3] Garantir em `group-card.tsx` (T018) que grupos online aparecem
       identificados ("Online", sem sala, sem seção de avaliadores).
 
 **Checkpoint**: US1 + US3 juntas cobrem a organização automática completa (FR-001 a FR-008,
@@ -171,29 +171,29 @@ para outro reflete nos dois grupos; mover entre modalidades é rejeitado; mover 
 
 ### Tests
 
-- [ ] T026 [P] [US2] `api/test/group.service.test.ts`: `moveCandidate`/`moveEvaluator` —
+- [X] T026 [P] [US2] `api/test/group.service.test.ts`: `moveCandidate`/`moveEvaluator` —
       move com sucesso (`warning: null`), move violando D1 (`warning:
       "GENDER_RULE_VIOLATED"`, ainda assim persiste), `GROUP_MODALITY_MISMATCH` ao cruzar
       modalidade, `GROUP_NOT_FOUND`/`CANDIDATE_NOT_ALLOCATED`/`EVALUATOR_NOT_ALLOCATED`.
-- [ ] T027 [P] [US2] `api/test/group.routes.test.ts`: `PATCH /groups/:groupId/candidates/:candidateId`
+- [X] T027 [P] [US2] `api/test/group.routes.test.ts`: `PATCH /groups/:groupId/candidates/:candidateId`
       e `PATCH /groups/:groupId/evaluators/:userId` — 200 nos casos válidos, 404/409 nos
       erros de domínio.
 
 ### Implementation
 
-- [ ] T028 [US2] `api/src/repositories/group.repository.ts`: `moveCandidate(groupId,
+- [X] T028 [US2] `api/src/repositories/group.repository.ts`: `moveCandidate(groupId,
       candidateId)` / `moveEvaluator(groupId, userId)` (`UPDATE` da FK na tabela de junção —
       o `UNIQUE` de data-model.md garante que sair do grupo antigo é automático).
-- [ ] T029 [US2] `api/src/services/group.service.ts`: `moveCandidate`/`moveEvaluator` —
+- [X] T029 [US2] `api/src/services/group.service.ts`: `moveCandidate`/`moveEvaluator` —
       valida existência/modalidade, recalcula composição de gênero dos dois grupos afetados
       para decidir `warning`, chama T028, devolve os dois `GroupSummary` atualizados.
-- [ ] T030 [US2] `api/src/routes/group.routes.ts`: as duas rotas `PATCH`, mesmo padrão de
+- [X] T030 [US2] `api/src/routes/group.routes.ts`: as duas rotas `PATCH`, mesmo padrão de
       erro de T010.
-- [ ] T031 [P] [US2] `front/lib/group/api.ts` (T016): `moveCandidate()`, `moveEvaluator()`.
-- [ ] T032 [P] [US2] `front/lib/group/queries.ts` (T017): `useMoveCandidateMutation`,
+- [X] T031 [P] [US2] `front/lib/group/api.ts` (T016): `moveCandidate()`, `moveEvaluator()`.
+- [X] T032 [P] [US2] `front/lib/group/queries.ts` (T017): `useMoveCandidateMutation`,
       `useMoveEvaluatorMutation` (invalidam a query de grupos, exibem o `warning` quando
       presente — ex.: `sonner`/toast já usado em outras telas do painel).
-- [ ] T033 [US2] `group-card.tsx` (T018/T025): controle simples (select de grupo destino +
+- [X] T033 [US2] `group-card.tsx` (T018/T025): controle simples (select de grupo destino +
       botão "mover") por candidato/avaliador listado, acionando as mutations de T032.
 
 **Checkpoint**: todas as user stories completas e testáveis independentemente.
@@ -205,7 +205,7 @@ para outro reflete nos dois grupos; mover entre modalidades é rejeitado; mover 
 - [ ] T034 [P] Rodar `npm run test --workspace=api`, `npm run test --workspace=shared`,
       `tsc --noEmit` em `shared`/`api`/`front`, `next build` em `front` — suíte completa
       precisa passar antes de considerar a feature pronta.
-- [ ] T035 [P] Atualizar `task.md` (raiz) e `CONTEXT.md`: mover FEAT-0012 para "Concluído",
+- [X] T035 [P] Atualizar `task.md` (raiz) e `CONTEXT.md`: mover FEAT-0012 para "Concluído",
       atualizar o diagrama de dependência (012 feita → 013 liberada), registrar qualquer
       decisão tomada durante a implementação que não estava prevista no plan (mesmo padrão
       das features anteriores).

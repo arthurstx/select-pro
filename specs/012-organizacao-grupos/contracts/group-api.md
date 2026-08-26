@@ -21,10 +21,10 @@ anterior (FR-011) e grava a nova.
 ```json
 {
   "data": {
-    "process": { "id": "uuid", "label": "2026.2" },
     "groups": [
       {
         "id": "uuid",
+        "name": "Sala 1 - Grupo 1",
         "modality": "presencial",
         "room": { "id": "uuid", "name": "Sala 1" },
         "candidates": [
@@ -34,6 +34,7 @@ anterior (FR-011) e grava a nova.
       },
       {
         "id": "uuid",
+        "name": "Grupo Online 1",
         "modality": "online",
         "room": null,
         "candidates": [
