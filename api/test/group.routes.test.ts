@@ -171,7 +171,7 @@ describe("PATCH /groups/:groupId/candidates|evaluators/:id (HTTP)", () => {
         const response = await call(
             new Request("http://local.test/groups/organize", { method: "POST", headers: authed(admin.token) }),
         );
-        return (await response.json()) as { data: { groups: { id: string }[] } };
+        return (await response.json()) as { data: { groups: { id: string; candidates: { id: string }[] }[] } };
     }
 
     it("401 sem Authorization", async () => {
@@ -197,8 +197,7 @@ describe("PATCH /groups/:groupId/candidates|evaluators/:id (HTTP)", () => {
     it("404 GROUP_NOT_FOUND quando o grupo de destino não existe", async () => {
         const admin = await userAndTokenFor("admin");
         const organized = await organizeWithOneCandidateOneEvaluator(admin);
-        const groups = organized.data.groups as { candidates: { id: string }[] }[];
-        const candidateId = groups.flatMap((g) => g.candidates)[0]!.id;
+        const candidateId = organized.data.groups.flatMap((g) => g.candidates)[0]!.id;
 
         const response = await call(
             new Request(`http://local.test/groups/${crypto.randomUUID()}/candidates/${candidateId}`, {
@@ -215,7 +214,7 @@ describe("PATCH /groups/:groupId/candidates|evaluators/:id (HTTP)", () => {
     it("200 move um candidato entre os dois grupos existentes", async () => {
         const admin = await userAndTokenFor("admin");
         const organized = await organizeWithOneCandidateOneEvaluator(admin);
-        const groups = organized.data.groups as { id: string; candidates: { id: string }[] }[];
+        const groups = organized.data.groups;
         const [groupWithCandidate] = groups.filter((g) => g.candidates.length > 0);
         const targetGroup = groups.find((g) => g.id !== groupWithCandidate!.id)!;
         const candidateId = groupWithCandidate!.candidates[0]!.id;
