@@ -97,26 +97,42 @@ Nove features derivadas de um backlog em texto livre sobre separação automáti
 
 ```
 011 (salas) ── ✅ feita ──────┐
-008 (status) ── ✅ feita ──→ 009 (host) ── ✅ feita, branch própria ──→ 010 (check-in) → 012 (grupos) → 013 (avaliação)
+008 (status) ── ✅ feita ──→ 009 (host) ── ✅ feita ──→ 010 (check-in) → 012 (grupos) → 013 (avaliação)
 
-014 (necessidades especiais), 015 (filtro por curso), 016 (exportação CSV) — sem dependência
+014 (necessidades especiais) ✅, 015 (filtro por curso) ✅, 016 (exportação CSV) ✅ — sem dependência
 ```
 
-**008 e 011 implementadas e mescladas em `develop`** (2026-08-24) — specs completas em
-`specs/008-member-status-approval/` e `specs/011-cadastro-de-salas/`. 272/272 testes `api` +
-20/20 `shared` passando com as duas juntas. **Pendente de ambas: aplicar as migrations `0008`
-e `0009` em staging e produção** — só locais até agora.
+**Todas as features 008, 009, 011, 014, 015 e 016 estão implementadas e mescladas em
+`develop`** (2026-08-26). 340/340 testes `api` + 20/20 `shared` passando com todas juntas,
+`tsc`/build limpos em `shared`/`api`/`front`. **Pendente: aplicar as migrations `0008` a `0012`
+em staging e produção** — só locais até agora (ver "Ambientes / Infra" acima).
 
-**009 implementada** (2026-08-25) na branch `feat/papel-host`, **ainda não mesclada**
-(mesma disciplina de aguardar instrução explícita) — spec completa em
-`specs/009-papel-de-host/`. `edition_hosts` é tabela-de-fatos (existência da linha = ser host
-na edição, sem coluna de estado — R1); reaproveita `SelectionProcessRepository.resolveCurrent()`
-e `NoActiveSelectionProcessError` de `checkin-errors.ts`, sem duplicar o conceito de "edição
-corrente". Um erro novo apareceu só ao implementar (`EVALUATOR_NOT_FOUND`, 404, para `userId`
-que não é avaliador ativo) — não estava previsto no plano original. 287/287 testes `api`
-passando; quickstart validado manualmente via curl contra `wrangler dev` local (UI não
-verificada em navegador nesta sessão — ver pendência abaixo). Migration `0010` aplicada só
-localmente.
+**009, 014, 015 e 016 foram implementadas em paralelo**, cada uma num git worktree/branch
+própria, e mescladas em sequência (009 → 014 → 016 → 015, por número de migration crescente
++ 015 por último por tocar mais arquivos de front em comum com 016). Conflitos de merge reais,
+todos resolvidos manualmente:
+- `api/src/index.ts` e `shared/src/index.ts` — cada feature nova monta seu próprio router/CORS
+  e exporta seu próprio schema; sempre aditivo, sem perda.
+- `front/app/painel/dashboard-screen.tsx` — 016 (botão de exportar) e 015 (filtro de curso)
+  mexeram no mesmo bloco de filtros da tabela; unidos manualmente.
+- Duas specs paralelas (015 e 016) numeraram a própria pasta como `specs/012-*` — cada worktree
+  só via os specs do próprio checkout e calculou "o próximo livre" de forma independente.
+  Renomeadas para `015-filtro-por-curso`/`016-exportacao-csv-candidatos` antes do merge, para
+  bater com a numeração real do backlog.
+- **Integração descoberta só no merge**: a exportação CSV (016) foi implementada sem saber do
+  filtro por curso (015, paralela) — o parâmetro `course` foi adicionado a
+  `ExportCandidatesQuerySchema` depois do merge das duas, para o botão de exportar respeitar
+  o mesmo recorte visível na tabela. Tratada como tarefa pequena (ver "Convenção" em `task.md`),
+  sem novo ciclo de spec-kit.
+- 009 (`edition_hosts` — tabela-de-fatos, R1) e 016 (log de auditoria `candidate_export_events`,
+  append-only) reaproveitam padrões já estabelecidos (`SelectionProcessRepository.resolveCurrent()`,
+  `checkin_events`), sem duplicar conceito nenhum.
+- 016 rendeu um bug real encontrado e corrigido pelo próprio agente: o refinamento de data em
+  `export.schema.ts` (copiado de `dashboard.schema.ts`) lançava `RangeError` em vez de falhar a
+  validação como 400 para entrada malformada — o mesmo padrão ainda existe, intocado, em
+  `DateOnlySchema` de `dashboard.schema.ts` (candidato a follow-up).
+- 014 rendeu outra correção real: o rascunho inicial do contrato supunha `422` para erro de
+  validação; corrigido para `400`, seguindo o padrão real já em produção nessa rota.
 
 Duas correções ao que este documento previa antes de implementar:
 - A função de senioridade (D3) chama-se `isEligibleToAnchorTrainee`, não `canQualifyTrainee`

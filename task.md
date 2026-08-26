@@ -26,29 +26,39 @@ torna este arquivo confiável em vez de mais um registro que ninguém confere.
       (D5). Migration `0009`. `specs/011-cadastro-de-salas/`.
 - [x] **FEAT-0009** — Papel de host por edição do processo seletivo + painel de avaliadores
       (toggle host↔avaliador, filtro por cargo). Migration `0010`. `specs/009-papel-de-host/`.
-      Implementada na branch `feat/papel-host`, ainda não mesclada em `develop`.
+- [x] **FEAT-0014** — Necessidades especiais: descrição condicional ao boolean existente.
+      Migration `0011`. `specs/014-necessidades-especiais-descricao/`.
+- [x] **FEAT-0015** — Filtro por curso no check-in e no dashboard (mesma tela do "painel" —
+      confirmado durante a implementação que são a mesma coisa). Sem migration.
+      `specs/015-filtro-por-curso/`.
+- [x] **FEAT-0016** — Exportação de candidatos em CSV, admin-only, com log de auditoria
+      append-only (`candidate_export_events`). Migration `0012`. `specs/016-exportacao-csv-candidatos/`.
+      Botão no painel implementado à parte, sem ciclo do spec-kit (tarefa pequena — ver
+      "Convenção" abaixo); inclui o filtro de curso da FEAT-0015 no recorte exportado.
 
-Features 008 e 011 estão mescladas em `develop`. A 009 está implementada e testada
-(287 testes passando, quickstart validado manualmente contra `wrangler dev` local) mas segue
-na própria branch — sem merge automático, mesmo padrão de 008/011. **Migrations `0008`, `0009`
-e `0010` aplicadas só localmente** — staging e produção pendentes (ver "Pendências operacionais").
+Todas as features acima estão **mescladas em `develop`** (2026-08-26), com a suíte completa
+passando (340 testes `api`, 20 `shared`, `tsc`/build limpos em `shared`/`api`/`front`).
+**Migrations `0008` a `0012` aplicadas só localmente** — staging e produção pendentes (ver
+"Pendências operacionais").
+
+## Convenção: quando pular o ciclo do spec-kit
+
+Tarefas pequenas (um botão, um ajuste pontual, sem schema/migration novos ou com extensão
+óbvia de um contrato existente) não passam por `/speckit.specify → plan → tasks → analyze` —
+implementar direto e documentar de forma leve (comentário no código, uma linha aqui). O ciclo
+completo é reservado para features relevantes de verdade.
 
 ## Backlog 008–016 — cadeia ainda não fechada
 
 Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. Resumo do que falta:
 
 - [ ] **FEAT-0010** — Check-in de membros (avaliadores/hosts) + sessão online para quem tem
-      restrição de sábado (D7). Depende da 009 (feita, aguardando merge).
-- [ ] **FEAT-0012** — Organização automática de grupos. Depende de 009, 010 e 011 (feita).
+      restrição de sábado (D7). Depende da 009 (feita e mesclada).
+- [ ] **FEAT-0012** — Organização automática de grupos. Depende de 009 (feita), 010 e 011 (feita).
       Reconstrói `groups`/`group_evaluators`/`group_candidates` (hoje vazias e órfãs desde a
       `0001`) — `DROP`/`CREATE` trivial agora, procedimento perigoso depois de povoadas.
 - [ ] **FEAT-0013** — Avaliação dos candidatos (5 critérios ponderados, veredito por veto de
       vermelho — D2). Depende da 012. Reconstrói `evaluations`/`metrics` (mesma janela acima).
-- [ ] **FEAT-0014** — Necessidades especiais: campo de descrição condicional ao boolean
-      existente. Independente.
-- [ ] **FEAT-0015** — Filtro por curso no painel, check-in e dashboard. Independente.
-- [ ] **FEAT-0016** — Exportação de candidatos em planilha (CSV — não XLSX, orçamento de CPU),
-      admin-only, com campos sensíveis marcados e log de quem exportou. Independente.
 
 ## Órfãos — sem spec, sem dono
 
@@ -59,12 +69,14 @@ Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. 
 - [ ] Contador "X de Y presentes" no cabeçalho do check-in.
 - [ ] Dark mode.
 - [ ] Duas telas de estado no Stitch: "nenhum candidato inscrito" e "sem processo corrente".
+- [ ] UI para incluir gênero/etnia na exportação CSV (`include_sensitive=true`) — a FEAT-0016
+      implementou o endpoint e o botão padrão (sempre `false`); um botão dedicado a dado
+      sensível fica para quando houver pedido real.
 
 ## Pendências operacionais (não são código)
 
-- [ ] Aplicar migrations `0008`, `0009` e `0010` em staging, depois produção (staging sempre
-      primeiro — Princípio III da constitution).
-- [ ] Mesclar `feat/papel-host` (FEAT-0009) em `develop`.
+- [ ] Aplicar migrations `0008` a `0012` em staging, depois produção (staging sempre primeiro
+      — Princípio III da constitution).
 - [ ] Calibrar as iterações do PBKDF2 (FEAT-0003) medindo CPU em produção — `wrangler dev`
       não aplica o teto de 10 ms.
 - [ ] Criar a regra de Rate Limiting do WAF em `/auth/*` (FEAT-0003) — o plano Free só dá
