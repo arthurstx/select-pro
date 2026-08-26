@@ -307,6 +307,35 @@ export interface CheckinEventRow {
     created_at: string;
 }
 
+// Exportação de candidatos — FEAT-0016 (migration 0012)
+
+/**
+ * Registro append-only de uma exportação de candidatos em CSV. Trilha de
+ * compliance, não log de operação: `actor_id`/`process_id` usam `ON DELETE
+ * RESTRICT` (mesma postura de `CandidateCheckinRow.checked_in_by`, não de
+ * `CheckinEventRow`) — apagar um usuário ou uma edição não pode apagar em
+ * silêncio o registro de que um dado sensível saiu do sistema.
+ *
+ * Nada nesta feature lê esta tabela de volta — é escrita pura, para uma
+ * futura tela de auditoria encontrar histórico (mesmo padrão de
+ * `checkin_events`, órfã até hoje).
+ */
+export interface CandidateExportEventRow {
+    id: string;
+    /** Quem pediu a exportação. */
+    actor_id: string;
+    /** `null` = recorte "todas as edições". */
+    process_id: string | null;
+    /** Snapshot do rótulo no momento da exportação — legível mesmo se a edição mudar depois. */
+    process_label: string;
+    /** O D1 devolve booleano como 0/1. */
+    included_sensitive_fields: number;
+    /** Quantas linhas de candidato o arquivo continha. */
+    row_count: number;
+
+    created_at: string;
+}
+
 // ------------------------------------------------------------
 // Tabelas de junção
 // ------------------------------------------------------------
@@ -412,6 +441,10 @@ export type NewCheckinEvent = Omit<CheckinEventRow, "created_at"> & {
     created_at?: string;
 };
 
+export type NewCandidateExportEvent = Omit<CandidateExportEventRow, "created_at"> & {
+    created_at?: string;
+};
+
 export type NewGroupEvaluator = GroupEvaluatorRow;
 export type NewGroupCandidate = GroupCandidateRow;
 
@@ -487,6 +520,7 @@ export interface DatabaseSchema {
     selection_processes: SelectionProcessRow;
     candidate_checkins: CandidateCheckinRow;
     checkin_events: CheckinEventRow;
+    candidate_export_events: CandidateExportEventRow;
 }
 
 export type TableName = keyof DatabaseSchema;
