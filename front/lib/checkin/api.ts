@@ -20,6 +20,7 @@ function toQueryString(query: ListCandidatesQuery): string {
     status: parsed.status,
   });
   if (parsed.search) params.set("search", parsed.search);
+  if (parsed.course) params.set("course", parsed.course);
 
   return params.toString();
 }

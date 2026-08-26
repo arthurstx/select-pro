@@ -13,10 +13,16 @@ import { PaginationMetaSchema, PaginationQuerySchema } from "./pagination.schema
 export const CheckinStatusFilterSchema = z.enum(["todos", "presentes", "ausentes"]);
 export type CheckinStatusFilter = z.infer<typeof CheckinStatusFilterSchema>;
 
-/** `GET /candidates` (FEAT-0005, seção 8.2). Busca é só por `name` — sem CPF/matrícula no domínio. */
+/**
+ * `GET /candidates` (FEAT-0005, seção 8.2; filtro por curso na FEAT-0015).
+ * Busca é só por `name` — sem CPF/matrícula no domínio. `course` ausente =
+ * todos os cursos; reusa `CourseSchema` (mesmo validador do domínio,
+ * Princípio I) em vez de um enum próprio.
+ */
 export const ListCandidatesQuerySchema = PaginationQuerySchema.extend({
     search: z.string().trim().min(1).optional(),
     status: CheckinStatusFilterSchema.default("todos"),
+    course: CourseSchema.optional(),
 });
 export type ListCandidatesQuery = z.infer<typeof ListCandidatesQuerySchema>;
 

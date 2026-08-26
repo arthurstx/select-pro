@@ -551,6 +551,81 @@ describe("Listagem de inscritos", () => {
         const ids = [...primeira.items, ...segunda.items].map((item) => item.id);
         expect(new Set(ids).size).toBe(4);
     });
+
+    // FEAT-0015 — filtro por curso.
+    it("filtro por curso: retorna só candidatos do curso pedido", async () => {
+        const marca = crypto.randomUUID();
+        await insertCandidate({ name: `Curso Comp ${marca}`, course: "eng-computacao" });
+        await insertCandidate({ name: `Curso Civil ${marca}`, course: "eng-civil" });
+
+        const result = unwrap(
+            await service().listCandidates(query({ search: marca, course: "eng-computacao" }), "admin", AGORA),
+        );
+
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0]?.course).toBe("eng-computacao");
+    });
+
+    it("filtro por curso combina com process_id, busca, intervalo de data e sort", async () => {
+        const marca = crypto.randomUUID();
+        await insertCandidate({ name: `Combo Comp Dentro ${marca}`, course: "eng-computacao", createdAt: "2026-08-10 10:00:00" });
+        await insertCandidate({ name: `Combo Comp Fora ${marca}`, course: "eng-computacao", createdAt: "2026-08-25 10:00:00" });
+        await insertCandidate({ name: `Combo Civil Dentro ${marca}`, course: "eng-civil", createdAt: "2026-08-10 10:00:00" });
+
+        const result = unwrap(
+            await service().listCandidates(
+                query({
+                    search: marca,
+                    course: "eng-computacao",
+                    from: "2026-08-01",
+                    to: "2026-08-15",
+                    process_id: "all",
+                }),
+                "admin",
+                AGORA,
+            ),
+        );
+
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0]?.name).toBe(`Combo Comp Dentro ${marca}`);
+    });
+
+    it("sem `course` no filtro, comportamento idêntico ao atual (todos os cursos)", async () => {
+        const marca = crypto.randomUUID();
+        await insertCandidate({ name: `Sem Filtro Comp ${marca}`, course: "eng-computacao" });
+        await insertCandidate({ name: `Sem Filtro Civil ${marca}`, course: "eng-civil" });
+
+        const result = unwrap(await service().listCandidates(query({ search: marca }), "admin", AGORA));
+
+        expect(result.items).toHaveLength(2);
+    });
+
+    it("cursos diferentes não reaproveitam o cache um do outro", async () => {
+        const marca = crypto.randomUUID();
+        await insertCandidate({ name: `Cache Comp ${marca}`, course: "eng-computacao" });
+        await insertCandidate({ name: `Cache Civil ${marca}`, course: "eng-civil" });
+        const cached = serviceWithCache();
+
+        const comp = unwrap(await cached.listCandidates(query({ search: marca, course: "eng-computacao" }), "admin", AGORA));
+        const civil = unwrap(await cached.listCandidates(query({ search: marca, course: "eng-civil" }), "admin", AGORA));
+
+        expect(comp.items).toHaveLength(1);
+        expect(comp.items[0]?.course).toBe("eng-computacao");
+        expect(civil.items).toHaveLength(1);
+        expect(civil.items[0]?.course).toBe("eng-civil");
+    });
+
+    it("`DashboardCandidatesQuery` não tem `course` em `metrics()` — o filtro é exclusivo da listagem", async () => {
+        // `metrics()` recebe `DashboardMetricsQuery`, que nunca teve (e continua sem ter) `course`.
+        // Este teste documenta a garantia de FR-009: não há como um `course` vazar para os agregados.
+        await insertCandidate({ course: "eng-computacao" });
+        await insertCandidate({ course: "eng-civil" });
+
+        const metrics = unwrap(await service().metrics({ mode: "sum" }, "admin", AGORA));
+
+        // `byCourse` continua trazendo TODOS os cursos representados, sem nenhum recorte de curso.
+        expect(metrics.byCourse.map((entry) => entry.key).sort()).toEqual(["eng-civil", "eng-computacao"]);
+    });
 });
 
 // ============================================================

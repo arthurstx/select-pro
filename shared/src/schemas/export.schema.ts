@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CourseSchema } from "./candidate.schema";
 import { isInvertedDateRange, ProcessScopeSchema } from "./dashboard.schema";
 
 // Exportação de candidatos em CSV (FEAT-0016). Ver `dashboard.schema.ts`
@@ -49,6 +50,8 @@ export const ExportCandidatesQuerySchema = z
         from: DateOnlySchema.optional(),
         /** Inclusive até o fim do dia. */
         to: DateOnlySchema.optional(),
+        /** Mesmo filtro da tabela do painel (FEAT-0015) — exportar deve refletir o recorte visível na tela. */
+        course: CourseSchema.optional(),
         include_sensitive: z
             .enum(["true", "false"])
             .default("false")

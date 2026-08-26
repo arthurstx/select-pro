@@ -84,6 +84,8 @@ export interface ListCandidatesFilters {
     perPage: number;
     /** `recent` = mais nova primeiro (default de sempre); `oldest` inverte. */
     sort: "recent" | "oldest";
+    /** FEAT-0015. `undefined` = todos os cursos — filtro exclusivo da listagem, nunca de `metrics()`. */
+    course?: Course;
 }
 
 /** Escapa `%`/`_` antes de envolver o termo em wildcards — sem isso, buscar por "50%" vira "tudo". */
@@ -231,6 +233,11 @@ export class DashboardRepository {
         if (filters.to) {
             conditions.push("c.created_at <= ?");
             bindings.push(`${filters.to} 23:59:59`);
+        }
+
+        if (filters.course) {
+            conditions.push("c.course = ?");
+            bindings.push(filters.course);
         }
 
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";

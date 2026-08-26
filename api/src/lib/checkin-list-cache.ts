@@ -1,4 +1,4 @@
-import type { CheckinStatusFilter } from "shared";
+import type { CheckinStatusFilter, Course } from "shared";
 
 import { logger } from "./logger";
 import type { CandidateWithCheckinRow } from "../repositories/checkin.repository";
@@ -8,6 +8,8 @@ export interface CachedListParams {
     perPage: number;
     status: CheckinStatusFilter;
     search?: string;
+    /** FEAT-0015. `undefined` = todos os cursos — precisa entrar em `keyFor`, ver nota lá. */
+    course?: Course;
 }
 
 export interface CachedListResult {
@@ -81,8 +83,11 @@ export class CheckinListCache {
     private async keyFor(processId: string, params: CachedListParams): Promise<string> {
         const generation = await this.generation(processId);
         const search = params.search?.trim().toLowerCase() ?? "";
+        // FEAT-0015 — precisa estar na chave, senão cursos diferentes
+        // reaproveitariam a mesma entrada de cache um do outro.
+        const course = params.course ?? "";
 
-        return `checkin:list:${processId}:${generation}:${params.page}:${params.perPage}:${params.status}:${search}`;
+        return `checkin:list:${processId}:${generation}:${params.page}:${params.perPage}:${params.status}:${search}:${course}`;
     }
 
     private generationKey(processId: string): string {

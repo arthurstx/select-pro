@@ -67,6 +67,7 @@ export class ExportsService {
             search: query.search,
             from: query.from,
             to: query.to,
+            course: query.course,
             includeSensitive: query.include_sensitive,
         });
 

@@ -62,6 +62,7 @@ export function useDashboardCandidatesQuery(params: DashboardCandidatesQuery) {
         (previous.search ?? "") === (params.search ?? "") &&
         (previous.from ?? "") === (params.from ?? "") &&
         (previous.to ?? "") === (params.to ?? "") &&
+        (previous.course ?? "") === (params.course ?? "") &&
         previous.sort === params.sort;
 
       return sameFilter ? previousData : undefined;

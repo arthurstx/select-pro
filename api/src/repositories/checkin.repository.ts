@@ -24,6 +24,8 @@ export interface ListCandidatesParams {
   endsAt: string;
   search?: string;
   status: CheckinStatusFilter;
+  /** FEAT-0015. `undefined` = todos os cursos. */
+  course?: Course;
   page: number;
   perPage: number;
 }
@@ -57,6 +59,11 @@ export class CheckinRepository {
       conditions.push("cc.checked_in_at IS NOT NULL");
     } else if (params.status === "ausentes") {
       conditions.push("cc.checked_in_at IS NULL");
+    }
+
+    if (params.course) {
+      conditions.push("c.course = ?");
+      bindings.push(params.course);
     }
 
     const whereClause = conditions.join(" AND ");

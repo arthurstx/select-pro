@@ -13,6 +13,8 @@ export interface ExportFilters {
     from?: string;
     /** `AAAA-MM-DD`, inclusive até o fim do dia. */
     to?: string;
+    /** Mesmo filtro da tabela do painel (FEAT-0015). */
+    course?: Course;
     /** Decide se `gender`/`ethnicity` entram na consulta — não filtra depois de ler (mesma postura de `dashboard.repository.metrics`). */
     includeSensitive: boolean;
 }
@@ -72,6 +74,11 @@ export class ExportsRepository {
         if (filters.to) {
             conditions.push("c.created_at <= ?");
             bindings.push(`${filters.to} 23:59:59`);
+        }
+
+        if (filters.course) {
+            conditions.push("c.course = ?");
+            bindings.push(filters.course);
         }
 
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
