@@ -25,9 +25,9 @@ Nenhuma tarefa de setup de infraestrutura — a stack, os workspaces e as ferram
 
 **⚠️ CRITICAL**: Nenhuma tarefa de US1/US2 pode começar antes de T001 e T002 estarem prontos.
 
-- [ ] T001 [P] Adicionar `course: CourseSchema.optional()` a `ListCandidatesQuerySchema` em `shared/src/schemas/checkin.schema.ts`
-- [ ] T002 [P] Adicionar `course: CourseSchema.optional()` a `DashboardCandidatesQuerySchema` em `shared/src/schemas/dashboard.schema.ts`
-- [ ] T003 `npx tsc --noEmit --project shared/tsconfig.json` para confirmar que os dois schemas compilam antes de seguir para `api/`/`front/`
+- [x] T001 [P] Adicionar `course: CourseSchema.optional()` a `ListCandidatesQuerySchema` em `shared/src/schemas/checkin.schema.ts`
+- [x] T002 [P] Adicionar `course: CourseSchema.optional()` a `DashboardCandidatesQuerySchema` em `shared/src/schemas/dashboard.schema.ts`
+- [x] T003 `npx tsc --noEmit --project shared/tsconfig.json` para confirmar que os dois schemas compilam antes de seguir para `api/`/`front/`
 
 **Checkpoint**: Contrato em `shared/` pronto — US1 e US2 podem prosseguir em paralelo.
 
@@ -43,18 +43,18 @@ Nenhuma tarefa de setup de infraestrutura — a stack, os workspaces e as ferram
 
 > Escrever estes casos ANTES da implementação e confirmar que falham (o campo `course` ainda não existe no filtro/repositório).
 
-- [ ] T004 [P] [US1] Adicionar casos de teste em `api/test/checkin.service.test.ts`: filtro por `course` retorna só itens do curso pedido; combinação de `course` + `status` + `search` aplica E lógico; `course` ausente mantém comportamento atual
-- [ ] T005 [P] [US1] Adicionar caso de teste em `api/test/checkin.routes.test.ts`: `GET /candidates?course=<inválido>` retorna `400` com `code: "VALIDATION_ERROR"` e `field: "course"`
+- [x] T004 [P] [US1] Adicionar casos de teste em `api/test/checkin.service.test.ts`: filtro por `course` retorna só itens do curso pedido; combinação de `course` + `status` + `search` aplica E lógico; `course` ausente mantém comportamento atual
+- [x] T005 [P] [US1] Adicionar caso de teste em `api/test/checkin.routes.test.ts`: `GET /candidates?course=<inválido>` retorna `400` com `code: "VALIDATION_ERROR"` e `field: "course"`
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Adicionar `course?: Course` a `ListCandidatesParams` em `api/src/repositories/checkin.repository.ts`; incluir `AND c.course = ?` em `conditions`/`bindings` dentro de `listCandidates` quando presente (depende de T001)
-- [ ] T007 [US1] Adicionar `course?: Course` a `CachedListParams` em `api/src/lib/checkin-list-cache.ts` **E** incluir `params.course ?? ""` na string template de `keyFor` (linha `` `checkin:list:${processId}:${generation}:${params.page}:${params.perPage}:${params.status}:${search}` ``) — `keyFor` interpola campo a campo, não deriva a chave do objeto inteiro; só estender a interface sem tocar o template deixaria a chave de cache igual entre cursos diferentes e serviria lista errada (achado E1 do `/speckit-analyze`) (depende de T001)
-- [ ] T008 [US1] Repassar `query.course` de `CheckinService.listCandidates` (`api/src/services/checkin.service.ts`) para `CachedListParams` e para `CheckinRepository.listCandidates` (depende de T006, T007)
-- [ ] T009 [US1] Rodar `npm run test --workspace=api -- checkin` e confirmar que T004/T005 passam
-- [ ] T010 [P] [US1] Criar `CourseFilter` em `front/components/painel/course-filter.tsx`: `<select>`/combobox (componentes `front/components/ui/`) com opção "Todos os cursos" + os 8 valores de `COURSE_LABELS` (de `shared`), no padrão visual de `role="group"`/rótulo acessível já usado em `filters-bar.tsx`
-- [ ] T011 [US1] Integrar `CourseFilter` em `front/app/painel/check-in/_components/filters-bar.tsx` (nova prop `course`/`onCourseChange`) e em `front/app/painel/check-in/page.tsx` (novo campo `course` no estado `Filters`, resetando `page` para 1 ao mudar, e repassando para `useCandidatesQuery`) (depende de T010)
-- [ ] T012 [US1] `npx tsc --noEmit --project front/tsconfig.json` e `npx tsc --noEmit --project api/tsconfig.json` para confirmar tipos ponta a ponta de US1
+- [x] T006 [US1] Adicionar `course?: Course` a `ListCandidatesParams` em `api/src/repositories/checkin.repository.ts`; incluir `AND c.course = ?` em `conditions`/`bindings` dentro de `listCandidates` quando presente (depende de T001)
+- [x] T007 [US1] Adicionar `course?: Course` a `CachedListParams` em `api/src/lib/checkin-list-cache.ts` **E** incluir `params.course ?? ""` na string template de `keyFor` (linha `` `checkin:list:${processId}:${generation}:${params.page}:${params.perPage}:${params.status}:${search}` ``) — `keyFor` interpola campo a campo, não deriva a chave do objeto inteiro; só estender a interface sem tocar o template deixaria a chave de cache igual entre cursos diferentes e serviria lista errada (achado E1 do `/speckit-analyze`) (depende de T001)
+- [x] T008 [US1] Repassar `query.course` de `CheckinService.listCandidates` (`api/src/services/checkin.service.ts`) para `CachedListParams` e para `CheckinRepository.listCandidates` (depende de T006, T007)
+- [x] T009 [US1] Rodar `npm run test --workspace=api -- checkin` e confirmar que T004/T005 passam
+- [x] T010 [P] [US1] Criar `CourseFilter` em `front/components/painel/course-filter.tsx`: `<select>`/combobox (componentes `front/components/ui/`) com opção "Todos os cursos" + os 8 valores de `COURSE_LABELS` (de `shared`), no padrão visual de `role="group"`/rótulo acessível já usado em `filters-bar.tsx`
+- [x] T011 [US1] Integrar `CourseFilter` em `front/app/painel/check-in/_components/filters-bar.tsx` (nova prop `course`/`onCourseChange`) e em `front/app/painel/check-in/page.tsx` (novo campo `course` no estado `Filters`, resetando `page` para 1 ao mudar, e repassando para `useCandidatesQuery`) (depende de T010)
+- [x] T012 [US1] `npx tsc --noEmit --project front/tsconfig.json` e `npx tsc --noEmit --project api/tsconfig.json` para confirmar tipos ponta a ponta de US1
 
 **Checkpoint**: Check-in filtra por curso de ponta a ponta — testável isoladamente, entregável como MVP.
 
