@@ -14,6 +14,7 @@ import { authRouter } from "./routes/auth.routes";
 import { candidatesRouter } from "./routes/candidates.routes";
 import { checkinRouter } from "./routes/checkin.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
+import { evaluatorsRouter } from "./routes/evaluators.routes";
 import { roomsRouter } from "./routes/rooms.routes";
 import { signupRequestsRouter } from "./routes/signup-requests.routes";
 import { SheetSyncService } from "./services/sheet-sync.service";
@@ -90,6 +91,20 @@ app.use("/rooms/*", (c, next) =>
 );
 
 /**
+ * `/evaluators/*` (FEAT-0009) — inteiramente admin-only, inclusive leitura.
+ * `allowMethods` precisa de PUT (alternar cargo).
+ */
+app.use("/evaluators/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
  * Modo de manutenção — fecha a janela de escrita durante migrations de
  * banco. Fica depois do CORS para que o 503 chegue com os headers de
  * origin, e não como erro de CORS.
@@ -144,6 +159,13 @@ app.use(
   ),
 );
 
+app.use(
+  "/evaluators/*",
+  maintenanceGuard(
+    "A gestão de avaliadores está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
@@ -154,6 +176,7 @@ app.route("/auth/signup-requests", signupRequestsRouter);
 app.route("/candidates", checkinRouter);
 app.route("/dashboard", dashboardRouter);
 app.route("/rooms", roomsRouter);
+app.route("/evaluators", evaluatorsRouter);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",

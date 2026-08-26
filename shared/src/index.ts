@@ -9,3 +9,4 @@ export * from './schemas/pagination.schema';
 export * from './schemas/checkin.schema';
 export * from './schemas/dashboard.schema';
 export * from './schemas/room.schema';
+export * from './schemas/evaluator.schema';

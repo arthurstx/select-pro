@@ -97,7 +97,7 @@ Nove features derivadas de um backlog em texto livre sobre separação automáti
 
 ```
 011 (salas) ── ✅ feita ──────┐
-008 (status) ── ✅ feita ──→ 009 (host) → 010 (check-in) → 012 (grupos) → 013 (avaliação)
+008 (status) ── ✅ feita ──→ 009 (host) ── ✅ feita, branch própria ──→ 010 (check-in) → 012 (grupos) → 013 (avaliação)
 
 014 (necessidades especiais), 015 (filtro por curso), 016 (exportação CSV) — sem dependência
 ```
@@ -106,6 +106,17 @@ Nove features derivadas de um backlog em texto livre sobre separação automáti
 `specs/008-member-status-approval/` e `specs/011-cadastro-de-salas/`. 272/272 testes `api` +
 20/20 `shared` passando com as duas juntas. **Pendente de ambas: aplicar as migrations `0008`
 e `0009` em staging e produção** — só locais até agora.
+
+**009 implementada** (2026-08-25) na branch `feat/papel-host`, **ainda não mesclada**
+(mesma disciplina de aguardar instrução explícita) — spec completa em
+`specs/009-papel-de-host/`. `edition_hosts` é tabela-de-fatos (existência da linha = ser host
+na edição, sem coluna de estado — R1); reaproveita `SelectionProcessRepository.resolveCurrent()`
+e `NoActiveSelectionProcessError` de `checkin-errors.ts`, sem duplicar o conceito de "edição
+corrente". Um erro novo apareceu só ao implementar (`EVALUATOR_NOT_FOUND`, 404, para `userId`
+que não é avaliador ativo) — não estava previsto no plano original. 287/287 testes `api`
+passando; quickstart validado manualmente via curl contra `wrangler dev` local (UI não
+verificada em navegador nesta sessão — ver pendência abaixo). Migration `0010` aplicada só
+localmente.
 
 Duas correções ao que este documento previa antes de implementar:
 - A função de senioridade (D3) chama-se `isEligibleToAnchorTrainee`, não `canQualifyTrainee`
