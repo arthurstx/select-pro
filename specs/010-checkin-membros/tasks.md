@@ -31,16 +31,16 @@ Monorepo já existente: `shared/src/schemas/`, `api/src/{repositories,services,r
 
 **Purpose**: contrato compartilhado antes de qualquer código de `api`/`front` (Princípio I).
 
-- [ ] T001 Criar `shared/src/schemas/member-checkin.schema.ts` com `MemberCheckinItemSchema`,
+- [X] T001 Criar `shared/src/schemas/member-checkin.schema.ts` com `MemberCheckinItemSchema`,
       `MemberCheckinListResponseSchema` (com `summary: {total, checkedIn}`),
       `MemberCheckinResponseSchema` e `MemberCheckinErrorCode` (`NO_EVALUATORS_IN_EDITION`),
       reaproveitando `EvaluatorRoleSchema` de `evaluator.schema.ts` e
       `SelectionProcessSummarySchema` de `checkin.schema.ts` — ver contracts/member-checkin-api.md
-- [ ] T002 [P] Alterar `shared/src/schemas/checkin.schema.ts`: acrescentar `attendance: z.enum(["online", "presencial"]).nullable()`
+- [X] T002 [P] Alterar `shared/src/schemas/checkin.schema.ts`: acrescentar `attendance: z.enum(["online", "presencial"]).nullable()`
       em `CandidateCheckinItemSchema` e `attendanceSummary: z.object({ online: z.number().int(), presencial: z.number().int() })`
       em `ListCandidatesResponseSchema.data` — ver contracts/member-checkin-api.md (seção "alteração em GET /candidates")
-- [ ] T003 Exportar os novos schemas/tipos em `shared/src/index.ts`
-- [ ] T004 Rodar `npm run build --workspace=shared` (ou `tsc`) para confirmar que os novos
+- [X] T003 Exportar os novos schemas/tipos em `shared/src/index.ts`
+- [X] T004 Rodar `npm run build --workspace=shared` (ou `tsc`) para confirmar que os novos
       tipos compilam antes de consumi-los em `api`/`front`
 
 **Checkpoint**: contrato pronto e publicado no workspace `shared` — `api`/`front` já podem importar.
@@ -53,12 +53,12 @@ Monorepo já existente: `shared/src/schemas/`, `api/src/{repositories,services,r
 
 **⚠️ CRITICAL**: nenhuma rota/service de membro roda sem esta migration.
 
-- [ ] T005 Criar `api/migrations/0013-member-checkin.sql` com `member_checkins` e
+- [X] T005 Criar `api/migrations/0013-member-checkin.sql` com `member_checkins` e
       `member_checkin_events` (espelhando `0006-candidate-checkin.sql`) + índices
       `idx_member_checkins_process`, `idx_member_checkin_events_process`,
       `idx_member_checkin_events_user` — ver data-model.md. Migration puramente aditiva,
       sem `MAINTENANCE_MODE` (Constitution Check do plan.md)
-- [ ] T006 Aplicar a migration localmente (`wrangler d1 migrations apply <DB> --local`,
+- [X] T006 Aplicar a migration localmente (`wrangler d1 migrations apply <DB> --local`,
       conferir comando exato em `api/package.json`/README) e confirmar que
       `npm run dev --workspace=api` sobe sem erro de schema
 
@@ -79,33 +79,33 @@ Cenários 1–7 de quickstart.md.
 
 > Escrever antes da implementação, confirmar que falham primeiro (Princípio V).
 
-- [ ] T007 [P] [US1] `api/test/member-checkin.service.test.ts`: marcar, desmarcar,
+- [X] T007 [P] [US1] `api/test/member-checkin.service.test.ts`: marcar, desmarcar,
       idempotência de marcar (sem 2º evento), idempotência de desmarcar (no-op),
       `NO_ACTIVE_SELECTION_PROCESS`, `NO_EVALUATORS_IN_EDITION`, `EVALUATOR_NOT_FOUND`
       (`userId` que não é avaliador/host ativo da edição corrente)
-- [ ] T008 [P] [US1] `api/test/member-checkin.routes.test.ts`: contrato HTTP de
+- [X] T008 [P] [US1] `api/test/member-checkin.routes.test.ts`: contrato HTTP de
       `GET/PUT/DELETE /member-checkins`, status codes e shapes de erro, `403` para papel
       `avaliador` (FR-007), `testEnv()` fixando o que os testes de `checkin.routes.test.ts`
       já fixam
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Criar `api/src/repositories/member-checkin.repository.ts`: `listWithCheckin(processId)`
+- [X] T009 [US1] Criar `api/src/repositories/member-checkin.repository.ts`: `listWithCheckin(processId)`
       (join `EvaluatorsRepository`-like + `member_checkins`), `upsertCheckin`/`removeCheckin`
       com o mesmo padrão de `db.batch` + `WHERE changes() > 0` de `checkin.repository.ts`,
       `findCheckin(userId, processId)` — reaproveita `EvaluatorsRepository.listWithRole`
       para achar quem é elegível (research.md D2)
-- [ ] T010 [US1] Criar `api/src/services/member-checkin.service.ts`: `listMemberCheckins`
+- [X] T010 [US1] Criar `api/src/services/member-checkin.service.ts`: `listMemberCheckins`
       (resolve edição corrente via `SelectionProcessRepository.resolveCurrent()`, retorna
       `NO_ACTIVE_SELECTION_PROCESS` ou `NO_EVALUATORS_IN_EDITION` conforme o caso, monta
       `summary`), `markPresent(userId, actorId)`, `unmarkPresent(userId, actorId)` —
       `Either`/tratamento de erro no mesmo estilo de `checkin.service.ts`
-- [ ] T011 [US1] Criar `api/src/routes/member-checkin.routes.ts`: `GET /`, `PUT /{id}/checkin`,
+- [X] T011 [US1] Criar `api/src/routes/member-checkin.routes.ts`: `GET /`, `PUT /{id}/checkin`,
       `DELETE /{id}/checkin`, `AUTHORIZED = [requireAuth, requireRole(ROLES.ADMIN)]`
       (research.md D5) — mesmo formato `createRoute` de `checkin.routes.ts`
-- [ ] T012 [US1] Montar `memberCheckinRouter` em `api/src/index.ts` (mesmo padrão aditivo
+- [X] T012 [US1] Montar `memberCheckinRouter` em `api/src/index.ts` (mesmo padrão aditivo
       já usado para os demais roteadores — ver nota do CONTEXT.md sobre merges aditivos)
-- [ ] T013 [US1] Rodar `npm run test --workspace=api` e confirmar T007/T008 verdes
+- [X] T013 [US1] Rodar `npm run test --workspace=api` e confirmar T007/T008 verdes
 
 **Checkpoint**: check-in de membros funcional ponta a ponta via API (Cenários 1–7 de quickstart.md).
 
@@ -123,19 +123,19 @@ tela; o contrato e o cálculo já existem desde a US1 por serem parte da mesma r
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Criar `front/app/painel/check-in-membros/_lib/api.ts`: client fetch para
+- [X] T014 [US2] Criar `front/app/painel/check-in-membros/_lib/api.ts`: client fetch para
       `GET/PUT/DELETE /member-checkins` usando os tipos de `shared` (T001)
-- [ ] T015 [P] [US2] Criar `front/app/painel/check-in-membros/_components/member-row.tsx`:
+- [X] T015 [P] [US2] Criar `front/app/painel/check-in-membros/_components/member-row.tsx`:
       linha da lista com nome, cargo (avaliador/host), estado de presença e ação de
       marcar/desmarcar — reaproveita padrões visuais de `check-in/_components/candidate-row.tsx`
-- [ ] T016 [P] [US2] Criar `front/app/painel/check-in-membros/_components/summary-bar.tsx`:
+- [X] T016 [P] [US2] Criar `front/app/painel/check-in-membros/_components/summary-bar.tsx`:
       "X de Y presentes" a partir de `summary` (FR-006)
-- [ ] T017 [US2] Criar `front/app/painel/check-in-membros/page.tsx`: compõe `member-row.tsx` +
+- [X] T017 [US2] Criar `front/app/painel/check-in-membros/page.tsx`: compõe `member-row.tsx` +
       `summary-bar.tsx`, estados de "sem processo corrente" (FR-008) e "edição sem
       avaliador/host atribuído" (FR-009) reaproveitando `state-message.tsx` existente
       (`front/app/painel/_components/state-message.tsx`), com mensagens distintas para os
       dois casos (Edge Cases da spec)
-- [ ] T018 [US2] Adicionar item "Check-in de membros" em `front/components/painel/painel-nav.tsx`
+- [X] T018 [US2] Adicionar item "Check-in de membros" em `front/components/painel/painel-nav.tsx`
       (`href: "/painel/check-in-membros"`, ícone a escolher — mesmo padrão comentado dos
       demais itens: guard real é a API, não o menu)
 
@@ -155,27 +155,27 @@ membro).
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T019 [P] [US3] Estender `api/test/checkin.service.test.ts`: candidato com
+- [X] T019 [P] [US3] Estender `api/test/checkin.service.test.ts`: candidato com
       `saturday_restriction=true` presente → `attendance: "online"`; `false` → `"presencial"`;
       ausente → `attendance: null`; `attendanceSummary` soma corretamente sobre o conjunto
       filtrado (não só a página)
-- [ ] T020 [P] [US3] Estender `api/test/checkin.routes.test.ts`: shape da resposta de
+- [X] T020 [P] [US3] Estender `api/test/checkin.routes.test.ts`: shape da resposta de
       `GET /candidates` inclui `attendance` por item e `attendanceSummary` agregado
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Alterar `api/src/repositories/checkin.repository.ts` (`listCandidates`):
+- [X] T021 [US3] Alterar `api/src/repositories/checkin.repository.ts` (`listCandidates`):
       selecionar `c.saturday_restriction` junto do resto (a query já faz `JOIN` com
       `candidates`) e devolver total agregado de online/presencial entre os presentes do
       conjunto filtrado (query de agregação irmã da de `total`, mesmo `WHERE`/`joinClause`
       já existentes — ver research.md D4)
-- [ ] T022 [US3] Alterar `api/src/services/checkin.service.ts` (`listCandidates`): mapear
+- [X] T022 [US3] Alterar `api/src/services/checkin.service.ts` (`listCandidates`): mapear
       `saturday_restriction` → `attendance` (`null` quando `checkedInAt` é `null`, senão
       `"online"`/`"presencial"`) e incluir `attendanceSummary` na resposta
-- [ ] T023 [US3] Rodar `npm run test --workspace=api` e confirmar T019/T020 verdes
-- [ ] T024 [P] [US3] Alterar `front/app/painel/check-in/_components/candidate-row.tsx`:
+- [X] T023 [US3] Rodar `npm run test --workspace=api` e confirmar T019/T020 verdes
+- [X] T024 [P] [US3] Alterar `front/app/painel/check-in/_components/candidate-row.tsx`:
       exibir rótulo online/presencial ao lado do estado de presença
-- [ ] T025 [US3] Alterar `front/app/painel/check-in/_components/filters-bar.tsx` (ou
+- [X] T025 [US3] Alterar `front/app/painel/check-in/_components/filters-bar.tsx` (ou
       componente de resumo irmão, conforme o que já existe na tela): exibir
       `attendanceSummary` (online vs. presencial) entre os presentes
 
@@ -187,13 +187,18 @@ membro).
 
 **Purpose**: consistência com o resto do projeto antes do merge.
 
-- [ ] T026 [P] Rodar `npm run lint`/`npm run typecheck` (ou equivalentes) em `shared`, `api`
+- [X] T026 [P] Rodar `npm run lint`/`npm run typecheck` (ou equivalentes) em `shared`, `api`
       e `front`
-- [ ] T027 Rodar toda a suíte `npm run test --workspace=api` (não só os testes novos) para
+- [X] T027 Rodar toda a suíte `npm run test --workspace=api` (não só os testes novos) para
       confirmar que nada de FEAT-0005/0009 quebrou com as alterações de T021/T022
 - [ ] T028 Executar os 8 cenários de `quickstart.md` manualmente (`npm run dev --workspace=api`
-      + `curl`) como validação final ponta a ponta
-- [ ] T029 Atualizar `task.md` (raiz): marcar FEAT-0010 como `[x]` e `CONTEXT.md` com o
+      + `curl`) como validação final ponta a ponta. **Não executado nesta sessão**: o ambiente
+      não tem `api/.dev.vars` (gitignored, per-checkout — ver CONTEXT.md) nem um usuário admin
+      real para gerar token; monte `.dev.vars` com `JWT_SECRET` e rode `POST /auth/register`
+      (ou insira um usuário `admin` direto no D1 local) antes de tentar. Os mesmos 8 cenários já
+      são exercitados, com asserções, pela suíte automatizada (T007/T008/T019/T020) contra D1
+      real via `vitest-pool-workers` — cobertura equivalente, sem o `curl` manual.
+- [X] T029 Atualizar `task.md` (raiz): marcar FEAT-0010 como `[x]` e `CONTEXT.md` com o
       resumo da feature, seguindo a convenção já usada para 008/009/011/014/015/016
 
 ---

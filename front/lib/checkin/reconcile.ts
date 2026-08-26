@@ -5,7 +5,19 @@ export type ListData = ListCandidatesResponse["data"];
 function patchItem(data: ListData, candidateId: string, checkedInAt: string | null): ListData {
     return {
         ...data,
-        items: data.items.map((item) => (item.id === candidateId ? { ...item, checkedInAt } : item)),
+        items: data.items.map((item) =>
+            item.id === candidateId
+                ? {
+                      ...item,
+                      checkedInAt,
+                      // Invariante do contrato (FEAT-0010): `attendance` é sempre
+                      // `null` quando ausente. Ao marcar, o modo real (online ou
+                      // presencial) só chega depois da invalidação em `onSettled`
+                      // — `patchAllLists`/reconcileItem não sabem `saturday_restriction`.
+                      attendance: checkedInAt === null ? null : item.attendance,
+                  }
+                : item,
+        ),
     };
 }
 

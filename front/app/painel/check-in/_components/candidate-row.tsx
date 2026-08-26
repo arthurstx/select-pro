@@ -75,7 +75,10 @@ export function CandidateRow({ candidate }: CandidateRowProps) {
               <p className="text-muted-foreground truncate text-sm">{courseAndSemester}</p>
             </div>
           </div>
-          <StatusBadge present={present} />
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <StatusBadge present={present} />
+            <AttendanceBadge attendance={candidate.attendance} />
+          </div>
         </div>
         <div className="text-muted-foreground flex flex-col gap-1 pl-[52px] text-sm">
           <span className="flex items-center gap-2 truncate">
@@ -106,8 +109,9 @@ export function CandidateRow({ candidate }: CandidateRowProps) {
           */}
           <p className="text-muted-foreground truncate text-sm">{formatPhone(candidate.phone)}</p>
         </div>
-        <div className="flex w-32 shrink-0 justify-center">
+        <div className="flex w-32 shrink-0 flex-col items-center gap-1">
           <StatusBadge present={present} />
+          <AttendanceBadge attendance={candidate.attendance} />
         </div>
         <div className="ml-4 w-40 shrink-0">
           <ActionButton present={present} pending={pending} onMark={handleMark} onUnmark={handleUnmark} className="w-full" />
@@ -143,6 +147,17 @@ function StatusBadge({ present }: { present: boolean }) {
       )}
     >
       {present ? "Presente" : "Aguardando"}
+    </span>
+  );
+}
+
+/** FEAT-0010, US3 (D7). `null` (ausente) não renderiza nada — modalidade só existe para quem está presente. */
+function AttendanceBadge({ attendance }: { attendance: CandidateCheckinItem["attendance"] }) {
+  if (attendance === null) return null;
+
+  return (
+    <span className="text-muted-foreground shrink-0 text-[11px] font-medium tracking-wide uppercase">
+      {attendance === "online" ? "Online" : "Presencial"}
     </span>
   );
 }

@@ -35,11 +35,22 @@ torna este arquivo confiável em vez de mais um registro que ninguém confere.
       append-only (`candidate_export_events`). Migration `0012`. `specs/016-exportacao-csv-candidatos/`.
       Botão no painel implementado à parte, sem ciclo do spec-kit (tarefa pequena — ver
       "Convenção" abaixo); inclui o filtro de curso da FEAT-0015 no recorte exportado.
+- [x] **FEAT-0010** — Check-in de membros (avaliadores/hosts), admin-only, com histórico
+      append-only (`member_checkin_events`) espelhando `checkin_events` da FEAT-0005; e
+      sinalização online/presencial no check-in de candidatos já existente, derivada de
+      `saturday_restriction` (D7), sem campo novo. Migration `0013`. `front/app/painel/check-in-membros/`.
+      `specs/010-checkin-membros/`. D7 esclarecido durante a spec: a modalidade é do
+      **candidato**, não do membro — `task.md`/`CONTEXT.md` amarravam os dois por engano.
 
 Todas as features acima estão **mescladas em `develop`** (2026-08-26), com a suíte completa
 passando (340 testes `api`, 20 `shared`, `tsc`/build limpos em `shared`/`api`/`front`).
 **Migrations `0008` a `0012` aplicadas só localmente** — staging e produção pendentes (ver
 "Pendências operacionais").
+
+**FEAT-0010 implementada na branch `claude/feat-0010-checkin-membros-u259pj`** (ainda não
+mesclada em `develop` no momento desta nota) — 366 testes `api` passando (21 novos: US1/US2
+de membro + US3 de candidato), `tsc`/build limpos em `shared`/`api`/`front`. Migration `0013`
+só local.
 
 ## Convenção: quando pular o ciclo do spec-kit
 
@@ -52,9 +63,8 @@ completo é reservado para features relevantes de verdade.
 
 Decisões D1–D7 e o diagrama de dependência completo estão em `CONTEXT.md`. Resumo do que falta:
 
-- [ ] **FEAT-0010** — Check-in de membros (avaliadores/hosts) + sessão online para quem tem
-      restrição de sábado (D7). Depende da 009 (feita e mesclada).
-- [ ] **FEAT-0012** — Organização automática de grupos. Depende de 009 (feita), 010 e 011 (feita).
+- [ ] **FEAT-0012** — Organização automática de grupos. Depende de 009 (feita), 010 (feita —
+      ver "Concluído" acima) e 011 (feita).
       Reconstrói `groups`/`group_evaluators`/`group_candidates` (hoje vazias e órfãs desde a
       `0001`) — `DROP`/`CREATE` trivial agora, procedimento perigoso depois de povoadas.
 - [ ] **FEAT-0013** — Avaliação dos candidatos (5 critérios ponderados, veredito por veto de

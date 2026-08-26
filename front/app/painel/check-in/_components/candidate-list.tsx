@@ -49,6 +49,11 @@ export function CandidateList({ query, search, status, onPageChange }: Candidate
         <EmptyState search={search} status={status} />
       ) : (
         <>
+          {/* FEAT-0010, US3/FR-011 — só entre os presentes do conjunto filtrado, não a página. */}
+          <p className="text-muted-foreground text-sm">
+            {data.attendanceSummary.online} online · {data.attendanceSummary.presencial} presencial
+            {data.attendanceSummary.presencial === 1 ? "" : "s"}
+          </p>
           <div className="flex flex-col gap-2">
             {data.items.map((item) => (
               <CandidateRow key={item.id} candidate={item} />

@@ -116,6 +116,14 @@ export function useMarkPresentMutation() {
             // instante deste clique (FEAT-0005, seção 8.3).
             patchAllLists(queryClient, result.candidateId, result.checkedInAt);
         },
+        onSettled: () => {
+            // FEAT-0010, US3: `attendance`/`attendanceSummary` não vêm no envelope
+            // de `PUT .../checkin` (só `candidateId`/`checkedInAt`) — o patch acima
+            // não sabe se a modalidade é online ou presencial. Invalidar em
+            // segundo plano busca o valor real sem re-mostrar o skeleton (os
+            // dados já corrigidos pelo patch continuam visíveis durante o fetch).
+            void queryClient.invalidateQueries({ queryKey: LIST_PREFIX });
+        },
     });
 }
 
@@ -130,6 +138,9 @@ export function useUnmarkPresentMutation() {
             const snapshot = snapshotLists(queryClient);
             patchAllLists(queryClient, candidateId, null);
             return { snapshot };
+        },
+        onSettled: () => {
+            void queryClient.invalidateQueries({ queryKey: LIST_PREFIX });
         },
         onError: (_error, _candidateId, context) => {
             if (context) restoreLists(queryClient, context.snapshot);

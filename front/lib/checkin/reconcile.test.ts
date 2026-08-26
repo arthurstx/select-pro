@@ -14,6 +14,9 @@ function item(id: string, checkedInAt: string | null) {
     course: "eng-computacao" as const,
     semester: 3,
     checkedInAt,
+    // FEAT-0010, US3 — irrelevante para os cenários de paginação/filtro
+    // testados aqui, sempre `null` como se ninguém tivesse restrição.
+    attendance: null,
   };
 }
 
@@ -21,6 +24,7 @@ function list(items: ReturnType<typeof item>[], total = items.length): ListData 
   return {
     process: { id: "11111111-1111-4111-8111-111111111111", label: "2026.2" },
     items,
+    attendanceSummary: { online: 0, presencial: 0 },
     pagination: { page: 1, perPage: 25, total, totalPages: Math.ceil(total / 25) },
   };
 }
