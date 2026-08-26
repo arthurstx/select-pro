@@ -1,6 +1,6 @@
 "use client";
 
-import { SearchIcon, ServerCrashIcon } from "lucide-react";
+import { DownloadIcon, SearchIcon, ServerCrashIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -11,7 +11,9 @@ import {
   type DashboardMetricsMode,
 } from "shared";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { exportCandidatesCsv } from "@/lib/dashboard/export-candidates";
 import {
   useCandidateDetailQuery,
   useDashboardCandidatesQuery,
@@ -53,6 +55,7 @@ export function DashboardScreen() {
   const [searchInput, setSearchInput] = useState("");
   const [mode, setMode] = useState<DashboardMetricsMode>("sum");
   const [selected, setSelected] = useState<DashboardCandidateItem | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   /**
    * `page` só muda AQUI, nunca num efeito separado que observe os demais
@@ -162,6 +165,22 @@ export function DashboardScreen() {
     updateFilters({ sort });
   }
 
+  async function handleExport() {
+    setIsExporting(true);
+    try {
+      await exportCandidatesCsv({
+        process_id: filters.processId,
+        search: filters.search || undefined,
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+      });
+    } catch {
+      toast.error("Não foi possível exportar os candidatos. Tente novamente.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   const scopeLabel =
     metricsQuery.data?.scope.kind === "edition" ? metricsQuery.data.scope.process.label : "todas as edições";
   const hasDateFilter = filters.from !== "" || filters.to !== "";
@@ -224,7 +243,13 @@ export function DashboardScreen() {
                   />
                 </div>
 
-                <DateRangeFilter value={{ from: filters.from, to: filters.to }} onApply={handleDateRangeApply} />
+                <div className="flex items-center gap-2">
+                  <DateRangeFilter value={{ from: filters.from, to: filters.to }} onApply={handleDateRangeApply} />
+                  <Button variant="outline" size="sm" disabled={isExporting} onClick={handleExport}>
+                    <DownloadIcon aria-hidden />
+                    {isExporting ? "Exportando…" : "Exportar CSV"}
+                  </Button>
+                </div>
               </div>
 
               <CandidatesTable
