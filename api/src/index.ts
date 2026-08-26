@@ -15,6 +15,7 @@ import { candidatesRouter } from "./routes/candidates.routes";
 import { checkinRouter } from "./routes/checkin.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
 import { evaluatorsRouter } from "./routes/evaluators.routes";
+import { exportsRouter } from "./routes/exports.routes";
 import { roomsRouter } from "./routes/rooms.routes";
 import { signupRequestsRouter } from "./routes/signup-requests.routes";
 import { SheetSyncService } from "./services/sheet-sync.service";
@@ -105,6 +106,21 @@ app.use("/evaluators/*", (c, next) =>
 );
 
 /**
+ * `/exports/*` (FEAT-0016) — inteiramente admin-only. Mesma allowlist das
+ * demais rotas autenticadas; só GET, a feature é somente leitura (o efeito
+ * colateral é uma linha de auditoria, não uma rota de escrita própria).
+ */
+app.use("/exports/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
  * Modo de manutenção — fecha a janela de escrita durante migrations de
  * banco. Fica depois do CORS para que o 503 chegue com os headers de
  * origin, e não como erro de CORS.
@@ -166,6 +182,13 @@ app.use(
   ),
 );
 
+app.use(
+  "/exports/*",
+  maintenanceGuard(
+    "A exportação está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
@@ -177,6 +200,7 @@ app.route("/candidates", checkinRouter);
 app.route("/dashboard", dashboardRouter);
 app.route("/rooms", roomsRouter);
 app.route("/evaluators", evaluatorsRouter);
+app.route("/exports", exportsRouter);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",
