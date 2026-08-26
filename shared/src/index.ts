@@ -13,3 +13,4 @@ export * from './schemas/evaluator.schema';
 export * from './schemas/export.schema';
 export * from './schemas/member-checkin.schema';
 export * from './schemas/group.schema';
+export * from './schemas/evaluation.schema';

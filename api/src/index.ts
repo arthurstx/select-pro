@@ -14,6 +14,7 @@ import { authRouter } from "./routes/auth.routes";
 import { candidatesRouter } from "./routes/candidates.routes";
 import { checkinRouter } from "./routes/checkin.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
+import { evaluationRouter } from "./routes/evaluation.routes";
 import { evaluatorsRouter } from "./routes/evaluators.routes";
 import { exportsRouter } from "./routes/exports.routes";
 import { groupRouter } from "./routes/group.routes";
@@ -151,6 +152,21 @@ app.use("/groups/*", (c, next) =>
 );
 
 /**
+ * `/evaluations/*` (FEAT-0013) — 4 rotas, todas exigem sessão. `allowMethods` precisa de
+ * PUT (registrar/editar avaliação). Nota da FEAT-0012/0010: este bloco é o que faltou nas
+ * duas primeiras vezes — não esquecer de novo em features futuras.
+ */
+app.use("/evaluations/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
  * Modo de manutenção — fecha a janela de escrita durante migrations de
  * banco. Fica depois do CORS para que o 503 chegue com os headers de
  * origin, e não como erro de CORS.
@@ -233,6 +249,13 @@ app.use(
   ),
 );
 
+app.use(
+  "/evaluations/*",
+  maintenanceGuard(
+    "A avaliação de candidatos está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
@@ -247,6 +270,7 @@ app.route("/evaluators", evaluatorsRouter);
 app.route("/exports", exportsRouter);
 app.route("/member-checkins", memberCheckinRouter);
 app.route("/groups", groupRouter);
+app.route("/evaluations", evaluationRouter);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",

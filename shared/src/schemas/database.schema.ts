@@ -9,8 +9,6 @@
 // Enums (CHECK constraints do schema)
 // ------------------------------------------------------------
 
-export type EvaluationStatus = "RED" | "YELLOW" | "GREEN";
-
 /** Estado de uma solicitação de cadastro pendente de aprovação (FEAT-0008). */
 export type SignupRequestStatus = "pending" | "approved" | "rejected";
 
@@ -64,12 +62,6 @@ export interface RoomRow {
     id: string;
     name: string;
     size: number;
-}
-
-export interface MetricRow {
-    id: string;
-    type: string | null;
-    score: number | null;
 }
 
 // ------------------------------------------------------------
@@ -358,25 +350,11 @@ export interface GroupCandidateRow {
     order: number | null;
 }
 
-// ------------------------------------------------------------
-// Avaliações
-// ------------------------------------------------------------
-
-export interface EvaluationRow {
-    id: string;
-
-    user_id: string;
-    candidate_id: string;
-    metrics_id: string;
-
-    score: number | null;
-    feedback: string | null;
-
-    status: EvaluationStatus;
-
-    created_at: string;
-    updated_at: string | null;
-}
+// Avaliações — ver `evaluation.repository.ts` (FEAT-0013). `EvaluationRow`/`MetricRow`
+// (design antigo, repetia cor/observação por critério) foram removidos daqui: migration
+// `0015` reconstruiu como `evaluations` + `evaluation_scores`, sem tipo placeholder nesta
+// tabela de scaffolding — mesmo padrão já usado por `groups`/`member_checkins` (FEAT-0012/0010),
+// cujos repositories definem seus próprios row types em vez de reusar `XxxRow` genérico daqui.
 
 // ------------------------------------------------------------
 // Payloads de INSERT (`NewXxx`)
@@ -384,7 +362,6 @@ export interface EvaluationRow {
 
 export type NewRole = RoleRow;
 export type NewRoom = RoomRow;
-export type NewMetric = MetricRow;
 
 export type NewUser = Omit<UserRow, "deactivated_at" | "created_at" | "updated_at"> & {
     deactivated_at?: string | null;
@@ -455,15 +432,6 @@ export type NewCandidateExportEvent = Omit<CandidateExportEventRow, "created_at"
 export type NewGroupEvaluator = GroupEvaluatorRow;
 export type NewGroupCandidate = GroupCandidateRow;
 
-export type NewEvaluation = Omit<
-    EvaluationRow,
-    "status" | "created_at" | "updated_at"
-> & {
-    status?: EvaluationStatus;
-    created_at?: string;
-    updated_at?: string | null;
-};
-
 // ------------------------------------------------------------
 // Payloads de UPDATE (`XxxUpdate`)
 // ------------------------------------------------------------
@@ -475,10 +443,6 @@ export type CandidateUpdate = Partial<Omit<CandidateRow, "id">> & { id: string }
 export type CandidateApplicationUpdate = Partial<Omit<CandidateApplicationRow, "id">> & { id: string };
 export type GroupUpdate = Partial<Omit<GroupRow, "id">> & { id: string };
 export type RoomUpdate = Partial<Omit<RoomRow, "id">> & { id: string };
-export type MetricUpdate = Partial<Omit<MetricRow, "id">> & { id: string };
-export type EvaluationUpdate = Partial<Omit<EvaluationRow, "id">> & {
-    id: string;
-};
 
 // ------------------------------------------------------------
 // Shapes com relacionamentos
@@ -498,12 +462,6 @@ export interface GroupWithMembers extends GroupRow {
     candidates: (CandidateRow & { order: number | null })[];
 }
 
-export interface EvaluationWithRelations extends EvaluationRow {
-    user: UserRow;
-    candidate: CandidateRow;
-    metric: MetricRow;
-}
-
 // ------------------------------------------------------------
 // Mapa nome-da-tabela -> tipo da linha
 // ------------------------------------------------------------
@@ -511,7 +469,6 @@ export interface EvaluationWithRelations extends EvaluationRow {
 export interface DatabaseSchema {
     roles: RoleRow;
     rooms: RoomRow;
-    metrics: MetricRow;
     users: UserRow;
     member_profiles: MemberProfileRow;
     sessions: SessionRow;
@@ -523,7 +480,6 @@ export interface DatabaseSchema {
     groups: GroupRow;
     group_evaluators: GroupEvaluatorRow;
     group_candidates: GroupCandidateRow;
-    evaluations: EvaluationRow;
     selection_processes: SelectionProcessRow;
     candidate_checkins: CandidateCheckinRow;
     checkin_events: CheckinEventRow;
