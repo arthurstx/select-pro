@@ -49,7 +49,7 @@ Nenhuma tarefa de setup de infraestrutura — a stack, os workspaces e as ferram
 ### Implementation for User Story 1
 
 - [ ] T006 [US1] Adicionar `course?: Course` a `ListCandidatesParams` em `api/src/repositories/checkin.repository.ts`; incluir `AND c.course = ?` em `conditions`/`bindings` dentro de `listCandidates` quando presente (depende de T001)
-- [ ] T007 [US1] Adicionar `course?: Course` a `CachedListParams` em `api/src/lib/checkin-list-cache.ts`, garantindo que `course` entre na chave de cache gerada por `keyFor` (depende de T001)
+- [ ] T007 [US1] Adicionar `course?: Course` a `CachedListParams` em `api/src/lib/checkin-list-cache.ts` **E** incluir `params.course ?? ""` na string template de `keyFor` (linha `` `checkin:list:${processId}:${generation}:${params.page}:${params.perPage}:${params.status}:${search}` ``) — `keyFor` interpola campo a campo, não deriva a chave do objeto inteiro; só estender a interface sem tocar o template deixaria a chave de cache igual entre cursos diferentes e serviria lista errada (achado E1 do `/speckit-analyze`) (depende de T001)
 - [ ] T008 [US1] Repassar `query.course` de `CheckinService.listCandidates` (`api/src/services/checkin.service.ts`) para `CachedListParams` e para `CheckinRepository.listCandidates` (depende de T006, T007)
 - [ ] T009 [US1] Rodar `npm run test --workspace=api -- checkin` e confirmar que T004/T005 passam
 - [ ] T010 [P] [US1] Criar `CourseFilter` em `front/components/painel/course-filter.tsx`: `<select>`/combobox (componentes `front/components/ui/`) com opção "Todos os cursos" + os 8 valores de `COURSE_LABELS` (de `shared`), no padrão visual de `role="group"`/rótulo acessível já usado em `filters-bar.tsx`
