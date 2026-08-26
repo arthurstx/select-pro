@@ -97,7 +97,7 @@ Nove features derivadas de um backlog em texto livre sobre separação automáti
 
 ```
 011 (salas) ── ✅ feita ──────┐
-008 (status) ── ✅ feita ──→ 009 (host) ── ✅ feita ──→ 010 (check-in) → 012 (grupos) → 013 (avaliação)
+008 (status) ── ✅ feita ──→ 009 (host) ── ✅ feita ──→ 010 (check-in) ✅ feita → 012 (grupos) → 013 (avaliação)
 
 014 (necessidades especiais) ✅, 015 (filtro por curso) ✅, 016 (exportação CSV) ✅ — sem dependência
 ```
@@ -106,6 +106,23 @@ Nove features derivadas de um backlog em texto livre sobre separação automáti
 `develop`** (2026-08-26). 340/340 testes `api` + 20/20 `shared` passando com todas juntas,
 `tsc`/build limpos em `shared`/`api`/`front`. **Pendente: aplicar as migrations `0008` a `0012`
 em staging e produção** — só locais até agora (ver "Ambientes / Infra" acima).
+
+**010 (check-in de membros) implementada na branch `claude/feat-0010-checkin-membros-u259pj`**
+(ainda não mesclada em `develop` no momento desta nota). 366/366 testes `api` (21 novos),
+`tsc`/build limpos em `shared`/`api`/`front`. Migration `0013` (`member_checkins`/
+`member_checkin_events`, espelhando `candidate_checkins`/`checkin_events` da FEAT-0005), só
+local. Tela nova `front/app/painel/check-in-membros/`, item de nav próprio. A US3 (sinalização
+online/presencial) mexeu em código já existente da FEAT-0005 (`checkin.repository/service.ts`
+e `check-in/_components/candidate-row.tsx`), não numa tela nova. **Achado durante a
+implementação**: o `PUT .../checkin` de candidato não devolve `attendance` no envelope — a
+atualização otimista do front (`lib/checkin/queries.ts`) por isso invalida a lista em
+`onSettled` depois do patch local, em vez de tentar adivinhar a modalidade no cliente.
+
+**D7 esclarecido nesta feature**: a linha original do `task.md` amarrava "check-in de
+membros" e "sessão online por restrição de sábado" como a mesma coisa — mas
+`saturday_restriction` só existe em `candidates`/`candidate_applications`, nunca em membro.
+A spec da 010 confirmou com o usuário: online/presencial é atributo do **candidato**
+presente, consumido depois pela FEAT-0012 (grupos), não um estado do avaliador/host.
 
 **009, 014, 015 e 016 foram implementadas em paralelo**, cada uma num git worktree/branch
 própria, e mescladas em sequência (009 → 014 → 016 → 015, por número de migration crescente
@@ -152,7 +169,7 @@ Duas correções ao que este documento previa antes de implementar:
 | D4 | Host é atribuição **por edição do processo seletivo**, não papel global em `roles`. |
 | D5 | Salas: ≤50 → 1 host / 2 grupos (3 em falta de sala); 51–80 → 2 hosts / 3 grupos; >80 → 2 hosts / 4 grupos. |
 | D6 | Sem o mínimo de 2 avaliações, o candidato fica **pendente** e não recebe veredito. |
-| D7 | "Online" é derivado de `saturday_restriction` — um eixo só, nenhum campo novo em `candidates`. |
+| D7 | "Online" é derivado de `saturday_restriction` do **candidato** — um eixo só, nenhum campo novo em `candidates`. Confirmado na FEAT-0010: não é atributo do membro/avaliador. |
 
 > ⚠️ **D3 é a que mais engana.** Com `inactive` significando pós-júnior, a regra "trainee precisa de um `active` ou `inactive` ao lado" se lê ao contrário em inglês — por isso ela é exposta no `shared` com nome próprio, `isEligibleToAnchorTrainee(status)` (`shared/src/schemas/member.schema.ts`), nunca como comparação de strings espalhada pelo código. D3 também foi o motivo de a aprovação de cadastro (008, já feita) ter sido a **primeira** feature da cadeia: pós-júnior precisava conseguir entrar na plataforma para poder avaliar, e antes da 008 `ELIGIBLE_MEMBER_STATUSES` só aceitava `active`.
 

@@ -11,3 +11,4 @@ export * from './schemas/dashboard.schema';
 export * from './schemas/room.schema';
 export * from './schemas/evaluator.schema';
 export * from './schemas/export.schema';
+export * from './schemas/member-checkin.schema';

@@ -51,13 +51,27 @@ export const CandidateCheckinItemSchema = z.object({
     semester: z.number().int(),
     /** `null` = ausente. Não existe campo `present` separado — um único fato, uma única fonte. */
     checkedInAt: z.string().nullable(),
+    /**
+     * FEAT-0010, US3 (D7). Derivado de `saturday_restriction` da inscrição —
+     * nunca persistido como campo novo do candidato. `null` sempre que
+     * `checkedInAt` também é `null`: quem está ausente não tem modalidade.
+     */
+    attendance: z.enum(["online", "presencial"]).nullable(),
 });
 export type CandidateCheckinItem = z.infer<typeof CandidateCheckinItemSchema>;
+
+/** FEAT-0010, FR-011. Soma sobre todo o conjunto filtrado (mesma semântica de `pagination.total`), não só a página atual. */
+export const AttendanceSummarySchema = z.object({
+    online: z.number().int(),
+    presencial: z.number().int(),
+});
+export type AttendanceSummary = z.infer<typeof AttendanceSummarySchema>;
 
 export const ListCandidatesResponseSchema = z.object({
     data: z.object({
         process: SelectionProcessSummarySchema,
         items: z.array(CandidateCheckinItemSchema),
+        attendanceSummary: AttendanceSummarySchema,
         pagination: PaginationMetaSchema,
     }),
 });

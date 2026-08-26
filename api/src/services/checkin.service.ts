@@ -1,4 +1,5 @@
 import type {
+    AttendanceSummary,
     CandidateCheckinItem,
     ListCandidatesQuery,
     PaginationMeta,
@@ -21,6 +22,7 @@ import type { SelectionProcessRepository } from "../repositories/selection-proce
 type ListResult = {
     process: SelectionProcessSummary;
     items: CandidateCheckinItem[];
+    attendanceSummary: AttendanceSummary;
     pagination: PaginationMeta;
 };
 
@@ -60,7 +62,7 @@ export class CheckinService {
         };
 
         const cached = await this.listCache?.get(process.id, cacheParams);
-        const { items, total } = cached ?? (await this.fetchAndCacheList(process, cacheParams));
+        const { items, total, attendance } = cached ?? (await this.fetchAndCacheList(process, cacheParams));
 
         return right({
             process: { id: process.id, label: process.label },
@@ -72,7 +74,10 @@ export class CheckinService {
                 course: row.course,
                 semester: row.semester,
                 checkedInAt: row.checked_in_at,
+                // FEAT-0010, US3 (D7): derivado, nunca persistido como campo novo do candidato.
+                attendance: row.checked_in_at === null ? null : row.saturday_restriction === 1 ? "online" : "presencial",
             })),
+            attendanceSummary: attendance,
             pagination: {
                 page: query.page,
                 perPage: query.per_page,
