@@ -96,20 +96,20 @@ avaliar candidato de outro grupo é bloqueado.
 
 ### Implementation
 
-- [ ] T013 [P] [US1] Criar `front/lib/evaluation/api.ts`: `getMyGroup()`,
+- [X] T013 [P] [US1] Criar `front/lib/evaluation/api.ts`: `getMyGroup()`,
       `submitEvaluation(candidateId, payload)` (mesmo padrão `authFetch` + `toApiError`).
-- [ ] T014 [P] [US1] Criar `front/lib/evaluation/queries.ts`: `useMyGroupQuery`,
+- [X] T014 [P] [US1] Criar `front/lib/evaluation/queries.ts`: `useMyGroupQuery`,
       `useSubmitEvaluationMutation` (invalida a query em `onSuccess`).
-- [ ] T015 [US1] Criar `front/app/painel/minhas-avaliacoes/_components/evaluation-form.tsx`:
+- [X] T015 [US1] Criar `front/app/painel/minhas-avaliacoes/_components/evaluation-form.tsx`:
       5 campos de nota (0-5, `react-hook-form` + `zodResolver(SubmitEvaluationSchema)`),
       seletor de cor geral, campo de comentário opcional.
-- [ ] T016 [US1] Criar `front/app/painel/minhas-avaliacoes/_components/candidate-evaluation-card.tsx`:
+- [X] T016 [US1] Criar `front/app/painel/minhas-avaliacoes/_components/candidate-evaluation-card.tsx`:
       nome do candidato, `evaluationCount`, abre `evaluation-form.tsx` pré-preenchido quando
       `myEvaluation` já existe.
-- [ ] T017 [US1] Criar `front/app/painel/minhas-avaliacoes/page.tsx`: lista via
+- [X] T017 [US1] Criar `front/app/painel/minhas-avaliacoes/page.tsx`: lista via
       `useMyGroupQuery`, trata `NOT_IN_ANY_GROUP` e `NO_ACTIVE_SELECTION_PROCESS` com
       `StateMessage`.
-- [ ] T018 [US1] Adicionar item de navegação "Minhas Avaliações" em
+- [X] T018 [US1] Adicionar item de navegação "Minhas Avaliações" em
       `front/components/painel/painel-nav.tsx`.
 
 **Checkpoint**: US1 completa e testável de forma independente.
@@ -135,19 +135,19 @@ entre várias) → `GET /evaluations/admin/candidates` mostra o veredito correto
 
 ### Implementation
 
-- [ ] T021 [P] [US2] `front/lib/evaluation/api.ts` (T013): `getAdminCandidates()`,
+- [X] T021 [P] [US2] `front/lib/evaluation/api.ts` (T013): `getAdminCandidates()`,
       `getAdminCandidateDetail(candidateId)`.
-- [ ] T022 [P] [US2] `front/lib/evaluation/queries.ts` (T014): `useAdminCandidatesQuery`,
+- [X] T022 [P] [US2] `front/lib/evaluation/queries.ts` (T014): `useAdminCandidatesQuery`,
       `useAdminCandidateDetailQuery`.
-- [ ] T023 [US2] Criar `front/app/painel/avaliacoes/_components/verdict-badge.tsx`: badge
+- [X] T023 [US2] Criar `front/app/painel/avaliacoes/_components/verdict-badge.tsx`: badge
       colorido por veredito (pendente/aprovado/reprovado).
-- [ ] T024 [US2] Criar `front/app/painel/avaliacoes/_components/evaluation-detail-sheet.tsx`:
+- [X] T024 [US2] Criar `front/app/painel/avaliacoes/_components/evaluation-detail-sheet.tsx`:
       painel lateral (shadcn `Sheet`) com as avaliações de um candidato — notas, cor,
       comentário, autor, pontuação ponderada.
-- [ ] T025 [US2] Criar `front/app/painel/avaliacoes/page.tsx`: tabela de candidatos
+- [X] T025 [US2] Criar `front/app/painel/avaliacoes/page.tsx`: tabela de candidatos
       (`Table`, mesmo padrão de `/painel/rooms`/`avaliadores`) com contagem, veredito
       (`verdict-badge.tsx`) e pontuação; clique abre `evaluation-detail-sheet.tsx`.
-- [ ] T026 [US2] Adicionar item de navegação "Avaliações" em
+- [X] T026 [US2] Adicionar item de navegação "Avaliações" em
       `front/components/painel/painel-nav.tsx`.
 
 **Checkpoint**: US1 + US2 completas — feature ponta a ponta.
@@ -156,9 +156,9 @@ entre várias) → `GET /evaluations/admin/candidates` mostra o veredito correto
 
 ## Phase 5: Polish
 
-- [ ] T027 [P] Rodar suíte completa (`api`, `shared`), `tsc --noEmit`/`next build` em
+- [X] T027 [P] Rodar suíte completa (`api`, `shared`), `tsc --noEmit`/`next build` em
       `shared`/`api`/`front` — precisa passar antes de considerar a feature pronta.
-- [ ] T028 [P] Atualizar `task.md`/`CONTEXT.md`: mover FEAT-0013 para "Concluído", registrar
+- [X] T028 [P] Atualizar `task.md`/`CONTEXT.md`: mover FEAT-0013 para "Concluído", registrar
       decisões tomadas durante a implementação que não estavam previstas no plan.
 - [ ] T029 Validar manualmente os 9 cenários de `quickstart.md` via `wrangler dev` + `curl`
       quando `api/.dev.vars`/usuário admin estiverem disponíveis — mesma pendência já
