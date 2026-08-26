@@ -235,6 +235,13 @@ export const CandidateApplicationDetailSchema = z.object({
     motivation: z.string(),
     saturdayRestriction: z.boolean(),
     specialNeeds: z.boolean(),
+    /**
+     * `null` quando `specialNeeds = false` OU quando `true` mas o candidato é anterior à
+     * FEAT-0014 (legado, sem descrição gravada) — mesma convenção de "ausente = null" de
+     * `referralSourceOther`. Sem gate por papel: mesmo nível de acesso do boolean
+     * `specialNeeds`, não o nível restrito de `demographics` (ver spec 014, Assumptions).
+     */
+    specialNeedsDescription: z.string().nullable(),
 });
 export type CandidateApplicationDetail = z.infer<typeof CandidateApplicationDetailSchema>;
 

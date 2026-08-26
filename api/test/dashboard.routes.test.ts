@@ -38,7 +38,9 @@ beforeEach(async () => {
     await Promise.all(keys.map((key) => env.CANDIDATES_KV.delete(key.name)));
 });
 
-async function insertCandidate(overrides: { name?: string; createdAt?: string } = {}) {
+async function insertCandidate(
+    overrides: { name?: string; createdAt?: string; specialNeeds?: boolean; specialNeedsDescription?: string | null } = {},
+) {
     counter += 1;
     const row = {
         id: crypto.randomUUID(),
@@ -47,6 +49,7 @@ async function insertCandidate(overrides: { name?: string; createdAt?: string } 
         phone: `+557196666${String(counter).padStart(4, "0")}`,
         created_at: overrides.createdAt ?? "2026-08-05 12:00:00",
     };
+    const specialNeeds = overrides.specialNeeds ?? false;
 
     await env.DB.prepare(
         `INSERT INTO candidates (id, process_id, course, semester, gender, ethnicity, name, email, phone, created_at)
@@ -58,10 +61,10 @@ async function insertCandidate(overrides: { name?: string; createdAt?: string } 
 
     await env.DB.prepare(
         `INSERT INTO candidate_applications
-            (id, candidate_id, referral_source, referral_source_other, mej_acknowledged, experience, motivation, saturday_restriction, special_needs)
-         VALUES (?, ?, 'instagram', NULL, 1, 'Experiência.', 'Motivação.', 0, 0)`,
+            (id, candidate_id, referral_source, referral_source_other, mej_acknowledged, experience, motivation, saturday_restriction, special_needs, special_needs_description)
+         VALUES (?, ?, 'instagram', NULL, 1, 'Experiência.', 'Motivação.', 0, ?, ?)`,
     )
-        .bind(crypto.randomUUID(), row.id)
+        .bind(crypto.randomUUID(), row.id, specialNeeds ? 1 : 0, specialNeeds ? (overrides.specialNeedsDescription ?? null) : null)
         .run();
 
     return row;
@@ -150,6 +153,32 @@ describe("Corte por papel, verificado no corpo da resposta", () => {
         expect(await paraAdmin.text()).toContain("demographics");
     });
 
+    it("FEAT-0014: o detalhe expõe specialNeedsDescription para qualquer papel (sem gate de admin)", async () => {
+        const candidate = await insertCandidate({
+            specialNeeds: true,
+            specialNeedsDescription: "Uso cadeira de rodas — preciso de acesso sem escadas.",
+        });
+        const avaliador = await tokenFor("avaliador");
+        const admin = await tokenFor("admin");
+
+        const paraAvaliador = await call(
+            new Request(`http://local.test/dashboard/candidates/${candidate.id}`, { headers: authed(avaliador) }),
+        );
+        const paraAdmin = await call(
+            new Request(`http://local.test/dashboard/candidates/${candidate.id}`, { headers: authed(admin) }),
+        );
+
+        const bodyAvaliador = await paraAvaliador.json<{ data: { application: { specialNeedsDescription: string | null } } }>();
+        const bodyAdmin = await paraAdmin.json<{ data: { application: { specialNeedsDescription: string | null } } }>();
+
+        expect(bodyAvaliador.data.application.specialNeedsDescription).toBe(
+            "Uso cadeira de rodas — preciso de acesso sem escadas.",
+        );
+        expect(bodyAdmin.data.application.specialNeedsDescription).toBe(
+            "Uso cadeira de rodas — preciso de acesso sem escadas.",
+        );
+    });
+
     it("a listagem não traz demografia para papel nenhum", async () => {
         await insertCandidate();
         const admin = await tokenFor("admin");
@@ -164,6 +193,23 @@ describe("Corte por papel, verificado no corpo da resposta", () => {
         expect(body.data.items[0]).not.toHaveProperty("gender");
         expect(body.data.items[0]).not.toHaveProperty("ethnicity");
         expect(body.data.items[0]?.process).toEqual({ id: EDICAO_2026_2, label: "2026.2" });
+    });
+
+    it("FEAT-0014: a listagem não traz specialNeeds nem specialNeedsDescription, mesmo com um candidato descrito (FR-008)", async () => {
+        await insertCandidate({ specialNeeds: true, specialNeedsDescription: "Uso cadeira de rodas." });
+        const admin = await tokenFor("admin");
+
+        const response = await call(
+            new Request(`http://local.test/dashboard/candidates?process_id=${EDICAO_2026_2}`, {
+                headers: authed(admin),
+            }),
+        );
+        const raw = await response.clone().text();
+        const body = await response.json<{ data: { items: Record<string, unknown>[] } }>();
+
+        expect(body.data.items[0]).not.toHaveProperty("specialNeeds");
+        expect(body.data.items[0]).not.toHaveProperty("specialNeedsDescription");
+        expect(raw).not.toMatch(/cadeira/);
     });
 });
 

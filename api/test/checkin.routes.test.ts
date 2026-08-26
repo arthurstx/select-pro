@@ -128,6 +128,9 @@ describe("GET /candidates (HTTP)", () => {
             expect(item).not.toHaveProperty("gender");
             expect(item).not.toHaveProperty("ethnicity");
             expect(item).toHaveProperty("checkedInAt");
+            // FEAT-0014 (FR-009): a tela de check-in nunca traz necessidade especial, boolean ou descrição.
+            expect(item).not.toHaveProperty("specialNeeds");
+            expect(item).not.toHaveProperty("specialNeedsDescription");
         }
     });
 

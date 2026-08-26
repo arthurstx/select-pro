@@ -167,18 +167,41 @@ export const AboutStepSchema = z.object({
 });
 export type AboutStep = z.infer<typeof AboutStepSchema>;
 
-export const AvailabilityStepSchema = z.object({
+const AvailabilityStepFields = z.object({
     saturdayRestriction: z.boolean({ errorMap: () => ({ message: "Selecione uma opção" }) }),
     specialNeeds: z.boolean({ errorMap: () => ({ message: "Selecione uma opção" }) }),
+    /**
+     * Condicional a `specialNeeds` (FEAT-0014) — obrigatório quando `true`, ignorado quando
+     * `false` (o service força `null` na gravação independentemente do que chegar aqui).
+     * Mesma forma de `referralSourceOther`: campo `optional()`, obrigatoriedade real via
+     * `superRefine` abaixo.
+     */
+    specialNeedsDescription: z.string().trim().max(500, "Máximo de 500 caracteres").optional(),
     ethnicity: EthnicitySchema,
 });
+
+const requireDescriptionWhenSpecialNeeds = (
+    data: { specialNeeds: boolean; specialNeedsDescription?: string },
+    ctx: z.RefinementCtx,
+) => {
+    if (data.specialNeeds && !data.specialNeedsDescription) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["specialNeedsDescription"],
+            message: "Descreva a necessidade especial",
+        });
+    }
+};
+
+export const AvailabilityStepSchema = AvailabilityStepFields.superRefine(requireDescriptionWhenSpecialNeeds);
 export type AvailabilityStep = z.infer<typeof AvailabilityStepSchema>;
 
 export const RegisterRequestSchema = PersonalDataStepSchema.merge(ReferralStepFields)
     .merge(MejStepSchema)
     .merge(AboutStepSchema)
-    .merge(AvailabilityStepSchema)
-    .superRefine(requireOtherWhenOutros);
+    .merge(AvailabilityStepFields)
+    .superRefine(requireOtherWhenOutros)
+    .superRefine(requireDescriptionWhenSpecialNeeds);
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 
 /** `createdAt` vem do D1 como `"YYYY-MM-DD HH:MM:SS"`, não ISO-8601. */

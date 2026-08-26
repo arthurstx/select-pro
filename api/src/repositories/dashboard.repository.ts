@@ -61,6 +61,12 @@ export interface DashboardCandidateDetailRow extends DashboardCandidateRow {
     /** O D1 devolve booleano como `0`/`1`. */
     saturday_restriction: number | null;
     special_needs: number | null;
+    /**
+     * `null` quando `special_needs = 0`, ou quando `1` mas o candidato é anterior à FEAT-0014
+     * (legado, sem descrição gravada). Lida sempre — não é condicional a
+     * `includeDemographics`, que só governa `gender`/`ethnicity` abaixo.
+     */
+    special_needs_description: string | null;
     /** Presentes apenas quando `includeDemographics` — ver `findDetail`. */
     gender?: Gender;
     ethnicity?: Ethnicity;
@@ -283,7 +289,7 @@ export class DashboardRepository {
                         ${demographicColumns}
                         p.id AS process_id, p.label AS process_label,
                         a.referral_source, a.referral_source_other, a.experience, a.motivation,
-                        a.saturday_restriction, a.special_needs
+                        a.saturday_restriction, a.special_needs, a.special_needs_description
                    FROM candidates c
                    INNER JOIN selection_processes p ON p.id = c.process_id
                    LEFT JOIN candidate_applications a ON a.candidate_id = c.id

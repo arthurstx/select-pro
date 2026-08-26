@@ -13,7 +13,7 @@ class FakeSheets implements SheetsClient {
     appendCalls = 0;
 
     async readValues(range: string): Promise<CellValue[][]> {
-        if (range.endsWith("!A1:O1")) return this.header.length > 0 ? [this.header] : [];
+        if (range.endsWith("!A1:P1")) return this.header.length > 0 ? [this.header] : [];
         if (range.endsWith("!A2:A")) return this.rows.map((row) => [row[0]]);
         throw new Error(`Intervalo inesperado: ${range}`);
     }
@@ -25,12 +25,13 @@ class FakeSheets implements SheetsClient {
 }
 
 let counter = 0;
-async function insertCandidate(repo: CandidateRepository) {
+async function insertCandidate(repo: CandidateRepository, overrides: { specialNeeds?: boolean; specialNeedsDescription?: string | null } = {}) {
     counter += 1;
     const id = crypto.randomUUID();
     const name = `Candidato ${counter}`;
 
     const process = await new SelectionProcessRepository(env.DB).resolveCurrent();
+    const specialNeeds = overrides.specialNeeds ?? false;
 
     await repo.insertWithApplication(
         {
@@ -52,7 +53,8 @@ async function insertCandidate(repo: CandidateRepository) {
             experience: "Projetos de extensão.",
             motivation: "Aplicar na prática.",
             saturday_restriction: true,
-            special_needs: false,
+            special_needs: specialNeeds,
+            special_needs_description: specialNeeds ? (overrides.specialNeedsDescription ?? null) : null,
         },
     );
 
@@ -100,7 +102,21 @@ describe("SheetSyncService", () => {
         expect(row?.[10]).toBe("Cartaz no mural");
         expect(row?.[13]).toBe("Sim"); // saturday_restriction
         expect(row?.[14]).toBe("Não"); // special_needs
+        expect(row?.[15]).toBe(""); // special_needs_description — vazio quando special_needs é false
         expect(row?.[1]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    });
+
+    it("FEAT-0014: leva a descrição de necessidade especial para a planilha", async () => {
+        const { id } = await insertCandidate(repo, {
+            specialNeeds: true,
+            specialNeedsDescription: "Uso cadeira de rodas.",
+        });
+
+        await buildService().run();
+
+        const row = sheets.rows.find((candidate) => candidate[0] === id);
+        expect(row?.[14]).toBe("Sim");
+        expect(row?.[15]).toBe("Uso cadeira de rodas.");
     });
 
     it("não escreve nada quando a planilha já está em dia", async () => {

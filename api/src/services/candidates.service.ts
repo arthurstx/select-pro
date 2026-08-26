@@ -59,6 +59,9 @@ export class CandidateService {
             motivation: input.motivation,
             saturday_restriction: input.saturdayRestriction,
             special_needs: input.specialNeeds,
+            // Condicional (FEAT-0014): texto só é persistido quando o boolean é true — mesmo
+            // padrão ternário de `referral_source_other` acima.
+            special_needs_description: input.specialNeeds ? (input.specialNeedsDescription ?? null) : null,
         };
 
         let row: CandidateRow;

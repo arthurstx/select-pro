@@ -230,6 +230,10 @@ export class DashboardService {
                 motivation: row.motivation,
                 saturdayRestriction: row.saturday_restriction === 1,
                 specialNeeds: row.special_needs === 1,
+                // Defesa em profundidade (FR-004): mesmo que uma anomalia de dado deixe texto
+                // gravado com o boolean em false, a leitura nunca expõe — a garantia não
+                // depende só do caminho de escrita em `CandidateService.register`.
+                specialNeedsDescription: row.special_needs === 1 ? row.special_needs_description : null,
             },
             // Ausente para `avaliador` — o repositório nem leu as colunas.
             ...(row.gender && row.ethnicity ? { demographics: { gender: row.gender, ethnicity: row.ethnicity } } : {}),

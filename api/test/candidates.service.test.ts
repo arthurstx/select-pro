@@ -26,6 +26,7 @@ function uniqueCandidateInput() {
         motivation: "Quero aplicar o que aprendo na prática.",
         saturdayRestriction: false,
         specialNeeds: false,
+        specialNeedsDescription: undefined as string | undefined,
     };
 }
 
@@ -58,6 +59,7 @@ function candidateRowFrom(input: ReturnType<typeof uniqueCandidateInput>, proces
             motivation: input.motivation,
             saturday_restriction: input.saturdayRestriction,
             special_needs: input.specialNeeds,
+            special_needs_description: input.specialNeeds ? (input.specialNeedsDescription ?? null) : null,
         },
     };
 }
@@ -77,6 +79,8 @@ async function applicationOf(candidateId: string) {
             experience: string;
             motivation: string;
             mej_acknowledged: number;
+            special_needs: number;
+            special_needs_description: string | null;
         }>();
 }
 
@@ -183,6 +187,42 @@ describe("CandidateService.register", () => {
         const application = await applicationOf(result.value.id);
         expect(application?.referral_source).toBe("linkedin");
         expect(application?.referral_source_other).toBeNull();
+    });
+
+    it("FEAT-0014: grava a descrição quando specialNeeds é true", async () => {
+        const { service } = buildService();
+        const input = {
+            ...uniqueCandidateInput(),
+            specialNeeds: true,
+            specialNeedsDescription: "Uso cadeira de rodas — preciso de acesso sem escadas.",
+        };
+
+        const result = await service.register(input);
+
+        expect(result.isRight()).toBe(true);
+        if (!result.isRight()) return;
+
+        const application = await applicationOf(result.value.id);
+        expect(application?.special_needs).toBe(1);
+        expect(application?.special_needs_description).toBe(input.specialNeedsDescription);
+    });
+
+    it("FEAT-0014: descarta a descrição quando specialNeeds é false, mesmo se enviada", async () => {
+        const { service } = buildService();
+        const input = {
+            ...uniqueCandidateInput(),
+            specialNeeds: false,
+            specialNeedsDescription: "isso não deveria ser gravado",
+        };
+
+        const result = await service.register(input);
+
+        expect(result.isRight()).toBe(true);
+        if (!result.isRight()) return;
+
+        const application = await applicationOf(result.value.id);
+        expect(application?.special_needs).toBe(0);
+        expect(application?.special_needs_description).toBeNull();
     });
 });
 

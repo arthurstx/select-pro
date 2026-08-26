@@ -1345,3 +1345,23 @@ INSERT INTO checkin_events (id, candidate_id, process_id, action, actor_id, crea
   ('0d1f0f2a-7796-4841-a965-a46ee796d4b9', '255b3df9-749b-45cd-9c14-8cc1cb88ad8b', 'ace24839-ec23-4942-9065-dbd45742034e', 'marcou', '708aa270-4041-40e8-a1f6-ff376185babd', '2026-08-20 08:22:56'),
   ('b9ccff52-2e3b-4535-b01b-a9d7fdb8b462', '2ac57975-8a91-48e1-b219-64c11337c73f', 'ace24839-ec23-4942-9065-dbd45742034e', 'marcou', '340651dc-ab0a-42bf-b85a-275eca08ae7c', '2026-08-20 08:56:40'),
   ('f8ceb1c4-2b24-41a9-a635-2a836fb02859', 'a75399bc-ed93-42de-87cb-f95464ea789c', 'ace24839-ec23-4942-9065-dbd45742034e', 'marcou', 'a076acfa-4a04-495e-b9a7-37265944d734', '2026-08-08 06:54:33');
+
+-- FEAT-0014: descrição de necessidades especiais. As linhas de
+-- `candidate_applications` acima já têm `special_needs = 1` em alguns
+-- candidatos, mas foram escritas antes desta coluna existir — em vez de
+-- reescrever cada INSERT (arriscando desalinhar as colunas posicionais),
+-- preenchemos a descrição via UPDATE nos ids que já têm `special_needs = 1`.
+-- Um id fica sem descrição de propósito, para exercitar o candidato "legado"
+-- (FR-007: specialNeedsDescription null mesmo com specialNeeds true).
+UPDATE candidate_applications
+   SET special_needs_description = 'Uso cadeira de rodas — preciso de acesso sem escadas até a sala de dinâmica.'
+ WHERE id = '11c02142-ca95-4c41-b832-8a31f713d722';
+
+UPDATE candidate_applications
+   SET special_needs_description = 'Sou surdo(a) e preciso de intérprete de Libras durante a dinâmica em grupo.'
+ WHERE id = '05b0e74a-e0a1-40ef-a248-701d33ca1767';
+
+UPDATE candidate_applications
+   SET special_needs_description = 'TDAH — peço um tempo adicional na etapa escrita, se houver.'
+ WHERE id = 'b03563bf-f0aa-4b45-a693-070e3f3513ec';
+-- id '03974e62-bbf9-433c-a108-8592276b08ff' fica sem descrição de propósito (candidato legado).

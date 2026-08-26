@@ -17,7 +17,10 @@ export function isStepComplete(answers: Partial<RegisterRequest>, step: WizardSt
       return Boolean(answers.experience && answers.motivation);
     case 5:
       return Boolean(
-        answers.saturdayRestriction !== undefined && answers.specialNeeds !== undefined && answers.ethnicity,
+        answers.saturdayRestriction !== undefined &&
+          answers.specialNeeds !== undefined &&
+          (!answers.specialNeeds || Boolean(answers.specialNeedsDescription)) &&
+          answers.ethnicity,
       );
     case 6:
       return true;

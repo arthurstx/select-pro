@@ -17,6 +17,7 @@ export interface CandidateWithApplicationRow extends CandidateRow {
   motivation: string;
   saturday_restriction: number;
   special_needs: number;
+  special_needs_description: string | null;
 }
 
 export class CandidateRepository {
@@ -59,7 +60,8 @@ export class CandidateRepository {
                 a.experience,
                 a.motivation,
                 a.saturday_restriction,
-                a.special_needs
+                a.special_needs,
+                a.special_needs_description
            FROM candidates c
            INNER JOIN candidate_applications a ON a.candidate_id = c.id
           ORDER BY c.created_at ASC, c.id ASC`,
@@ -95,8 +97,8 @@ export class CandidateRepository {
     const insertApplication = this.db
       .prepare(
         `INSERT INTO candidate_applications
-                    (id, candidate_id, referral_source, referral_source_other, mej_acknowledged, experience, motivation, saturday_restriction, special_needs)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    (id, candidate_id, referral_source, referral_source_other, mej_acknowledged, experience, motivation, saturday_restriction, special_needs, special_needs_description)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         application.id,
@@ -108,6 +110,7 @@ export class CandidateRepository {
         application.motivation,
         application.saturday_restriction ? 1 : 0,
         application.special_needs ? 1 : 0,
+        application.special_needs_description,
       );
 
     const [candidateResult] = await this.db.batch<CandidateRow>([
