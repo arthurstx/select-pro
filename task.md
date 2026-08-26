@@ -127,9 +127,6 @@ staging/produção (ver "Pendências operacionais").
 
 ## Pendências operacionais (não são código)
 
-- [ ] Empurrar o merge local de `develop` (FEAT-0012) para `origin/develop`, e mesclar
-      `claude/feat-0013-avaliacao-candidatos` em seguida — nenhum dos dois foi enviado ainda
-      (sessão trabalhou só local, a pedido do usuário).
 - [ ] Aplicar migrations `0008` a `0015` em staging, depois produção (staging sempre primeiro
       — Princípio III da constitution). Migration `0014` reconstrói `groups`/`group_evaluators`/
       `group_candidates`; `0015` dropa `metrics` e reconstrói `evaluations`/`evaluation_scores`
