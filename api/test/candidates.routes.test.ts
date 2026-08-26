@@ -120,6 +120,48 @@ describe("POST /candidate/register (HTTP)", () => {
         expect(res.status).toBe(201);
     });
 
+    it("FEAT-0014: specialNeeds true sem descrição retorna 400 apontando specialNeedsDescription", async () => {
+        const res = await postRegister({ ...uniqueCandidateInput(), specialNeeds: true });
+
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { field?: string } }>();
+        expect(body.error.field).toBe("specialNeedsDescription");
+    });
+
+    it("FEAT-0014: specialNeeds true com descrição só espaços retorna 400", async () => {
+        const res = await postRegister({
+            ...uniqueCandidateInput(),
+            specialNeeds: true,
+            specialNeedsDescription: "   ",
+        });
+
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { field?: string } }>();
+        expect(body.error.field).toBe("specialNeedsDescription");
+    });
+
+    it("FEAT-0014: specialNeeds true com descrição acima de 500 caracteres retorna 400", async () => {
+        const res = await postRegister({
+            ...uniqueCandidateInput(),
+            specialNeeds: true,
+            specialNeedsDescription: "a".repeat(501),
+        });
+
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { field?: string } }>();
+        expect(body.error.field).toBe("specialNeedsDescription");
+    });
+
+    it("FEAT-0014: aceita specialNeeds true com descrição preenchida (201)", async () => {
+        const res = await postRegister({
+            ...uniqueCandidateInput(),
+            specialNeeds: true,
+            specialNeedsDescription: "Uso cadeira de rodas — preciso de acesso sem escadas.",
+        });
+
+        expect(res.status).toBe(201);
+    });
+
     it("E1 - segunda inscrição com o mesmo email retorna 409", async () => {
         const input = uniqueCandidateInput();
         expect((await postRegister(input)).status).toBe(201);

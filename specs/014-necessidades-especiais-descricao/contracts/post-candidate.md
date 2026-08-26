@@ -30,15 +30,17 @@ request/response não mudam.
 (`data.id`, `data.status`, `data.name`, `data.email`, `data.createdAt`), então o campo novo
 não aparece na resposta de registro.
 
-## Response de erro (`422`) — novo caso de validação
+## Response de erro (`400`) — novo caso de validação
 
 Quando `specialNeeds: true` e `specialNeedsDescription` ausente/vazio, a resposta segue o
 formato padrão de erro de validação do Zod já usado pela rota (via `@hono/zod-openapi`), com
 o issue apontando para `specialNeedsDescription` — mesmo mecanismo já em produção para
 `referralSourceOther` ausente quando `referralSource === "outros"`. Não é um novo
 `CandidateErrorCode` (esses são reservados a conflitos de unicidade E1/E2/E5 e formato de
-email/telefone E3/E4) — é validação de shape de payload, tratada no nível 422 padrão do
-schema, antes de chegar ao service.
+email/telefone E3/E4) — é validação de shape de payload, tratada no nível `400` padrão da
+rota (confirmado no código: `api/test/candidates.routes.test.ts`, casos análogos como
+`mejAcknowledged`/`referralSourceOther` já retornam `400`, não `422`), antes de chegar ao
+service.
 
 ## Contract: `GET /candidates/:id` (detalhe — dashboard)
 

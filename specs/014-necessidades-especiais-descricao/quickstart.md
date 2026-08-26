@@ -33,7 +33,7 @@ Casos novos esperados (ver plan.md → Project Structure):
 - `candidates.service.test.ts`: registro com `specialNeeds: true` sem descrição é rejeitado;
   com descrição é aceito e persiste `special_needs_description`; com `specialNeeds: false` a
   descrição enviada é ignorada (persiste `null`).
-- `candidates.routes.test.ts`: `POST /candidate/register` retorna 422 quando `specialNeeds:
+- `candidates.routes.test.ts`: `POST /candidate/register` retorna 400 quando `specialNeeds:
   true` e `specialNeedsDescription` ausente/vazio.
 - `dashboard.service.test.ts` / `dashboard.routes.test.ts`: detalhe do candidato expõe
   `application.specialNeedsDescription`; totais agregados (`GET /dashboard/metrics`)
@@ -74,7 +74,7 @@ curl -s -X POST http://localhost:8787/candidate/register \
 ```
 
 Esperado: `201` com o `id` do candidato criado. Repetir sem `specialNeedsDescription` (mesmo
-`specialNeeds: true`) deve retornar `422`.
+`specialNeeds: true`) deve retornar `400`.
 
 Para conferir a exibição no detalhe (autenticado como avaliador/host/admin — token de
 membro válido):

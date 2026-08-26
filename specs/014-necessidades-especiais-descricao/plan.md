@@ -75,7 +75,7 @@ api/
 │       └── dashboard.service.ts       # mapeia special_needs_description -> specialNeedsDescription no detalhe
 └── test/
     ├── candidates.service.test.ts     # + casos: obrigatório quando true, ausente quando false
-    ├── candidates.routes.test.ts      # + caso: payload 422 quando true sem descrição
+    ├── candidates.routes.test.ts      # + caso: payload 400 quando true sem descrição
     ├── dashboard.service.test.ts      # + caso: detalhe expõe a descrição
     └── dashboard.routes.test.ts       # + caso: agregado NÃO expõe descrição
 

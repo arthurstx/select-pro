@@ -67,6 +67,7 @@ interface CandidateOverrides {
     motivation?: string;
     saturdayRestriction?: boolean;
     specialNeeds?: boolean;
+    specialNeedsDescription?: string | null;
 }
 
 /** Candidato + questionário, como a inscrição real grava (`db.batch` dos dois). */
@@ -104,8 +105,8 @@ async function insertCandidate(overrides: CandidateOverrides = {}) {
 
     await env.DB.prepare(
         `INSERT INTO candidate_applications
-            (id, candidate_id, referral_source, referral_source_other, mej_acknowledged, experience, motivation, saturday_restriction, special_needs)
-         VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+            (id, candidate_id, referral_source, referral_source_other, mej_acknowledged, experience, motivation, saturday_restriction, special_needs, special_needs_description)
+         VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
     )
         .bind(
             crypto.randomUUID(),
@@ -116,6 +117,7 @@ async function insertCandidate(overrides: CandidateOverrides = {}) {
             overrides.motivation ?? "Motivação do candidato.",
             overrides.saturdayRestriction ? 1 : 0,
             overrides.specialNeeds ? 1 : 0,
+            overrides.specialNeedsDescription ?? null,
         )
         .run();
 
@@ -293,6 +295,15 @@ describe("Agregações", () => {
 
         expect(metrics.totals.specialNeeds).toBe(1);
         expect(metrics.totals.saturdayRestriction).toBe(2);
+    });
+
+    it("FEAT-0014: totals.specialNeeds continua um número — nenhum texto de descrição vaza para o agregado (FR-010)", async () => {
+        await insertCandidate({ specialNeeds: true, specialNeedsDescription: "Uso cadeira de rodas." });
+
+        const metrics = unwrap(await service().metrics({ mode: "sum" }, "admin", AGORA));
+
+        expect(typeof metrics.totals.specialNeeds).toBe("number");
+        expect(JSON.stringify(metrics.totals)).not.toMatch(/cadeira/);
     });
 
     it("ordena semestre por valor, e as demais séries por contagem", async () => {
@@ -581,6 +592,42 @@ describe("Detalhe da inscrição", () => {
 
         expect(detail.application.saturdayRestriction).toBe(true);
         expect(detail.application.specialNeeds).toBe(false);
+    });
+
+    it("FEAT-0014: expõe a descrição de necessidade especial no detalhe, para qualquer papel", async () => {
+        const candidate = await insertCandidate({
+            specialNeeds: true,
+            specialNeedsDescription: "Uso cadeira de rodas — preciso de acesso sem escadas.",
+        });
+
+        const paraAvaliador = unwrap(await service().detail(candidate.id, "avaliador"));
+        const paraAdmin = unwrap(await service().detail(candidate.id, "admin"));
+
+        // Sem gate por papel — mesmo nível de acesso do boolean `specialNeeds` (spec 014, Assumptions).
+        expect(paraAvaliador.application.specialNeedsDescription).toBe(
+            "Uso cadeira de rodas — preciso de acesso sem escadas.",
+        );
+        expect(paraAdmin.application.specialNeedsDescription).toBe(
+            "Uso cadeira de rodas — preciso de acesso sem escadas.",
+        );
+    });
+
+    it("FEAT-0014: candidato com specialNeeds=true e sem descrição (legado) retorna null, sem quebrar (FR-007)", async () => {
+        const candidate = await insertCandidate({ specialNeeds: true, specialNeedsDescription: null });
+
+        const detail = unwrap(await service().detail(candidate.id, "admin"));
+
+        expect(detail.application.specialNeeds).toBe(true);
+        expect(detail.application.specialNeedsDescription).toBeNull();
+    });
+
+    it("FEAT-0014: candidato com specialNeeds=false nunca expõe descrição, mesmo se uma sobrou gravada", async () => {
+        const candidate = await insertCandidate({ specialNeeds: false, specialNeedsDescription: "resíduo indevido" });
+
+        const detail = unwrap(await service().detail(candidate.id, "admin"));
+
+        expect(detail.application.specialNeeds).toBe(false);
+        expect(detail.application.specialNeedsDescription).toBeNull();
     });
 
     it("`referralSourceOther` vem `null` quando a origem não é `outros`", async () => {

@@ -220,6 +220,8 @@ export interface CandidateApplicationRow {
     motivation: string;
     saturday_restriction: boolean;
     special_needs: boolean;
+    /** `null` quando `special_needs = false`, ou quando `true` mas o dado é anterior à FEAT-0014 (candidato legado). */
+    special_needs_description: string | null;
 
     created_at: string;
     updated_at: string | null;

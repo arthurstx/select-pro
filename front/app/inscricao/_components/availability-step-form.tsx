@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import {
   AvailabilityStepSchema,
   ETHNICITY_LABELS,
@@ -20,6 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+
+const SPECIAL_NEEDS_DESCRIPTION_MAX = 500;
 
 import { useRegistration } from "../_context/registration-context";
 import { useWizardGuard } from "../_hooks/use-wizard-guard";
@@ -65,14 +68,20 @@ export function AvailabilityStepForm() {
     values: {
       saturdayRestriction: answers.saturdayRestriction as boolean,
       specialNeeds: answers.specialNeeds as boolean,
+      specialNeedsDescription: answers.specialNeedsDescription ?? "",
       ethnicity: answers.ethnicity ?? ("" as AvailabilityStep["ethnicity"]),
     },
   });
 
+  const specialNeeds = useWatch({ control: form.control, name: "specialNeeds" });
+
   if (!isHydrated) return null;
 
   function onSubmit(data: AvailabilityStep) {
-    setStepData(data);
+    setStepData({
+      ...data,
+      specialNeedsDescription: data.specialNeeds ? data.specialNeedsDescription : undefined,
+    });
     router.push(WIZARD_STEPS[5].path);
   }
 
@@ -98,11 +107,36 @@ export function AvailabilityStepForm() {
               control={form.control}
               name="specialNeeds"
               render={({ field }) => (
-                <YesNoField value={field.value} onChange={field.onChange} idPrefix="special-needs" />
+                <YesNoField
+                  value={field.value}
+                  onChange={(value) => {
+                    field.onChange(value);
+                    // Sair de "Sim" limpa o texto e o erro de um campo que não está mais visível.
+                    if (!value) {
+                      form.setValue("specialNeedsDescription", "");
+                      form.clearErrors("specialNeedsDescription");
+                    }
+                  }}
+                  idPrefix="special-needs"
+                />
               )}
             />
             <FieldError errors={[form.formState.errors.specialNeeds]} />
           </Field>
+
+          {specialNeeds && (
+            <Field data-invalid={!!form.formState.errors.specialNeedsDescription}>
+              <FieldLabel htmlFor="specialNeedsDescription">Descreva a necessidade especial</FieldLabel>
+              <Textarea
+                id="specialNeedsDescription"
+                placeholder="Ex.: uso cadeira de rodas, preciso de tempo adicional, sou surdo(a)..."
+                maxLength={SPECIAL_NEEDS_DESCRIPTION_MAX}
+                aria-invalid={!!form.formState.errors.specialNeedsDescription}
+                {...form.register("specialNeedsDescription")}
+              />
+              <FieldError errors={[form.formState.errors.specialNeedsDescription]} />
+            </Field>
+          )}
 
           <Field data-invalid={!!form.formState.errors.ethnicity}>
             <FieldLabel htmlFor="ethnicity">Cor/Etnia</FieldLabel>

@@ -108,6 +108,21 @@ export function CandidateDetailSheet({
                 />
               </Section>
 
+              {/* Só aparece quando specialNeeds é true (FEAT-0014) — sem campo vazio nem
+                  placeholder quando é false. `whitespace-pre-line` preserva as quebras
+                  digitadas, mesmo padrão de "Experiências"/"Motivação" abaixo. Candidatos
+                  legados (specialNeeds=true sem descrição gravada) mostram "Não informado"
+                  em vez de texto em branco (FR-007). */}
+              {detail.application.specialNeeds && (
+                <Section title="Descrição da necessidade especial">
+                  <p className="text-sm leading-relaxed whitespace-pre-line">
+                    {detail.application.specialNeedsDescription ?? (
+                      <span className="text-muted-foreground italic">Não informado</span>
+                    )}
+                  </p>
+                </Section>
+              )}
+
               {/* Os textos saem na íntegra, sem truncar: é o que o avaliador
                   abre o painel para ler. `whitespace-pre-line` preserva as
                   quebras que a pessoa digitou. */}

@@ -95,7 +95,7 @@ FR-009).
 1. Front (`availability-step-form.tsx`) envia `specialNeedsDescription` só quando
    `specialNeeds = true` (campo escondido/limpo quando `false` — ver FR-004).
 2. `POST /candidate` valida via `RegisterRequestSchema` (`@hono/zod-openapi`), rejeitando
-   422 se `specialNeeds = true` e descrição ausente/vazia.
+   400 se `specialNeeds = true` e descrição ausente/vazia — mesmo código já usado para os demais erros de validação de shape desta rota (confirmado empiricamente, não 422).
 3. `CandidateService.register` monta `newApplication.special_needs_description` como
    `input.specialNeeds ? (input.specialNeedsDescription ?? null) : null` — mesmo padrão
    ternário já usado para `referral_source_other`.

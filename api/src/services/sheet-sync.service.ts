@@ -6,11 +6,20 @@ import type { CandidateWithApplicationRow, CandidateRepository } from "../reposi
 
 const SHEET_TAB = "Inscricoes";
 
-const HEADER_RANGE = `${SHEET_TAB}!A1:O1`;
+const HEADER_RANGE = `${SHEET_TAB}!A1:P1`;
 const IDS_RANGE = `${SHEET_TAB}!A2:A`;
-const APPEND_RANGE = `${SHEET_TAB}!A:O`;
+const APPEND_RANGE = `${SHEET_TAB}!A:P`;
 
-/** Colunas novas entram no fim — linhas já escritas nunca são reescritas. */
+/**
+ * Colunas novas entram no fim — linhas já escritas nunca são reescritas.
+ *
+ * `special_needs_description` (FEAT-0014) foi adicionada ao final por essa
+ * mesma regra. Decisão de escopo (sem como confirmar com o Arthur em tempo
+ * real): a descrição segue para a planilha junto do boolean que já ia — é a
+ * mesma sensibilidade (dado de saúde) e o mesmo público (a comissão, que já
+ * recebe "Necessidades especiais: Sim/Não" aqui). Revisar se a planilha
+ * algum dia tiver um público mais amplo do que a comissão organizadora.
+ */
 export const SHEET_HEADER = [
     "id",
     "Data de inscrição",
@@ -27,6 +36,7 @@ export const SHEET_HEADER = [
     "Motivação",
     "Restrição aos sábados",
     "Necessidades especiais",
+    "Necessidades especiais (descrição)",
 ] as const;
 
 export interface SheetSyncConfig {
@@ -58,6 +68,7 @@ function toSheetRow(row: CandidateWithApplicationRow): CellValue[] {
         row.motivation,
         yesNo(row.saturday_restriction),
         yesNo(row.special_needs),
+        row.special_needs_description ?? "",
     ];
 }
 

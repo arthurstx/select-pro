@@ -1,0 +1,23 @@
+-- ============================================================
+-- Migration 0011 — Descrição de necessidades especiais (FEAT-0014)
+--
+-- ⚠️ NUMERAÇÃO RESERVADA: 0010 pertence à FEAT-0009 (branch feat/papel-host,
+-- ainda não mesclada em `develop` no momento em que esta migration foi
+-- escrita) e 0012 já está em uso pela FEAT-0016 (branch
+-- feat/exportacao-csv, em andamento em paralelo). NÃO renumerar esta
+-- migration para "a próxima livre" — o número correto é 0011, mesmo que
+-- 0010 pareça disponível no `develop` local.
+--
+-- SEGURANÇA DESTA MIGRATION: puramente aditiva. `special_needs_description`
+-- é nullable, sem CHECK, sem DEFAULT — não mexe em UNIQUE/CHECK/FK de
+-- `candidate_applications`, então dispensa o procedimento de reconstrução de
+-- tabela (Princípio III / migrations 0004 e 0007) e a janela de manutenção.
+--
+-- DADOS EXISTENTES: linhas já gravadas em `candidate_applications` recebem
+-- `NULL` nesta coluna, inclusive as que já têm `special_needs = 1`. Isso é
+-- esperado e tratado explicitamente pela API/UI como "não informado" — não é
+-- um estado de erro, e não há migração retroativa de dado (spec
+-- 014-necessidades-especiais-descricao, seção Assumptions).
+-- ============================================================
+
+ALTER TABLE candidate_applications ADD COLUMN special_needs_description TEXT;
