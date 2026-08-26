@@ -55,6 +55,22 @@ async function insertCandidate(overrides: { name?: string; createdAt?: string; c
     return row;
 }
 
+/**
+ * FEAT-0010, US3. `insertCandidate` sozinho não cria `candidate_applications`
+ * — a query de listagem trata a ausência via `COALESCE(..., 0)` (não-online
+ * por padrão), então só candidatos que precisam ser "online" nos testes
+ * passam por aqui.
+ */
+async function insertApplication(candidateId: string, saturdayRestriction: boolean) {
+    await env.DB.prepare(
+        `INSERT INTO candidate_applications
+                (id, candidate_id, referral_source, mej_acknowledged, experience, motivation, saturday_restriction, special_needs)
+              VALUES (?, ?, 'indicacao', 1, 'Nenhuma', 'Motivação', ?, 0)`,
+    )
+        .bind(crypto.randomUUID(), candidateId, saturdayRestriction ? 1 : 0)
+        .run();
+}
+
 async function insertUser(role: "avaliador" | "admin" = "avaliador") {
     counter += 1;
     const id = crypto.randomUUID();
@@ -440,5 +456,87 @@ describe("CheckinService.listCandidates — cache em KV", () => {
 
         const afterUnmark = await svc.listCandidates(query, NOW);
         if (afterUnmark.isRight()) expect(afterUnmark.value.items[0]?.checkedInAt).toBeNull();
+    });
+});
+
+describe("CheckinService.listCandidates — sinalização online/presencial (FEAT-0010, US3/D7)", () => {
+    it("candidato com saturday_restriction presente aparece como 'online'; sem restrição, como 'presencial'; ausente, `null`", async () => {
+        const svc = service();
+        const actorId = await insertUser();
+        const marca = crypto.randomUUID();
+
+        const online = await insertCandidate({ name: `Attendance Online ${marca}` });
+        await insertApplication(online.id, true);
+        const presencial = await insertCandidate({ name: `Attendance Presencial ${marca}` });
+        await insertApplication(presencial.id, false);
+        const ausente = await insertCandidate({ name: `Attendance Ausente ${marca}` });
+        await insertApplication(ausente.id, true);
+
+        await svc.markPresent(online.id, actorId, NOW);
+        await svc.markPresent(presencial.id, actorId, NOW);
+        // `ausente` nunca é marcado — precisa ter restrição=true mas continuar sem modalidade.
+
+        const result = await svc.listCandidates({ page: 1, per_page: 25, status: "todos", search: marca }, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) {
+            const byName = (name: string) => result.value.items.find((item) => item.name === name);
+            expect(byName(online.name)?.attendance).toBe("online");
+            expect(byName(presencial.name)?.attendance).toBe("presencial");
+            expect(byName(ausente.name)?.attendance).toBeNull();
+        }
+    });
+
+    it("candidato sem candidate_applications (fixture incompleta) não conta como online — COALESCE trata como presencial", async () => {
+        const svc = service();
+        const actorId = await insertUser();
+        const marca = crypto.randomUUID();
+        const candidate = await insertCandidate({ name: `Attendance Sem Application ${marca}` });
+
+        await svc.markPresent(candidate.id, actorId, NOW);
+
+        const result = await svc.listCandidates({ page: 1, per_page: 25, status: "todos", search: marca }, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) expect(result.value.items[0]?.attendance).toBe("presencial");
+    });
+
+    it("FR-011 — attendanceSummary soma sobre todo o conjunto filtrado, não só a página", async () => {
+        const svc = service();
+        const actorId = await insertUser();
+        const marca = crypto.randomUUID();
+
+        const onlines = await Promise.all(
+            [0, 1, 2].map(async (i) => {
+                const c = await insertCandidate({ name: `Summary Online ${i} ${marca}` });
+                await insertApplication(c.id, true);
+                await svc.markPresent(c.id, actorId, NOW);
+                return c;
+            }),
+        );
+        const presencial = await insertCandidate({ name: `Summary Presencial ${marca}` });
+        await insertApplication(presencial.id, false);
+        await svc.markPresent(presencial.id, actorId, NOW);
+
+        // per_page menor que o total — o resumo não pode refletir só a página.
+        const result = await svc.listCandidates({ page: 1, per_page: 2, status: "todos", search: marca }, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) {
+            expect(result.value.items).toHaveLength(2);
+            expect(result.value.attendanceSummary).toEqual({ online: onlines.length, presencial: 1 });
+        }
+    });
+
+    it("attendanceSummary conta só presentes — candidato ausente não entra em nenhum dos dois grupos", async () => {
+        const svc = service();
+        const marca = crypto.randomUUID();
+        const candidate = await insertCandidate({ name: `Summary Ausente ${marca}` });
+        await insertApplication(candidate.id, true);
+
+        const result = await svc.listCandidates({ page: 1, per_page: 25, status: "todos", search: marca }, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) expect(result.value.attendanceSummary).toEqual({ online: 0, presencial: 0 });
     });
 });

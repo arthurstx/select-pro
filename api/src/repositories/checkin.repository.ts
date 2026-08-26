@@ -16,6 +16,8 @@ export interface CandidateWithCheckinRow {
   semester: number;
   /** `null` = ausente. */
   checked_in_at: string | null;
+  /** FEAT-0010, US3 (D7). `1`/`0` — SQLite não tem boolean nativo. */
+  saturday_restriction: number;
 }
 
 export interface ListCandidatesParams {
@@ -46,7 +48,9 @@ export class CheckinRepository {
    * Busca, filtro de status e paginação na mesma consulta — filtrar depois,
    * sobre uma página já recortada, faria `total` mentir (FEAT-0005, seção 4.2).
    */
-  async listCandidates(params: ListCandidatesParams): Promise<{ items: CandidateWithCheckinRow[]; total: number }> {
+  async listCandidates(
+    params: ListCandidatesParams,
+  ): Promise<{ items: CandidateWithCheckinRow[]; total: number; attendance: { online: number; presencial: number } }> {
     const conditions: string[] = ["c.created_at BETWEEN ? AND ?"];
     const bindings: unknown[] = [params.startsAt, params.endsAt];
 
@@ -67,13 +71,20 @@ export class CheckinRepository {
     }
 
     const whereClause = conditions.join(" AND ");
+    // LEFT JOIN, não INNER: em produção toda inscrição nasce com questionário
+    // no mesmo `db.batch` (FEAT-0001), mas usar INNER aqui excluiria
+    // silenciosamente qualquer candidato sem `candidate_applications` —
+    // `COALESCE(..., 0)` trata a ausência como "sem restrição" em vez de
+    // sumir da lista.
     const joinClause = `FROM candidates c
+                          LEFT JOIN candidate_applications a ON a.candidate_id = c.id
                           LEFT JOIN candidate_checkins cc
                             ON cc.candidate_id = c.id AND cc.process_id = ?`;
 
     const listStatement = this.db
       .prepare(
-        `SELECT c.id, c.name, c.email, c.phone, c.course, c.semester, cc.checked_in_at
+        `SELECT c.id, c.name, c.email, c.phone, c.course, c.semester, cc.checked_in_at,
+                COALESCE(a.saturday_restriction, 0) AS saturday_restriction
            ${joinClause}
           WHERE ${whereClause}
           ORDER BY c.created_at ASC, c.id ASC
@@ -85,15 +96,31 @@ export class CheckinRepository {
       .prepare(`SELECT COUNT(*) AS total ${joinClause} WHERE ${whereClause}`)
       .bind(params.processId, ...bindings);
 
-    const [listResult, countResult] = await this.db.batch<CandidateWithCheckinRow | { total: number }>([
-      listStatement,
-      countStatement,
-    ]);
+    // FEAT-0010, US3: soma sobre TODO o conjunto filtrado (mesmo WHERE do
+    // count acima), não só a página — mesma semântica de `pagination.total`.
+    const attendanceStatement = this.db
+      .prepare(
+        `SELECT
+            COALESCE(SUM(CASE WHEN cc.checked_in_at IS NOT NULL AND COALESCE(a.saturday_restriction, 0) = 1 THEN 1 ELSE 0 END), 0) AS online,
+            COALESCE(SUM(CASE WHEN cc.checked_in_at IS NOT NULL AND COALESCE(a.saturday_restriction, 0) = 0 THEN 1 ELSE 0 END), 0) AS presencial
+           ${joinClause}
+          WHERE ${whereClause}`,
+      )
+      .bind(params.processId, ...bindings);
+
+    const [listResult, countResult, attendanceResult] = await this.db.batch<
+      CandidateWithCheckinRow | { total: number } | { online: number; presencial: number }
+    >([listStatement, countStatement, attendanceStatement]);
 
     const items = (listResult.results ?? []) as CandidateWithCheckinRow[];
     const total = ((countResult.results?.[0] as { total: number } | undefined)?.total) ?? 0;
+    const attendanceRow = attendanceResult.results?.[0] as { online: number; presencial: number } | undefined;
 
-    return { items, total };
+    return {
+      items,
+      total,
+      attendance: { online: attendanceRow?.online ?? 0, presencial: attendanceRow?.presencial ?? 0 },
+    };
   }
 
   // ------------------------------------------------------------

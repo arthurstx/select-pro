@@ -69,6 +69,17 @@ async function insertCandidate(overrides: { name?: string; createdAt?: string } 
     return row;
 }
 
+/** FEAT-0010, US3 — `insertCandidate` sozinho não cria `candidate_applications` (ver mesmo helper em checkin.service.test.ts). */
+async function insertApplication(candidateId: string, saturdayRestriction: boolean) {
+    await env.DB.prepare(
+        `INSERT INTO candidate_applications
+                (id, candidate_id, referral_source, mej_acknowledged, experience, motivation, saturday_restriction, special_needs)
+              VALUES (?, ?, 'indicacao', 1, 'Nenhuma', 'Motivação', ?, 0)`,
+    )
+        .bind(crypto.randomUUID(), candidateId, saturdayRestriction ? 1 : 0)
+        .run();
+}
+
 /** `role` é uma claim do JWT, independente do `roles` real — ver comentário do topo do arquivo. */
 async function tokenFor(userId: string, role: string): Promise<string> {
     return signAccessToken({ sub: userId, email: `${userId}@example.com`, role, sid: "test-sid" }, JWT_SECRET);
@@ -117,6 +128,7 @@ describe("GET /candidates (HTTP)", () => {
             data: {
                 process: { id: string; label: string };
                 items: Array<Record<string, unknown>>;
+                attendanceSummary: { online: number; presencial: number };
                 pagination: { page: number; perPage: number; total: number; totalPages: number };
             };
         }>();
@@ -124,10 +136,14 @@ describe("GET /candidates (HTTP)", () => {
         expect(body.data.process.label).toMatch(/^\d{4}\.[12]$/);
         expect(body.data.items).toHaveLength(2);
         expect(body.data.pagination.total).toBe(2);
+        // FEAT-0010, US3: presente no shape mesmo sem ninguém presente ainda (ambos ausentes aqui).
+        expect(body.data.attendanceSummary).toEqual({ online: 0, presencial: 0 });
         for (const item of body.data.items) {
             expect(item).not.toHaveProperty("gender");
             expect(item).not.toHaveProperty("ethnicity");
             expect(item).toHaveProperty("checkedInAt");
+            expect(item).toHaveProperty("attendance");
+            expect(item.attendance).toBeNull();
             // FEAT-0014 (FR-009): a tela de check-in nunca traz necessidade especial, boolean ou descrição.
             expect(item).not.toHaveProperty("specialNeeds");
             expect(item).not.toHaveProperty("specialNeedsDescription");
@@ -328,5 +344,25 @@ describe("CORS de /candidates/*", () => {
         );
 
         expect(response.headers.get("Access-Control-Allow-Origin")).not.toBe("https://site-estranho.test");
+    });
+});
+
+describe("GET /candidates — sinalização online/presencial (FEAT-0010, US3/D7)", () => {
+    it("candidato presente com restrição de sábado aparece como 'online' no shape HTTP", async () => {
+        const { token } = await avaliador();
+        const marca = crypto.randomUUID();
+        const candidate = await insertCandidate({ name: `Http Online ${marca}` });
+        await insertApplication(candidate.id, true);
+
+        await call(new Request(`http://local.test/candidates/${candidate.id}/checkin`, { method: "PUT", headers: authed(token) }));
+
+        const response = await call(new Request(`http://local.test/candidates?search=${marca}`, { headers: authed(token) }));
+        const body = await response.json<{
+            data: { items: { attendance: string | null }[]; attendanceSummary: { online: number; presencial: number } };
+        }>();
+
+        expect(response.status).toBe(200);
+        expect(body.data.items[0]?.attendance).toBe("online");
+        expect(body.data.attendanceSummary).toEqual({ online: 1, presencial: 0 });
     });
 });
