@@ -61,6 +61,7 @@ export class CheckinService {
             status: query.status,
             search: query.search,
             course: query.course,
+            attendance: query.attendance,
         };
 
         const cached = await this.listCache?.get(process.id, cacheParams);
@@ -163,6 +164,7 @@ export class CheckinService {
             search: params.search,
             status: params.status,
             course: params.course,
+            attendance: params.attendance,
             page: params.page,
             perPage: params.perPage,
         });

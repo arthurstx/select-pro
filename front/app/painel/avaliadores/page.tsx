@@ -40,6 +40,16 @@ export default function AvaliadoresPage() {
     queryFn: () => listEvaluators(roleFilter),
   });
 
+  // Contagem por cargo, sempre sobre a lista inteira — independe do `roleFilter` ativo
+  // (senão o contador mudaria de número dependendo da aba selecionada). Mesma query key
+  // de `roleFilter === "all"`, então quando ele já está selecionado não duplica round-trip.
+  const allQuery = useQuery({
+    queryKey: ["evaluators", "all"],
+    queryFn: () => listEvaluators("all"),
+  });
+  const evaluatorCount = allQuery.data?.filter((e) => e.role === "avaliador").length ?? 0;
+  const hostCount = allQuery.data?.filter((e) => e.role === "host").length ?? 0;
+
   const roleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: EvaluatorRole }) => setEvaluatorRole(userId, role),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["evaluators"] }),
@@ -57,11 +67,21 @@ export default function AvaliadoresPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8 md:py-10">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight md:text-3xl">Avaliadores</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Cargo na edição corrente do processo seletivo. Alterar aqui não afeta edições anteriores.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight md:text-3xl">Avaliadores</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Cargo na edição corrente do processo seletivo. Alterar aqui não afeta edições anteriores.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Badge variant="outline" className="gap-1.5 py-1.5 text-sm font-medium">
+            {evaluatorCount} avaliador{evaluatorCount === 1 ? "" : "es"}
+          </Badge>
+          <Badge variant="outline" className="gap-1.5 py-1.5 text-sm font-medium">
+            {hostCount} host{hostCount === 1 ? "" : "s"}
+          </Badge>
+        </div>
       </div>
 
       <div className="relative w-full md:w-[400px]">

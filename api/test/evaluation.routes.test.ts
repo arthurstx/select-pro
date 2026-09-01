@@ -54,14 +54,14 @@ async function insertCandidate(): Promise<string> {
     return id;
 }
 
-async function insertGroup(): Promise<string> {
+async function insertGroup(modality: "presencial" | "online" = "presencial"): Promise<string> {
     counter += 1;
     const id = crypto.randomUUID();
     await env.DB.prepare(
         `INSERT INTO groups (id, process_id, room_id, modality, name)
-         VALUES (?, (SELECT id FROM selection_processes WHERE '2026-08-26 12:00:00' BETWEEN starts_at AND ends_at), NULL, 'presencial', ?)`,
+         VALUES (?, (SELECT id FROM selection_processes WHERE '2026-08-26 12:00:00' BETWEEN starts_at AND ends_at), NULL, ?, ?)`,
     )
-        .bind(id, `Grupo Eval Rota ${counter}`)
+        .bind(id, modality, `Grupo Eval Rota ${counter}`)
         .run();
     return id;
 }
@@ -207,6 +207,26 @@ describe("PUT /evaluations/candidates/:candidateId (HTTP)", () => {
         const body = (await response.json()) as { data: { overallColor: string; feedback: string | null } };
         expect(body.data.overallColor).toBe("GREEN");
         expect(body.data.feedback).toBe("Muito bem.");
+    });
+
+    it("FEAT-0018 — 200 registra a avaliação para candidato de grupo ONLINE", async () => {
+        const { userId, token } = await userAndToken("avaliador");
+        const candidateId = await insertCandidate();
+        const groupId = await insertGroup("online");
+        await addToGroup("group_evaluators", groupId, userId);
+        await addToGroup("group_candidates", groupId, candidateId);
+
+        const response = await call(
+            new Request(`http://local.test/evaluations/candidates/${candidateId}`, {
+                method: "PUT",
+                headers: jsonHeaders(token),
+                body: JSON.stringify({ scores: FULL_SCORES, overallColor: "GREEN" }),
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as { data: { overallColor: string } };
+        expect(body.data.overallColor).toBe("GREEN");
     });
 });
 

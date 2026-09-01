@@ -20,6 +20,7 @@ import { exportsRouter } from "./routes/exports.routes";
 import { groupRouter } from "./routes/group.routes";
 import { memberCheckinRouter } from "./routes/member-checkin.routes";
 import { roomsRouter } from "./routes/rooms.routes";
+import { selectionProcessRouter } from "./routes/selection-process.routes";
 import { signupRequestsRouter } from "./routes/signup-requests.routes";
 import { SheetSyncService } from "./services/sheet-sync.service";
 
@@ -138,14 +139,16 @@ app.use("/member-checkins/*", (c, next) =>
 );
 
 /**
- * `/groups/*` (FEAT-0012) — inteiramente admin-only. `allowMethods` precisa
- * de POST (`organize`) e PATCH (mover candidato/avaliador entre grupos).
+ * `/groups/*` (FEAT-0012) — a maior parte é admin-only, mas `/groups/online/{id}/join` e
+ * `/groups/online/me` (FEAT-0018) são self-service do avaliador, não admin. `allowMethods`
+ * precisa de POST (`organize/*`, `join`), PATCH (mover candidato/avaliador já alocado), PUT
+ * (atribuição manual admin) e DELETE (`online/me`, sair do grupo online).
  */
 app.use("/groups/*", (c, next) =>
   cors({
     origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
     credentials: true,
-    allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400,
   })(c, next),
@@ -157,6 +160,21 @@ app.use("/groups/*", (c, next) =>
  * duas primeiras vezes — não esquecer de novo em features futuras.
  */
 app.use("/evaluations/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/selection-processes/*` (FEAT-0017) — inteiramente admin-only. `allowMethods`
+ * precisa de PUT (corrigir label/starts_at/ends_at); sem POST/DELETE — a
+ * criação continua só automática (resolveCurrent()), sem exclusão nesta versão.
+ */
+app.use("/selection-processes/*", (c, next) =>
   cors({
     origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
     credentials: true,
@@ -256,6 +274,13 @@ app.use(
   ),
 );
 
+app.use(
+  "/selection-processes/*",
+  maintenanceGuard(
+    "A correção de processos seletivos está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
@@ -271,6 +296,7 @@ app.route("/exports", exportsRouter);
 app.route("/member-checkins", memberCheckinRouter);
 app.route("/groups", groupRouter);
 app.route("/evaluations", evaluationRouter);
+app.route("/selection-processes", selectionProcessRouter);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
   type: "http",

@@ -14,15 +14,26 @@ export const CheckinStatusFilterSchema = z.enum(["todos", "presentes", "ausentes
 export type CheckinStatusFilter = z.infer<typeof CheckinStatusFilterSchema>;
 
 /**
- * `GET /candidates` (FEAT-0005, seção 8.2; filtro por curso na FEAT-0015).
- * Busca é só por `name` — sem CPF/matrícula no domínio. `course` ausente =
- * todos os cursos; reusa `CourseSchema` (mesmo validador do domínio,
+ * FEAT-0010 (D7). Extraído como schema nomeado (em vez de inline) para a
+ * FEAT-0012 poder reaproveitar o mesmo tipo em `group.schema.ts` sem
+ * duplicar o enum (Princípio I). Movido pra cima de `ListCandidatesQuerySchema`
+ * na FEAT-0019, que passa a usá-lo também como filtro de consulta.
+ */
+export const AttendanceSchema = z.enum(["online", "presencial"]);
+export type Attendance = z.infer<typeof AttendanceSchema>;
+
+/**
+ * `GET /candidates` (FEAT-0005, seção 8.2; filtro por curso na FEAT-0015; filtro por
+ * modalidade na FEAT-0019, para as telas de check-in por presencial/online).
+ * Busca é só por `name` — sem CPF/matrícula no domínio. `course`/`attendance` ausentes =
+ * todos os cursos/modalidades; `course` reusa `CourseSchema` (mesmo validador do domínio,
  * Princípio I) em vez de um enum próprio.
  */
 export const ListCandidatesQuerySchema = PaginationQuerySchema.extend({
     search: z.string().trim().min(1).optional(),
     status: CheckinStatusFilterSchema.default("todos"),
     course: CourseSchema.optional(),
+    attendance: AttendanceSchema.optional(),
 });
 export type ListCandidatesQuery = z.infer<typeof ListCandidatesQuerySchema>;
 
@@ -35,14 +46,6 @@ export const SelectionProcessSummarySchema = z.object({
     label: z.string(),
 });
 export type SelectionProcessSummary = z.infer<typeof SelectionProcessSummarySchema>;
-
-/**
- * FEAT-0010 (D7). Extraído como schema nomeado (em vez de inline) para a
- * FEAT-0012 poder reaproveitar o mesmo tipo em `group.schema.ts` sem
- * duplicar o enum (Princípio I).
- */
-export const AttendanceSchema = z.enum(["online", "presencial"]);
-export type Attendance = z.infer<typeof AttendanceSchema>;
 
 /**
  * Item da listagem. Deliberadamente SEM `gender` nem `ethnicity` — dado

@@ -52,11 +52,11 @@ async function checkIn(candidateId: string, processId: string, actorId: string) 
         .run();
 }
 
-async function insertGroup(processId: string) {
+async function insertGroup(processId: string, modality: "presencial" | "online" = "presencial") {
     counter += 1;
     const id = crypto.randomUUID();
-    await env.DB.prepare(`INSERT INTO groups (id, process_id, room_id, modality, name) VALUES (?, ?, NULL, 'presencial', ?)`)
-        .bind(id, processId, `Grupo Eval ${counter}`)
+    await env.DB.prepare(`INSERT INTO groups (id, process_id, room_id, modality, name) VALUES (?, ?, NULL, ?, ?)`)
+        .bind(id, processId, modality, `Grupo Eval ${counter}`)
         .run();
     return id;
 }
@@ -97,6 +97,27 @@ describe("EvaluationService.submit / myGroup (US1)", () => {
         const candidate = myGroupResult.value.candidates.find((c) => c.id === candidateId);
         expect(candidate?.myEvaluation?.overallColor).toBe("GREEN");
         expect(candidate?.myEvaluation?.scores).toEqual(FULL_SCORES);
+        expect(candidate?.evaluationCount).toBe(1);
+    });
+
+    it("FEAT-0018 — avaliador alocado a um grupo ONLINE consegue avaliar os candidatos desse grupo", async () => {
+        const NOW = new Date("2203-08-10T12:00:00.000Z");
+        const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
+        const evaluatorId = await insertUser();
+        const candidateId = await insertCandidate(process.id);
+        const groupId = await insertGroup(process.id, "online");
+        await addEvaluatorToGroup(groupId, evaluatorId);
+        await addCandidateToGroup(groupId, candidateId);
+
+        const submitResult = await service().submit(evaluatorId, candidateId, { scores: FULL_SCORES, overallColor: "GREEN" }, NOW);
+        expect(submitResult.isRight()).toBe(true);
+
+        const myGroupResult = await service().myGroup(evaluatorId, NOW);
+        expect(myGroupResult.isRight()).toBe(true);
+        if (!myGroupResult.isRight()) return;
+
+        const candidate = myGroupResult.value.candidates.find((c) => c.id === candidateId);
+        expect(candidate?.myEvaluation?.overallColor).toBe("GREEN");
         expect(candidate?.evaluationCount).toBe(1);
     });
 

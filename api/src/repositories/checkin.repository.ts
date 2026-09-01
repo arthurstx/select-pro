@@ -1,4 +1,5 @@
 import type {
+  Attendance,
   CandidateCheckinRow,
   CheckinStatusFilter,
   Course,
@@ -28,6 +29,8 @@ export interface ListCandidatesParams {
   status: CheckinStatusFilter;
   /** FEAT-0015. `undefined` = todos os cursos. */
   course?: Course;
+  /** FEAT-0019. `undefined` = as duas modalidades (comportamento anterior à feature). */
+  attendance?: Attendance;
   page: number;
   perPage: number;
 }
@@ -71,6 +74,14 @@ export class CheckinRepository {
     if (params.course) {
       baseConditions.push("c.course = ?");
       bindings.push(params.course);
+    }
+
+    // FEAT-0019 — entra em `baseConditions` (não só em `conditions`), pra `totalCandidates`
+    // e `attendance` (o resumo "X de Y" do cabeçalho) também respeitarem o recorte de
+    // modalidade — senão o contador da tela presencial contaria online também.
+    if (params.attendance) {
+      baseConditions.push("COALESCE(a.saturday_restriction, 0) = ?");
+      bindings.push(params.attendance === "online" ? 1 : 0);
     }
 
     const conditions = [...baseConditions];

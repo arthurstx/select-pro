@@ -78,4 +78,20 @@ export class SelectionProcessRepository {
             .bind(label)
             .first<SelectionProcessRow>();
     }
+
+    /**
+     * FEAT-0017 — correção pontual de `label`/`starts_at`/`ends_at`. `PUT`
+     * substitui os três campos juntos (mesmo padrão de `RoomsRepository.update`).
+     */
+    async update(update: {
+        id: string;
+        label: string;
+        starts_at: string;
+        ends_at: string;
+    }): Promise<SelectionProcessRow | null> {
+        return this.db
+            .prepare("UPDATE selection_processes SET label = ?, starts_at = ?, ends_at = ? WHERE id = ? RETURNING *")
+            .bind(update.label, update.starts_at, update.ends_at, update.id)
+            .first<SelectionProcessRow>();
+    }
 }

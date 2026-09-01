@@ -1,4 +1,4 @@
-import type { Attendance, EvaluatorRole, Gender, GroupModality, RoomRow } from "shared";
+import type { Attendance, EvaluatorRole, Gender, GroupModality, MemberStatus, RoomRow } from "shared";
 
 /** Candidato presente (check-in feito), com os dois dados que o algoritmo precisa (D1/D7). */
 export interface PresentCandidateRow {
@@ -8,11 +8,12 @@ export interface PresentCandidateRow {
     attendance: Attendance;
 }
 
-/** Avaliador/host presente (check-in de membro feito, FEAT-0010). */
+/** Avaliador/host presente (check-in de membro feito, FEAT-0010). `memberStatus` desde a FEAT-0021 (badge trainee). */
 export interface PresentMemberRow {
     user_id: string;
     name: string;
     role: EvaluatorRole;
+    memberStatus: MemberStatus;
 }
 
 /** Grupo pronto para persistir — saída do algoritmo (`group-organization.ts`), entrada de `replaceOrganization`. */
@@ -32,6 +33,8 @@ export interface GroupRow {
     modality: GroupModality;
     room_id: string | null;
     room_name: string | null;
+    /** FEAT-0022 — alimenta `GroupSummary.room.size`, pro front reaproveitar `deriveRoomCapacity` sem round-trip. */
+    room_size: number | null;
     name: string;
 }
 
@@ -40,6 +43,7 @@ export interface GroupCandidateAllocationRow {
     candidate_id: string;
     name: string;
     attendance: Attendance;
+    gender: Gender;
 }
 
 export interface GroupEvaluatorAllocationRow {
@@ -47,6 +51,7 @@ export interface GroupEvaluatorAllocationRow {
     user_id: string;
     name: string;
     role: EvaluatorRole;
+    memberStatus: MemberStatus;
 }
 
 /**
@@ -93,10 +98,11 @@ export class GroupRepository {
     async listPresentMembers(processId: string): Promise<PresentMemberRow[]> {
         const { results } = await this.db
             .prepare(
-                `SELECT u.id AS user_id, u.name,
+                `SELECT u.id AS user_id, u.name, p.status AS memberStatus,
                         CASE WHEN eh.user_id IS NOT NULL THEN 'host' ELSE 'avaliador' END AS role
                    FROM member_checkins mc
                    INNER JOIN users u ON u.id = mc.user_id
+                   INNER JOIN member_profiles p ON p.user_id = u.id
                    LEFT JOIN edition_hosts eh ON eh.user_id = u.id AND eh.process_id = mc.process_id
                   WHERE mc.process_id = ?
                   ORDER BY u.name ASC`,
@@ -119,12 +125,18 @@ export class GroupRepository {
     // ------------------------------------------------------------
 
     /**
-     * `DELETE FROM groups WHERE process_id = ?` (cascade limpa `group_evaluators`/
-     * `group_candidates`) seguido da inserção dos grupos novos — tudo num único `db.batch`,
-     * nunca um estado parcialmente escrito (data-model.md).
+     * `DELETE FROM groups WHERE process_id = ? AND modality = ?` (cascade limpa
+     * `group_evaluators`/`group_candidates`) seguido da inserção dos grupos novos — tudo num
+     * único `db.batch`, nunca um estado parcialmente escrito (data-model.md). Escopado por
+     * `modality` (FEAT-0018): presencial e online são organizados em dias/operações
+     * diferentes — organizar um nunca pode apagar o outro. Todo `groups` passado deve ser da
+     * mesma `modality` (quem chama garante isso — `GroupService.organizePresencial`/
+     * `organizeOnline`).
      */
-    async replaceOrganization(processId: string, groups: GroupToInsert[]): Promise<void> {
-        const statements: D1PreparedStatement[] = [this.db.prepare("DELETE FROM groups WHERE process_id = ?").bind(processId)];
+    async replaceOrganization(processId: string, modality: GroupModality, groups: GroupToInsert[]): Promise<void> {
+        const statements: D1PreparedStatement[] = [
+            this.db.prepare("DELETE FROM groups WHERE process_id = ? AND modality = ?").bind(processId, modality),
+        ];
 
         for (const group of groups) {
             statements.push(
@@ -158,7 +170,7 @@ export class GroupRepository {
     async listGroups(processId: string): Promise<GroupRow[]> {
         const { results } = await this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
                    FROM groups g
                    LEFT JOIN rooms r ON r.id = g.room_id
                   WHERE g.process_id = ?
@@ -174,7 +186,7 @@ export class GroupRepository {
         const { results } = await this.db
             .prepare(
                 `SELECT gc.group_id, gc.candidate_id,
-                        c.name,
+                        c.name, c.gender,
                         CASE WHEN COALESCE(a.saturday_restriction, 0) = 1 THEN 'online' ELSE 'presencial' END AS attendance
                    FROM group_candidates gc
                    INNER JOIN candidates c ON c.id = gc.candidate_id
@@ -192,10 +204,11 @@ export class GroupRepository {
         const { results } = await this.db
             .prepare(
                 `SELECT ge.group_id, ge.user_id,
-                        u.name,
-                        CASE WHEN eh.user_id IS NOT NULL THEN 'host' ELSE 'avaliador' END AS role
+                        u.name, p.status AS memberStatus,
+                        CASE WHEN g.modality = 'presencial' AND eh.user_id IS NOT NULL THEN 'host' ELSE 'avaliador' END AS role
                    FROM group_evaluators ge
                    INNER JOIN users u ON u.id = ge.user_id
+                   INNER JOIN member_profiles p ON p.user_id = u.id
                    INNER JOIN groups g ON g.id = ge.group_id
                    LEFT JOIN edition_hosts eh ON eh.user_id = u.id AND eh.process_id = g.process_id
                   WHERE g.process_id = ?`,
@@ -214,7 +227,7 @@ export class GroupRepository {
     async getGroupRow(groupId: string): Promise<GroupRow | null> {
         return this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
                    FROM groups g
                    LEFT JOIN rooms r ON r.id = g.room_id
                   WHERE g.id = ?`,
@@ -227,7 +240,7 @@ export class GroupRepository {
         const { results } = await this.db
             .prepare(
                 `SELECT gc.group_id, gc.candidate_id,
-                        c.name,
+                        c.name, c.gender,
                         CASE WHEN COALESCE(a.saturday_restriction, 0) = 1 THEN 'online' ELSE 'presencial' END AS attendance
                    FROM group_candidates gc
                    INNER JOIN candidates c ON c.id = gc.candidate_id
@@ -244,10 +257,11 @@ export class GroupRepository {
         const { results } = await this.db
             .prepare(
                 `SELECT ge.group_id, ge.user_id,
-                        u.name,
-                        CASE WHEN eh.user_id IS NOT NULL THEN 'host' ELSE 'avaliador' END AS role
+                        u.name, p.status AS memberStatus,
+                        CASE WHEN g.modality = 'presencial' AND eh.user_id IS NOT NULL THEN 'host' ELSE 'avaliador' END AS role
                    FROM group_evaluators ge
                    INNER JOIN users u ON u.id = ge.user_id
+                   INNER JOIN member_profiles p ON p.user_id = u.id
                    INNER JOIN groups g ON g.id = ge.group_id
                    LEFT JOIN edition_hosts eh ON eh.user_id = u.id AND eh.process_id = g.process_id
                   WHERE ge.group_id = ?`,
@@ -261,7 +275,7 @@ export class GroupRepository {
     async findGroupById(groupId: string, processId: string): Promise<GroupRow | null> {
         return this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
                    FROM groups g
                    LEFT JOIN rooms r ON r.id = g.room_id
                   WHERE g.id = ? AND g.process_id = ?`,
@@ -274,7 +288,7 @@ export class GroupRepository {
     async findCandidateGroup(candidateId: string, processId: string): Promise<GroupRow | null> {
         return this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
                    FROM group_candidates gc
                    INNER JOIN groups g ON g.id = gc.group_id
                    LEFT JOIN rooms r ON r.id = g.room_id
@@ -287,7 +301,7 @@ export class GroupRepository {
     async findEvaluatorGroup(userId: string, processId: string): Promise<GroupRow | null> {
         return this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
                    FROM group_evaluators ge
                    INNER JOIN groups g ON g.id = ge.group_id
                    LEFT JOIN rooms r ON r.id = g.room_id
@@ -306,6 +320,29 @@ export class GroupRepository {
 
     async moveEvaluator(userId: string, toGroupId: string): Promise<void> {
         await this.db.prepare("UPDATE group_evaluators SET group_id = ? WHERE user_id = ?").bind(toGroupId, userId).run();
+    }
+
+    /**
+     * FEAT-0018 — alocação de avaliador a um grupo online, por ação humana (self-service ou
+     * atribuição manual do admin), nunca por algoritmo. `ON CONFLICT(user_id)` usa o
+     * `UNIQUE(user_id)` já existente (migration `0014`, "uma pessoa, um grupo por vez") para
+     * cobrir tanto a primeira entrada quanto mover de outro grupo (presencial ou online) numa
+     * instrução só, sem checar `fromGroup` antes (research.md, Decisão 3).
+     */
+    async assignEvaluator(userId: string, groupId: string): Promise<void> {
+        await this.db
+            .prepare(
+                `INSERT INTO group_evaluators (group_id, user_id) VALUES (?, ?)
+                 ON CONFLICT(user_id) DO UPDATE SET group_id = excluded.group_id`,
+            )
+            .bind(groupId, userId)
+            .run();
+    }
+
+    /** FEAT-0018 — avaliador sai do grupo online em que estiver. Devolve se havia vínculo pra remover. */
+    async removeEvaluator(userId: string): Promise<boolean> {
+        const result = await this.db.prepare("DELETE FROM group_evaluators WHERE user_id = ?").bind(userId).run();
+        return result.meta.changes > 0;
     }
 
     /** Quantas mulheres um grupo tem — usado para decidir o aviso `GENDER_RULE_VIOLATED` (FR-010) após um `move*`. */

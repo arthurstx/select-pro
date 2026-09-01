@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { distributeByGender, organizeGroups } from "../src/services/group-organization";
+import { distributeByGender, organizeOnlineGroups, organizePresencialGroups } from "../src/services/group-organization";
 import type { PresentCandidateRow, PresentMemberRow } from "../src/repositories/group.repository";
 
 // Testes unitários do algoritmo puro (research.md D-tech4/D-tech5) — sem D1, sem I/O.
 // A cobertura com D1 real (fixture completo, edição corrente) fica em
-// group.service.test.ts.
+// group.service.test.ts. FEAT-0018: presencial e online são funções independentes, sem
+// pool combinado de avaliadores — cada uma é chamada por uma operação de organização
+// separada (dias diferentes, pessoas diferentes).
 
 function candidate(overrides: Partial<PresentCandidateRow> & { id: string }): PresentCandidateRow {
     return {
@@ -21,7 +23,7 @@ function room(overrides: { id?: string; name: string; size: number }) {
 }
 
 function member(id: string, role: PresentMemberRow["role"] = "avaliador"): PresentMemberRow {
-    return { user_id: id, name: `Membro ${id}`, role };
+    return { user_id: id, name: `Membro ${id}`, role, memberStatus: "active" };
 }
 
 describe("distributeByGender (D1 — nunca exatamente 1 mulher por grupo)", () => {
@@ -72,12 +74,12 @@ describe("distributeByGender (D1 — nunca exatamente 1 mulher por grupo)", () =
     });
 });
 
-describe("organizeGroups — distribuição presencial (D5 via deriveRoomCapacity)", () => {
+describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     it("uma sala de até 50: 2 grupos (D5)", () => {
         const sala = room({ name: "Sala 1", size: 50 });
         const candidates = Array.from({ length: 10 }, (_, i) => candidate({ id: `c${i}`, gender: "masculino" }));
 
-        const result = organizeGroups({ candidates, rooms: [sala], presentMembers: [] });
+        const result = organizePresencialGroups(candidates, [sala], []);
 
         expect(result.groups).toHaveLength(2);
         expect(result.groups.every((g) => g.roomId === sala.id)).toBe(true);
@@ -88,7 +90,7 @@ describe("organizeGroups — distribuição presencial (D5 via deriveRoomCapacit
         const sala = room({ name: "Sala 1", size: 2 });
         const candidates = Array.from({ length: 5 }, (_, i) => candidate({ id: `c${i}`, gender: "masculino" }));
 
-        const result = organizeGroups({ candidates, rooms: [sala], presentMembers: [] });
+        const result = organizePresencialGroups(candidates, [sala], []);
 
         const allocated = result.groups.flatMap((g) => g.candidateIds);
         expect(allocated).toHaveLength(2);
@@ -97,10 +99,10 @@ describe("organizeGroups — distribuição presencial (D5 via deriveRoomCapacit
         expect(allocated).toEqual(["c0", "c1"]);
     });
 
-    it("sem sala nenhuma: todos os presenciais ficam não alocados, nenhum grupo formado", () => {
+    it("sem sala nenhuma: todos ficam não alocados, nenhum grupo formado", () => {
         const candidates = [candidate({ id: "c0" })];
 
-        const result = organizeGroups({ candidates, rooms: [], presentMembers: [] });
+        const result = organizePresencialGroups(candidates, [], []);
 
         expect(result.groups).toHaveLength(0);
         expect(result.unallocatedCandidateCount).toBe(1);
@@ -111,77 +113,222 @@ describe("organizeGroups — distribuição presencial (D5 via deriveRoomCapacit
         const sala2 = room({ name: "Sala 2", size: 50 });
         const candidates = [candidate({ id: "c0" })];
 
-        const result = organizeGroups({ candidates, rooms: [sala1, sala2], presentMembers: [] });
+        const result = organizePresencialGroups(candidates, [sala1, sala2], []);
 
         expect(result.groups).toHaveLength(1);
         expect(result.groups[0].roomId).toBe(sala1.id);
     });
 
-    it("avaliadores/hosts presentes são distribuídos entre os grupos presenciais formados", () => {
-        const sala = room({ name: "Sala 1", size: 50 });
+    it("FEAT-0020/FEAT-0021 — avaliador conta pro alvo do grupo, host vira responsável da sala (não do grupo)", () => {
+        const sala = room({ name: "Sala 1", size: 50 }); // D5: 1 host, maxGroups=2
         const candidates = Array.from({ length: 4 }, (_, i) => candidate({ id: `c${i}` }));
         const members = [member("e1"), member("e2", "host")];
 
-        const result = organizeGroups({ candidates, rooms: [sala], presentMembers: members });
+        const result = organizePresencialGroups(candidates, [sala], members);
 
-        const allocatedEvaluators = result.groups.flatMap((g) => g.evaluatorUserIds);
-        expect(allocatedEvaluators.sort()).toEqual(["e1", "e2"]);
+        // 4 candidatos -> 1 grupo único (derivePresencialGroupCount), alvo 2 avaliadores —
+        // só 1 avaliador presente, então evaluatorSlots tem só e1; e2 (host) some daí, mas
+        // aparece no grupo como host da sala (FEAT-0021).
+        expect(result.groups).toHaveLength(1);
+        expect(result.groups[0]?.evaluatorUserIds).toEqual(["e1", "e2"]);
     });
 
-    it("sem nenhum avaliador presente: grupos presenciais são formados mesmo assim, sem avaliador alocado", () => {
+    it("FEAT-0020 (FR-003) — grupos formados têm sempre entre 3 e 5 candidatos", () => {
+        const sala = room({ name: "Sala 1", size: 100 }); // maxGroups=4 (D5, >80)
+        const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
+
+        const result = organizePresencialGroups(candidates, [sala], []);
+
+        const sizes = result.groups.map((g) => g.candidateIds.length);
+        expect(sizes.every((size) => size >= 3 && size <= 5)).toBe(true);
+        expect(sizes.reduce((a, b) => a + b, 0)).toBe(13);
+    });
+
+    it("FEAT-0020 (FR-004) — capacidade insuficiente ainda reporta unallocatedCandidateCount corretamente", () => {
+        // Sala de 50 (D5: maxGroups=2) comporta no máximo 2*5=10 candidatos em grupos válidos,
+        // mesmo tendo "espaço físico" pra mais — capacidade real é min(size, maxGroups*5).
+        const sala = room({ name: "Sala 1", size: 50 });
+        const candidates = Array.from({ length: 15 }, (_, i) => candidate({ id: `c${i}` }));
+
+        const result = organizePresencialGroups(candidates, [sala], []);
+
+        const allocated = result.groups.flatMap((g) => g.candidateIds);
+        expect(allocated).toHaveLength(10);
+        expect(result.unallocatedCandidateCount).toBe(5);
+    });
+
+    it("FEAT-0020 (FR-005/FR-006) — com avaliador de sobra só pro 2º de UM grupo, todo mundo já tem 1 antes de alguém ter 2", () => {
+        const sala = room({ name: "Sala 1", size: 100 }); // maxGroups=4
+        // 13 candidatos -> 3 grupos (research.md Decisão 2): [5, 4, 4] candidatos, todos alvo 2.
+        const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
+        // 3 avaliadores cobrem o "1 por grupo" de todo mundo; o 4º é o único 2º avaliador possível.
+        const members = Array.from({ length: 4 }, (_, i) => member(`e${i}`));
+
+        const result = organizePresencialGroups(candidates, [sala], members);
+
+        const counts = result.groups.map((g) => g.evaluatorUserIds.length);
+        // Todo grupo já tem pelo menos 1 (pass 1 completa antes de qualquer 2º — pass 2).
+        expect(counts.every((c) => c >= 1)).toBe(true);
+        // Só um grupo tem 2 (o 4º avaliador, único "extra") — nunca um grupo com 2 enquanto
+        // outro (de tamanho igual, 4-5) ainda está com 0.
+        expect(counts.filter((c) => c === 2)).toHaveLength(1);
+        expect(counts.filter((c) => c === 0)).toHaveLength(0);
+    });
+
+    it("FEAT-0020 (FR-005) — com avaliadores suficientes, grupo de 3 tem exatamente 1 e grupo de 4-5 tem exatamente 2", () => {
+        const sala = room({ name: "Sala 1", size: 100 });
+        const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
+        const members = Array.from({ length: 6 }, (_, i) => member(`e${i}`)); // avaliadores de sobra
+
+        const result = organizePresencialGroups(candidates, [sala], members);
+
+        for (const group of result.groups) {
+            const expected = group.candidateIds.length >= 4 ? 2 : 1;
+            expect(group.evaluatorUserIds.length).toBe(expected);
+        }
+    });
+
+    it("FEAT-0021 — host da sala aparece em TODOS os grupos daquela sala", () => {
+        const sala = room({ name: "Sala 1", size: 100 }); // D5: 2 hosts, maxGroups=4
+        const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` })); // -> 3 grupos
+        const members = [member("h1", "host")];
+
+        const result = organizePresencialGroups(candidates, [sala], members);
+
+        expect(result.groups).toHaveLength(3);
+        for (const group of result.groups) {
+            expect(group.evaluatorUserIds).toContain("h1");
+        }
+    });
+
+    it("FEAT-0021 — sala com D5 de 2 hosts recebe até 2, nunca mais que isso", () => {
+        const sala = room({ name: "Sala 1", size: 100 }); // D5: 2 hosts
+        const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
+        const members = [member("h1", "host"), member("h2", "host"), member("h3", "host")];
+
+        const result = organizePresencialGroups(candidates, [sala], members);
+
+        for (const group of result.groups) {
+            const hostsInGroup = group.evaluatorUserIds.filter((id) => id === "h1" || id === "h2" || id === "h3");
+            expect(hostsInGroup).toHaveLength(2);
+            expect(hostsInGroup.sort()).toEqual(["h1", "h2"]); // os 2 primeiros da lista, h3 sobra
+        }
+    });
+
+    it("FEAT-0021 — hosts insuficientes: sala fica com menos hosts que o ideal, sem erro", () => {
+        const sala = room({ name: "Sala 1", size: 100 }); // D5: 2 hosts
+        const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
+        const members = [member("h1", "host")]; // só 1, D5 pede 2
+
+        const result = organizePresencialGroups(candidates, [sala], members);
+
+        for (const group of result.groups) {
+            expect(group.evaluatorUserIds).toContain("h1");
+            expect(group.evaluatorUserIds.filter((id) => id === "h1")).toHaveLength(1);
+        }
+    });
+
+    it("FEAT-0021 — segunda sala usada só recebe host depois da primeira estar completa", () => {
+        const sala1 = room({ id: "sala-a", name: "Sala A", size: 50 }); // D5: 1 host, maxGroups=2
+        const sala2 = room({ id: "sala-b", name: "Sala B", size: 50 }); // D5: 1 host
+        // Candidatos suficientes pra estourar a capacidade da sala1 (min(50,2*5)=10) e usar a sala2.
+        const candidates = Array.from({ length: 15 }, (_, i) => candidate({ id: `c${i}` }));
+        const members = [member("h1", "host"), member("h2", "host")];
+
+        const result = organizePresencialGroups(candidates, [sala1, sala2], members);
+
+        const groupsSala1 = result.groups.filter((g) => g.roomId === "sala-a");
+        const groupsSala2 = result.groups.filter((g) => g.roomId === "sala-b");
+        expect(groupsSala1.length).toBeGreaterThan(0);
+        expect(groupsSala2.length).toBeGreaterThan(0);
+        for (const g of groupsSala1) expect(g.evaluatorUserIds).toContain("h1");
+        for (const g of groupsSala2) expect(g.evaluatorUserIds).toContain("h2");
+    });
+
+    it("sem nenhum avaliador presente: grupos são formados mesmo assim, sem avaliador alocado", () => {
         const sala = room({ name: "Sala 1", size: 50 });
         const candidates = [candidate({ id: "c0" })];
 
-        const result = organizeGroups({ candidates, rooms: [sala], presentMembers: [] });
+        const result = organizePresencialGroups(candidates, [sala], []);
 
         expect(result.groups).toHaveLength(1);
         expect(result.groups[0].evaluatorUserIds).toEqual([]);
+    });
+
+    it("sem candidato nenhum: nenhum grupo, nada não alocado", () => {
+        const result = organizePresencialGroups([], [], []);
+
+        expect(result.groups).toHaveLength(0);
+        expect(result.unallocatedCandidateCount).toBe(0);
     });
 });
 
-describe("organizeGroups — separação online/presencial (FR-003, US3)", () => {
-    it("nunca mistura modalidade no mesmo grupo", () => {
-        const sala = room({ name: "Sala 1", size: 50 });
-        const candidates = [
-            candidate({ id: "p1", attendance: "presencial" }),
-            candidate({ id: "o1", attendance: "online" }),
-        ];
-
-        const result = organizeGroups({ candidates, rooms: [sala], presentMembers: [] });
-
-        expect(result.groups.every((g) => g.candidateIds.every((id) => (id === "p1" ? g.modality === "presencial" : true)))).toBe(
-            true,
-        );
-        const onlineGroup = result.groups.find((g) => g.candidateIds.includes("o1"));
-        expect(onlineGroup?.modality).toBe("online");
-        expect(onlineGroup?.roomId).toBeNull();
-    });
-
-    it("grupos online não têm sala nem avaliador alocado", () => {
+describe("organizeOnlineGroups (FEAT-0022 — só candidatos, D1, sem sala/avaliador/host, faixa ideal via derivePresencialGroupCount)", () => {
+    it("forma grupo(s) só com candidatos, sem sala e sem avaliador — mesmo passando membros presentes em outro lugar", () => {
         const candidates = [candidate({ id: "o1", attendance: "online" })];
-        const members = [member("e1")];
 
-        const result = organizeGroups({ candidates, rooms: [], presentMembers: members });
+        const groups = organizeOnlineGroups(candidates);
 
-        expect(result.groups).toHaveLength(1);
-        expect(result.groups[0].roomId).toBeNull();
-        expect(result.groups[0].evaluatorUserIds).toEqual([]);
+        expect(groups).toHaveLength(1);
+        expect(groups[0].modality).toBe("online");
+        expect(groups[0].roomId).toBeNull();
+        expect(groups[0].evaluatorUserIds).toEqual([]);
     });
 
-    it("sobra ímpar de mulheres entre online também vira trio (D1 se aplica aos dois modos)", () => {
+    it("sobra ímpar de mulheres também vira trio (D1 se aplica ao online)", () => {
         const women = ["w1", "w2", "w3"].map((id) => candidate({ id, gender: "feminino", attendance: "online" as const }));
 
-        const result = organizeGroups({ candidates: women, rooms: [], presentMembers: [] });
+        const groups = organizeOnlineGroups(women);
 
-        expect(result.groups.filter((g) => g.candidateIds.length === 1)).toHaveLength(0);
+        expect(groups.filter((g) => g.candidateIds.length === 1)).toHaveLength(0);
     });
 
-    it("candidatos online não contam para unallocatedCandidateCount (sem limite de capacidade)", () => {
+    it("sem limite de capacidade — todos os candidatos presentes são alocados a algum grupo", () => {
         const candidates = Array.from({ length: 100 }, (_, i) => candidate({ id: `o${i}`, attendance: "online" as const }));
 
-        const result = organizeGroups({ candidates, rooms: [], presentMembers: [] });
+        const groups = organizeOnlineGroups(candidates);
 
-        expect(result.unallocatedCandidateCount).toBe(0);
-        expect(result.groups.flatMap((g) => g.candidateIds)).toHaveLength(100);
+        expect(groups.flatMap((g) => g.candidateIds)).toHaveLength(100);
+    });
+
+    it("sem candidato nenhum: nenhum grupo formado", () => {
+        const groups = organizeOnlineGroups([]);
+
+        expect(groups).toHaveLength(0);
+    });
+
+    it("1 ou 2 candidatos: forma o único grupo possível, mesmo abaixo do mínimo aceitável (FR-014, edge case)", () => {
+        expect(organizeOnlineGroups([candidate({ id: "o1", attendance: "online" })])).toHaveLength(1);
+        const twoCandidates = ["o1", "o2"].map((id) => candidate({ id, attendance: "online" as const }));
+        const groups = organizeOnlineGroups(twoCandidates);
+        expect(groups).toHaveLength(1);
+        expect(groups[0].candidateIds).toHaveLength(2);
+    });
+
+    it("8, 9 ou 10 candidatos: 2 grupos de 4-5 (faixa ideal, FR-014)", () => {
+        for (const total of [8, 9, 10]) {
+            const candidates = Array.from({ length: total }, (_, i) => candidate({ id: `o${total}-${i}`, attendance: "online" as const }));
+            const groups = organizeOnlineGroups(candidates);
+            expect(groups).toHaveLength(2);
+            for (const g of groups) expect(g.candidateIds.length).toBeGreaterThanOrEqual(4);
+        }
+    });
+
+    it("6 candidatos: 2 grupos de 3, nunca 1 grupo de 6 (evita grupo grande quando dá pra redistribuir, FR-014)", () => {
+        const candidates = Array.from({ length: 6 }, (_, i) => candidate({ id: `o${i}`, attendance: "online" as const }));
+
+        const groups = organizeOnlineGroups(candidates);
+
+        expect(groups).toHaveLength(2);
+        expect(groups.every((g) => g.candidateIds.length === 3)).toBe(true);
+    });
+
+    it("11 candidatos: aceita um grupo de 3 quando a divisão perfeita não é possível (FR-014)", () => {
+        const candidates = Array.from({ length: 11 }, (_, i) => candidate({ id: `o${i}`, attendance: "online" as const }));
+
+        const groups = organizeOnlineGroups(candidates);
+
+        expect(groups).toHaveLength(3);
+        expect(groups.every((g) => g.candidateIds.length >= 3 && g.candidateIds.length <= 5)).toBe(true);
     });
 });

@@ -366,3 +366,45 @@ describe("GET /candidates — sinalização online/presencial (FEAT-0010, US3/D7
         expect(body.data.attendanceSummary).toEqual({ online: 1, presencial: 0 });
     });
 });
+
+describe("GET /candidates?attendance= (FEAT-0019)", () => {
+    it("attendance=presencial devolve só presenciais", async () => {
+        const { token } = await avaliador();
+        const marca = crypto.randomUUID();
+        const online = await insertCandidate({ name: `Attendance Filtro Online ${marca}` });
+        await insertApplication(online.id, true);
+        await call(new Request(`http://local.test/candidates/${online.id}/checkin`, { method: "PUT", headers: authed(token) }));
+        const presencial = await insertCandidate({ name: `Attendance Filtro Presencial ${marca}` });
+        await insertApplication(presencial.id, false);
+        await call(new Request(`http://local.test/candidates/${presencial.id}/checkin`, { method: "PUT", headers: authed(token) }));
+
+        const response = await call(
+            new Request(`http://local.test/candidates?search=${marca}&attendance=presencial`, { headers: authed(token) }),
+        );
+        const body = await response.json<{ data: { items: { name: string }[] } }>();
+
+        expect(response.status).toBe(200);
+        expect(body.data.items).toHaveLength(1);
+        expect(body.data.items[0]?.name).toBe(presencial.name);
+    });
+
+    it("attendance=online devolve só online", async () => {
+        const { token } = await avaliador();
+        const marca = crypto.randomUUID();
+        const online = await insertCandidate({ name: `Attendance Filtro Online 2 ${marca}` });
+        await insertApplication(online.id, true);
+        await call(new Request(`http://local.test/candidates/${online.id}/checkin`, { method: "PUT", headers: authed(token) }));
+        const presencial = await insertCandidate({ name: `Attendance Filtro Presencial 2 ${marca}` });
+        await insertApplication(presencial.id, false);
+        await call(new Request(`http://local.test/candidates/${presencial.id}/checkin`, { method: "PUT", headers: authed(token) }));
+
+        const response = await call(
+            new Request(`http://local.test/candidates?search=${marca}&attendance=online`, { headers: authed(token) }),
+        );
+        const body = await response.json<{ data: { items: { name: string }[] } }>();
+
+        expect(response.status).toBe(200);
+        expect(body.data.items).toHaveLength(1);
+        expect(body.data.items[0]?.name).toBe(online.name);
+    });
+});

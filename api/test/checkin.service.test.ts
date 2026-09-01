@@ -568,3 +568,104 @@ describe("CheckinService.listCandidates — sinalização online/presencial (FEA
         if (result.isRight()) expect(result.value.attendanceSummary).toEqual({ online: 0, presencial: 0 });
     });
 });
+
+describe("CheckinService.listCandidates — filtro por modalidade (FEAT-0019)", () => {
+    it("attendance=presencial filtra items, total e totalCandidates — sem online no meio", async () => {
+        const svc = service();
+        const actorId = await insertUser();
+        const marca = crypto.randomUUID();
+
+        const online = await insertCandidate({ name: `Filtro Online ${marca}` });
+        await insertApplication(online.id, true);
+        await svc.markPresent(online.id, actorId, NOW);
+        const presencial = await insertCandidate({ name: `Filtro Presencial ${marca}` });
+        await insertApplication(presencial.id, false);
+        await svc.markPresent(presencial.id, actorId, NOW);
+
+        const result = await svc.listCandidates(
+            { page: 1, per_page: 25, status: "todos", search: marca, attendance: "presencial" },
+            NOW,
+        );
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) {
+            expect(result.value.items).toHaveLength(1);
+            expect(result.value.items[0]?.name).toBe(presencial.name);
+            expect(result.value.pagination.total).toBe(1);
+            expect(result.value.totalCandidates).toBe(1);
+            expect(result.value.attendanceSummary).toEqual({ online: 0, presencial: 1 });
+        }
+    });
+
+    it("attendance=online filtra items, total e totalCandidates — sem presencial no meio", async () => {
+        const svc = service();
+        const actorId = await insertUser();
+        const marca = crypto.randomUUID();
+
+        const online = await insertCandidate({ name: `Filtro Online 2 ${marca}` });
+        await insertApplication(online.id, true);
+        await svc.markPresent(online.id, actorId, NOW);
+        const presencial = await insertCandidate({ name: `Filtro Presencial 2 ${marca}` });
+        await insertApplication(presencial.id, false);
+        await svc.markPresent(presencial.id, actorId, NOW);
+
+        const result = await svc.listCandidates(
+            { page: 1, per_page: 25, status: "todos", search: marca, attendance: "online" },
+            NOW,
+        );
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) {
+            expect(result.value.items).toHaveLength(1);
+            expect(result.value.items[0]?.name).toBe(online.name);
+            expect(result.value.totalCandidates).toBe(1);
+            expect(result.value.attendanceSummary).toEqual({ online: 1, presencial: 0 });
+        }
+    });
+
+    it("sem attendance, comportamento igual a hoje — as duas modalidades aparecem juntas", async () => {
+        const svc = service();
+        const actorId = await insertUser();
+        const marca = crypto.randomUUID();
+
+        const online = await insertCandidate({ name: `Filtro Ausente Online ${marca}` });
+        await insertApplication(online.id, true);
+        await svc.markPresent(online.id, actorId, NOW);
+        const presencial = await insertCandidate({ name: `Filtro Ausente Presencial ${marca}` });
+        await insertApplication(presencial.id, false);
+        await svc.markPresent(presencial.id, actorId, NOW);
+
+        const result = await svc.listCandidates({ page: 1, per_page: 25, status: "todos", search: marca }, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (result.isRight()) expect(result.value.items).toHaveLength(2);
+    });
+});
+
+describe("CheckinService.listCandidates — cache em KV inclui `attendance` na chave (FEAT-0019)", () => {
+    it("filtrar por modalidades diferentes não reaproveita o cache da outra modalidade", async () => {
+        const svc = serviceWithCache();
+        const marca = crypto.randomUUID();
+        const online = await insertCandidate({ name: `Cache Attendance Online ${marca}` });
+        await insertApplication(online.id, true);
+        const presencial = await insertCandidate({ name: `Cache Attendance Presencial ${marca}` });
+        await insertApplication(presencial.id, false);
+
+        const onlineResult = await svc.listCandidates(
+            { page: 1, per_page: 25, status: "todos", search: marca, attendance: "online" },
+            NOW,
+        );
+        const presencialResult = await svc.listCandidates(
+            { page: 1, per_page: 25, status: "todos", search: marca, attendance: "presencial" },
+            NOW,
+        );
+
+        expect(onlineResult.isRight() && presencialResult.isRight()).toBe(true);
+        if (onlineResult.isRight() && presencialResult.isRight()) {
+            expect(onlineResult.value.items).toHaveLength(1);
+            expect(onlineResult.value.items[0]?.name).toBe(online.name);
+            expect(presencialResult.value.items).toHaveLength(1);
+            expect(presencialResult.value.items[0]?.name).toBe(presencial.name);
+        }
+    });
+});

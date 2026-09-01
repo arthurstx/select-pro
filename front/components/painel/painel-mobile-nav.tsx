@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
-import { PAINEL_NAV_ITEMS } from "./painel-nav";
+import { isPainelNavGroup, PAINEL_NAV_ITEMS, type PainelNavItem } from "./painel-nav";
 
 /**
  * Nav inferior do mobile — a sidebar (`PainelSidebar`) só aparece em `md+`,
@@ -13,7 +13,15 @@ import { PAINEL_NAV_ITEMS } from "./painel-nav";
  * `/painel` e `/painel/check-in` além de digitar a URL. Barra fixa embaixo,
  * não gaveta/hambúrguer: só dois destinos, e um menu para dois itens é mais
  * toque do que a própria navegação.
+ *
+ * FEAT-0018 — "Grupos" virou um grupo com sub-rotas na sidebar, mas aqui não
+ * há espaço para um dropdown numa barra inferior: os filhos (Online/
+ * Presencial) são achatados em itens próprios, no lugar do pai.
  */
+const MOBILE_NAV_ITEMS: PainelNavItem[] = PAINEL_NAV_ITEMS.flatMap((item) =>
+  isPainelNavGroup(item) ? item.children : [item],
+);
+
 export function PainelMobileNav() {
     const pathname = usePathname();
 
@@ -22,7 +30,7 @@ export function PainelMobileNav() {
             aria-label="Navegação principal"
             className="border-border bg-background fixed inset-x-0 bottom-0 z-40 flex border-t md:hidden"
         >
-            {PAINEL_NAV_ITEMS.map((item) => {
+            {MOBILE_NAV_ITEMS.map((item) => {
                 const active = pathname === item.href;
                 const Icon = item.icon;
 

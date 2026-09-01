@@ -1,91 +1,90 @@
-import { deriveRoomCapacity, type RoomRow } from "shared";
+import {
+    deriveEvaluatorTargetForGroupSize,
+    deriveRoomCapacity,
+    derivePresencialGroupCount,
+    type RoomRow,
+} from "shared";
 
 import type { GroupToInsert, PresentCandidateRow, PresentMemberRow } from "../repositories/group.repository";
 
 /**
  * Algoritmo de organização automática de grupos (FEAT-0012, research.md D-tech4/D-tech5).
- * Função pura — sem I/O, sem D1 — recebe as "fotos" já carregadas pelo repository e devolve
- * a estrutura de grupos a persistir. Testada isoladamente em `group-organization.test.ts`.
- *
- * Referência de tamanho de grupo online quando não há sala cadastrada — ponto médio da
- * primeira faixa de D5 (`deriveRoomCapacity`). Só usado como último recurso; ver
- * `averageRoomGroupSize`.
+ * Duas funções puras e INDEPENDENTES — sem I/O, sem D1 — uma por modalidade (FEAT-0018:
+ * presencial e online acontecem em dias diferentes, com pessoas diferentes; não há pool
+ * combinado de avaliadores entre as duas, e cada uma é chamada por uma operação de
+ * organização separada em `GroupService`). Testadas isoladamente em
+ * `group-organization.test.ts`.
  */
-const FALLBACK_ONLINE_GROUP_SIZE = 25;
 
-export interface OrganizeInput {
-    candidates: PresentCandidateRow[];
-    rooms: RoomRow[];
-    presentMembers: PresentMemberRow[];
-}
-
-export interface OrganizeOutput {
+export interface OrganizePresencialOutput {
     groups: GroupToInsert[];
     unallocatedCandidateCount: number;
 }
 
-export function organizeGroups(input: OrganizeInput): OrganizeOutput {
-    const rooms = [...input.rooms].sort((a, b) => a.name.localeCompare(b.name));
-    const presencial = input.candidates.filter((c) => c.attendance === "presencial");
-    const online = input.candidates.filter((c) => c.attendance === "online");
-
-    const presencialResult = organizePresencial(presencial, rooms, input.presentMembers);
-    const onlineResult = organizeOnline(online, rooms);
-
-    return {
-        groups: [...presencialResult.groups, ...onlineResult.groups],
-        unallocatedCandidateCount: presencialResult.unallocatedCandidateCount,
-    };
-}
-
 // ------------------------------------------------------------
-// Presencial — FR-004/FR-005/FR-006/FR-013
+// Presencial — FR-004/FR-005/FR-006/FR-013 (FEAT-0012)
 // ------------------------------------------------------------
 
-function organizePresencial(
+/** Candidatos presenciais presentes + salas cadastradas + avaliadores/hosts presentes → grupos com sala e avaliador. */
+export function organizePresencialGroups(
     candidates: PresentCandidateRow[],
     rooms: RoomRow[],
     presentMembers: PresentMemberRow[],
-): OrganizeOutput {
+): OrganizePresencialOutput {
     if (candidates.length === 0) {
         return { groups: [], unallocatedCandidateCount: 0 };
     }
 
+    const sortedRooms = [...rooms].sort((a, b) => a.name.localeCompare(b.name));
+
+    // FEAT-0020: a capacidade real de uma sala não é mais só `room.size` (lugares físicos) —
+    // é `min(size, maxGroups * 5)`, porque nenhum grupo pode passar de 5 (FR-003). Uma sala de
+    // 50 lugares mas só 2 grupos (D5) não comporta 50 pessoas em grupos válidos, comporta 10.
     // Acumula salas (já em ordem de nome) até cobrir o total de presentes, ou esgotar
     // (FR-012/013 tratam "sem sala nenhuma"/"capacidade insuficiente" fora daqui, no service).
-    const usedRooms: RoomRow[] = [];
-    let capacity = 0;
-    for (const room of rooms) {
-        if (capacity >= candidates.length) break;
-        usedRooms.push(room);
-        capacity += room.size;
+    const roomAssignments: { room: RoomRow; count: number; maxGroups: number }[] = [];
+    let remaining = candidates.length;
+    for (const room of sortedRooms) {
+        if (remaining <= 0) break;
+        const { maxGroups } = deriveRoomCapacity(room.size);
+        const roomCapacity = Math.min(room.size, maxGroups * 5);
+        const count = Math.min(remaining, roomCapacity);
+        if (count <= 0) continue;
+        roomAssignments.push({ room, count, maxGroups });
+        remaining -= count;
     }
 
-    if (usedRooms.length === 0) {
+    if (roomAssignments.length === 0) {
         return { groups: [], unallocatedCandidateCount: candidates.length };
     }
 
-    // Slot → sala: cada sala reserva `maxGroups` slots consecutivos.
-    const slotRoomIds: string[] = [];
-    for (const room of usedRooms) {
-        const { maxGroups } = deriveRoomCapacity(room.size);
-        for (let i = 0; i < maxGroups; i++) slotRoomIds.push(room.id);
-    }
-
+    const capacity = candidates.length - remaining;
     const unallocatedCandidateCount = Math.max(0, candidates.length - capacity);
     // `candidates` já vem ordenado por `checked_in_at ASC` do repository — quem chegou
     // primeiro é alocado primeiro quando falta capacidade (FR-013).
     const allocatable = candidates.slice(0, capacity);
 
-    const slots = distributeByGender(allocatable, slotRoomIds.length);
+    // Slot → sala: cada sala reserva tantos slots quanto `derivePresencialGroupCount` recomendar
+    // pra sua fatia de candidatos (FEAT-0020) — não mais sempre `maxGroups` fixo.
+    const slotRoomIds: string[] = [];
+    for (const { room, count, maxGroups } of roomAssignments) {
+        const groupsForRoom = derivePresencialGroupCount(count, maxGroups);
+        for (let i = 0; i < groupsForRoom; i++) slotRoomIds.push(room.id);
+    }
 
-    const evaluatorSlots = distributeEvaluatorsAcrossNonEmptySlots(presentMembers, slots);
+    const candidateSlots = distributeByGender(allocatable, slotRoomIds.length);
+    const avaliadores = presentMembers.filter((m) => m.role === "avaliador");
+    const hosts = presentMembers.filter((m) => m.role === "host");
+    const evaluatorSlots = distributeEvaluatorsByTarget(avaliadores, candidateSlots);
+    // FEAT-0021: host é recurso da SALA (compartilhado por todos os grupos dela), não do
+    // grupo — distribuído à parte do avaliador-por-grupo (research.md, Decisão 1/2).
+    const hostsByRoom = distributeHostsToRooms(hosts, roomAssignments);
 
-    const roomsById = new Map(rooms.map((r) => [r.id, r] as const));
+    const roomsById = new Map(sortedRooms.map((r) => [r.id, r] as const));
     const groupsByRoom = new Map<string, number>();
     const groups: GroupToInsert[] = [];
 
-    slots.forEach((candidateIds, index) => {
+    candidateSlots.forEach((candidateIds, index) => {
         if (candidateIds.length === 0) return; // nunca cria grupo vazio (edge case da spec)
 
         const roomId = slotRoomIds[index];
@@ -99,29 +98,64 @@ function organizePresencial(
             roomId,
             name: `${room?.name ?? "Sala"} - Grupo ${ordinal}`,
             candidateIds,
-            evaluatorUserIds: evaluatorSlots[index] ?? [],
+            // O(s) mesmo(s) host(s) da sala aparecem em TODOS os grupos dela — "host
+            // responsável" é lido filtrando `evaluators` por `role === "host"` (FEAT-0021).
+            evaluatorUserIds: [...(evaluatorSlots[index] ?? []), ...(hostsByRoom.get(roomId) ?? [])],
         });
     });
 
     return { groups, unallocatedCandidateCount };
 }
 
-// ------------------------------------------------------------
-// Online — FR-003/FR-005/FR-007 (US3)
-// ------------------------------------------------------------
+/**
+ * FEAT-0021 — até `deriveRoomCapacity(room.size).hostCount` hosts por sala, em ordem de sala
+ * (mesma ordem de `roomAssignments`), consumindo os hosts presentes sequencialmente até
+ * acabarem. Host é recurso da sala inteira, não de um grupo específico — por isso os mesmos
+ * ids valem pra todos os grupos daquela sala (aplicado por quem chama, `organizePresencialGroups`).
+ */
+function distributeHostsToRooms(
+    hosts: PresentMemberRow[],
+    roomAssignments: { room: RoomRow }[],
+): Map<string, string[]> {
+    const hostsByRoom = new Map<string, string[]>();
+    let cursor = 0;
 
-function organizeOnline(candidates: PresentCandidateRow[], allRooms: RoomRow[]): { groups: GroupToInsert[] } {
-    if (candidates.length === 0) {
-        return { groups: [] };
+    for (const { room } of roomAssignments) {
+        const target = deriveRoomCapacity(room.size).hostCount;
+        const assigned: string[] = [];
+        while (assigned.length < target && cursor < hosts.length) {
+            assigned.push(hosts[cursor]!.user_id);
+            cursor += 1;
+        }
+        hostsByRoom.set(room.id, assigned);
     }
 
-    const avgGroupSize = averageRoomGroupSize(allRooms);
-    const targetGroups = Math.max(1, Math.ceil(candidates.length / avgGroupSize));
+    return hostsByRoom;
+}
 
-    const slots = distributeByGender(candidates, targetGroups);
+// ------------------------------------------------------------
+// Online — FR-001/FR-002 (FEAT-0018): só separa candidatos, D1, SEM sala/avaliador/host.
+// O vínculo avaliador↔grupo online nasce só por ação humana (GroupService.assignEvaluatorToOnlineGroup).
+// ------------------------------------------------------------
+
+/**
+ * FEAT-0022 (US4, FR-014) — candidatos online presentes → grupos só com candidatos, sem sala
+ * (o online nunca teve sala de verdade). Tamanho de grupo via `derivePresencialGroupCount`
+ * (sem `maxGroups` — o online não tem teto de sala): já implementa a faixa pedida (4-5 ideal,
+ * 3 mínimo aceitável quando não dá pra evitar, nunca deixa 6+ quando redistribuir é possível —
+ * conferido manualmente em research.md D1). Antes desta feature o tamanho vinha da MÉDIA das
+ * salas cadastradas (`averageRoomGroupSize`, removida) — sem noção nenhuma de faixa ideal.
+ */
+export function organizeOnlineGroups(candidates: PresentCandidateRow[]): GroupToInsert[] {
+    if (candidates.length === 0) {
+        return [];
+    }
+
+    const targetGroups = derivePresencialGroupCount(candidates.length);
+    const candidateSlots = distributeByGender(candidates, targetGroups);
 
     const groups: GroupToInsert[] = [];
-    slots.forEach((candidateIds, index) => {
+    candidateSlots.forEach((candidateIds, index) => {
         if (candidateIds.length === 0) return;
 
         groups.push({
@@ -134,18 +168,7 @@ function organizeOnline(candidates: PresentCandidateRow[], allRooms: RoomRow[]):
         });
     });
 
-    return { groups };
-}
-
-/**
- * data-model.md, Assumptions: tamanho médio de grupo entre as salas cadastradas (média de
- * `size / maxGroups` de cada uma), ou `FALLBACK_ONLINE_GROUP_SIZE` sem nenhuma sala.
- */
-function averageRoomGroupSize(rooms: RoomRow[]): number {
-    if (rooms.length === 0) return FALLBACK_ONLINE_GROUP_SIZE;
-
-    const total = rooms.reduce((sum, room) => sum + room.size / deriveRoomCapacity(room.size).maxGroups, 0);
-    return Math.max(1, Math.round(total / rooms.length));
+    return groups;
 }
 
 // ------------------------------------------------------------
@@ -191,18 +214,39 @@ export function distributeByGender(
     return slots;
 }
 
-/** Mesma técnica de balanceamento por menor grupo, aplicada aos avaliadores/hosts (FR-006). */
-function distributeEvaluatorsAcrossNonEmptySlots(members: PresentMemberRow[], candidateSlots: string[][]): string[][] {
+/**
+ * FEAT-0020 (FR-005/FR-006/FR-007) — 1 avaliador por grupo de 3, 2 por grupo de 4-5,
+ * priorizando completar o segundo avaliador dos grupos maiores antes de qualquer outra coisa.
+ * Host NUNCA entra no pool — é alocado à sala (`deriveRoomCapacity`), não ao grupo. Substitui
+ * o balanceamento "por menor grupo" da FEAT-0012: a semântica mudou de "equilibrar igual" pra
+ * "priorizar completar os grupos maiores primeiro" (research.md, Decisão 3).
+ */
+function distributeEvaluatorsByTarget(members: PresentMemberRow[], candidateSlots: string[][]): string[][] {
     const evaluatorSlots: string[][] = candidateSlots.map(() => []);
-    const eligibleSlotIndexes = candidateSlots.map((_, index) => index).filter((index) => candidateSlots[index].length > 0);
+    const nonEmptyIndexes = candidateSlots.map((_, index) => index).filter((index) => candidateSlots[index].length > 0);
 
-    if (eligibleSlotIndexes.length === 0) return evaluatorSlots;
+    if (nonEmptyIndexes.length === 0) return evaluatorSlots;
 
-    for (const member of members) {
-        const smallest = eligibleSlotIndexes.reduce((min, index) =>
-            evaluatorSlots[index].length < evaluatorSlots[min].length ? index : min,
-        );
-        evaluatorSlots[smallest].push(member.user_id);
+    const pool = members.filter((m) => m.role === "avaliador");
+    if (pool.length === 0) return evaluatorSlots;
+
+    let cursor = 0;
+
+    // Passada 1: garante 1 avaliador em cada grupo não-vazio, em ordem de índice.
+    for (const index of nonEmptyIndexes) {
+        if (cursor >= pool.length) return evaluatorSlots;
+        evaluatorSlots[index].push(pool[cursor]!.user_id);
+        cursor += 1;
+    }
+
+    // Passada 2: completa o 2º avaliador só dos grupos com alvo 2 (4-5 candidatos), em ordem
+    // de índice — para assim que os avaliadores presentes acabarem.
+    for (const index of nonEmptyIndexes) {
+        if (cursor >= pool.length) return evaluatorSlots;
+        if (deriveEvaluatorTargetForGroupSize(candidateSlots[index]!.length) === 2) {
+            evaluatorSlots[index].push(pool[cursor]!.user_id);
+            cursor += 1;
+        }
     }
 
     return evaluatorSlots;

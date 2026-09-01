@@ -9,7 +9,10 @@
     "test": "vitest run",
     "seed:local:generate": "node scripts/seed-local.mjs",
     "seed:local:apply": "wrangler d1 execute D1-select-pro --local --file=./scripts/seed-local.sql",
-    "db:local": "wrangler d1 execute D1-select-pro --local"
+    "db:local": "wrangler d1 execute D1-select-pro --local",
+    "db:migrate:local": "wrangler d1 migrations apply D1-select-pro --local",
+    "db:migrate:staging": "wrangler d1 migrations apply select-pro-staging --env staging --remote",
+    "db:migrate:production": "wrangler d1 migrations apply D1-select-pro --remote"
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",

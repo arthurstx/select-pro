@@ -14,3 +14,4 @@ export * from './schemas/export.schema';
 export * from './schemas/member-checkin.schema';
 export * from './schemas/group.schema';
 export * from './schemas/evaluation.schema';
+export * from './schemas/selection-process-admin.schema';

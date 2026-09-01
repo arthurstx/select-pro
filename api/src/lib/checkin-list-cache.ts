@@ -1,4 +1,4 @@
-import type { CheckinStatusFilter, Course } from "shared";
+import type { Attendance, CheckinStatusFilter, Course } from "shared";
 
 import { logger } from "./logger";
 import type { CandidateWithCheckinRow } from "../repositories/checkin.repository";
@@ -10,6 +10,8 @@ export interface CachedListParams {
     search?: string;
     /** FEAT-0015. `undefined` = todos os cursos — precisa entrar em `keyFor`, ver nota lá. */
     course?: Course;
+    /** FEAT-0019. `undefined` = as duas modalidades — precisa entrar em `keyFor`, mesmo motivo do `course`. */
+    attendance?: Attendance;
 }
 
 export interface CachedListResult {
@@ -90,8 +92,11 @@ export class CheckinListCache {
         // FEAT-0015 — precisa estar na chave, senão cursos diferentes
         // reaproveitariam a mesma entrada de cache um do outro.
         const course = params.course ?? "";
+        // FEAT-0019 — mesmo motivo do `course`: sem isso, as telas de check-in presencial e
+        // online cacheariam sob a mesma chave e uma serviria o resultado da outra.
+        const attendance = params.attendance ?? "";
 
-        return `checkin:list:${processId}:${generation}:${params.page}:${params.perPage}:${params.status}:${search}:${course}`;
+        return `checkin:list:${processId}:${generation}:${params.page}:${params.perPage}:${params.status}:${search}:${course}:${attendance}`;
     }
 
     private generationKey(processId: string): string {
