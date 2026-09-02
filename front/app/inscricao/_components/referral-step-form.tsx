@@ -21,12 +21,9 @@ import { WIZARD_STEPS } from "../_lib/wizard-steps";
 import { WizardNav } from "./wizard-nav";
 import { WizardShell } from "./wizard-shell";
 
-// REFERRAL_SOURCE_LABELS vem de `shared`: o mesmo mapa é lido por qualquer
-// consumidor que precise exibir a origem (wizard, planilha, painel).
-
 const OTHER_MAX = 100;
 
-/** Etapa 2 — Como conheceu o processo seletivo (FEAT-0001-UI v3.0, seção 4.2). */
+/** Etapa 2 — Como conheceu o processo seletivo. */
 export function ReferralStepForm() {
   const router = useRouter();
   const { answers, setStepData } = useRegistration();
@@ -46,8 +43,6 @@ export function ReferralStepForm() {
   if (!isHydrated) return null;
 
   function onSubmit(data: ReferralStep) {
-    // A descrição só acompanha a origem "outros" (FEAT-0001-UI v3.0, seção 4.2) —
-    // trocar de opção não pode deixar um texto órfão no estado do wizard.
     setStepData({
       referralSource: data.referralSource,
       referralSourceOther: data.referralSource === "outros" ? data.referralSourceOther : undefined,
@@ -68,9 +63,7 @@ export function ReferralStepForm() {
                   value={field.value || ""}
                   onValueChange={(value: string) => {
                     field.onChange(value);
-                    // Sair de "Outros" limpa o texto — evita reenviá-lo junto de
-                    // outra origem e evita um erro de validação preso num campo
-                    // que não está mais visível.
+                    // Sair de "Outros" limpa o texto e o erro de um campo que não está mais visível.
                     if (value !== "outros") {
                       form.setValue("referralSourceOther", "");
                       form.clearErrors("referralSourceOther");

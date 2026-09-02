@@ -35,6 +35,15 @@
       "migrations_dir": "migrations",
     },
   ],
+  // Cache da listagem de candidatos do check-in (`CheckinListCache`,
+  // api/src/lib/checkin-list-cache.ts) — TTL de 60s (mínimo aceito pelo KV)
+  // + invalidação por geração a cada marcar/desmarcar (FEAT-0005).
+  "kv_namespaces": [
+    {
+      "binding": "CANDIDATES_KV",
+      "id": "51d028fbfdd043878d16792caa552663",
+    },
+  ],
   /**
    * Environment Variables
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
@@ -49,8 +58,34 @@
     // Serve para fechar a janela de escrita durante migrations de banco:
     // deploy com "true" -> migration -> deploy com "false".
     // Deve estar "false" em todo deploy normal.
+    // Quando "true", /candidate/* e /auth/* respondem 503 (FEAT-0003, seção 9):
+    // uma migration que toque users/sessions precisa da mesma janela fechada.
     "MAINTENANCE_MODE": "false",
     "GOOGLE_SHEET_ID": "1P1wJ4JrKv6SSbbJAKSv0RWbNgMd3lK8gknWYPZrJpxA",
+    // ⚠️ PREENCHER ANTES DO DEPLOY — SUPABASE_URL e RESEND_FROM_EMAIL ainda são
+    // placeholders (FRONT_ORIGIN já é o valor real do projeto Vercel).
+    //
+    // Banco da tec (Supabase), consultado só em POST /auth/register. A
+    // service_role key é secret (`wrangler secret put SUPABASE_SERVICE_ROLE_KEY`)
+    // e nunca pode aparecer aqui: ela ignora RLS e dá acesso total ao banco.
+    "SUPABASE_URL": "https://zzqioofrjubccblvyilx.supabase.co",
+    // Allowlist de CORS de /auth/*. Aceita lista separada por vírgula.
+    // Diferente de /candidate/*, aqui a origin NÃO pode ser refletida: com
+    // `credentials: true` isso entregaria o cookie de sessão a qualquer site.
+    // É também a base do link do email de recuperação (a primeira da lista).
+    //
+    // URL real do projeto Vercel `select-pro-front` (alias de produção,
+    // `vercel alias ls`) + localhost:3000 — sem ele, `wrangler dev` local
+    // (que usa este bloco raiz, não há env "development" separado) rejeita
+    // /auth/* e /candidates/* por CORS assim que o front local chama a API.
+    // O cookie de refresh não é gravado em http://localhost mesmo assim
+    // (é `Secure`); só o access token funciona localmente (ver env.staging).
+    "FRONT_ORIGIN": "https://select-pro-front.vercel.app,http://localhost:3000",
+    "RESEND_FROM_EMAIL": "inscricao@arthurstx.me",
+    // Destino do e-mail de solicitação de cadastro pendente (FEAT-0008,
+    // FR-020). Caixa institucional compartilhada, não a conta de um admin —
+    // é por isso que a decisão em si exige login (ver research.md da 008, R2).
+    "SIGNUP_APPROVAL_EMAIL": "gentegestao@cimatecjr.com.br",
   },
   /**
    * Service Bindings (communicate between multiple Workers)
@@ -75,7 +110,7 @@
         "directory": "./public",
       },
       "triggers": {
-        "crons": ["*/2 * * * *"], // Executa a cada hora, no minuto 0
+        "crons": ["0 */12 * * *"], // Executa a cada 12 horas, no minuto 0
       },
       "d1_databases": [
         {
@@ -85,10 +120,37 @@
           "migrations_dir": "migrations",
         },
       ],
+      "kv_namespaces": [
+        {
+          "binding": "CANDIDATES_KV",
+          "id": "b904715da55f4fa991181258cc34242b",
+        },
+      ],
       "vars": {
         "DOCS_USER": "admin",
         "MAINTENANCE_MODE": "false",
         "GOOGLE_SHEET_ID": "152RZa4fQ-PPz8fU02k2PsZgyMdPvgcxS-fEC1RPOQeU",
+        // ⚠️ PREENCHER ANTES DO DEPLOY — SUPABASE_URL ainda é placeholder
+        // (FRONT_ORIGIN já é o alias real do branch develop no Vercel;
+        // RESEND_FROM_EMAIL já usa o remetente de teste do Resend, abaixo).
+        //
+        // Staging pode (e deve) apontar para um projeto Supabase separado: um
+        // cadastro de teste que consulte o banco real da tec não estraga nada,
+        // mas o inverso — apontar produção para dados de teste — cria conta
+        // para quem não é membro.
+        "SUPABASE_URL": "https://urzdvlddicrxkiyikwiv.supabase.co",
+        // Inclui o localhost do Next para desenvolvimento contra a API de
+        // staging. Vale lembrar que o cookie de refresh é `Secure`, então ele
+        // não é gravado em `http://localhost` — só o access token funciona aí
+        // (testado em Chromium: funciona com o hostname literal `localhost`,
+        // não é garantido em outro browser nem com IP/127.0.0.1).
+        //
+        // Alias estável do deploy do branch `develop` no Vercel (`vercel alias
+        // ls`) — não é mais placeholder.
+        "FRONT_ORIGIN": "https://select-pro-front-git-develop-arthurstxs-projects.vercel.app,http://localhost:3000",
+
+        "RESEND_FROM_EMAIL": "inscricao@arthurstx.me",
+        "SIGNUP_APPROVAL_EMAIL": "gentegestao@cimatecjr.com.br",
       },
     },
   },

@@ -1,8 +1,17 @@
 export * from './schemas/database.schema';
 export * from './schemas/user.schema';
 export * from './schemas/candidate.schema';
+export * from './schemas/auth.schema';
+export * from './schemas/member.schema';
 export * from './schemas/error.schema';
-
-// Exportaremos também constants, types, errors quando forem adicionados futuramente
-// export * from './constants/...';
-// export * from './errors/...';
+export * from './schemas/phone.schema';
+export * from './schemas/pagination.schema';
+export * from './schemas/checkin.schema';
+export * from './schemas/dashboard.schema';
+export * from './schemas/room.schema';
+export * from './schemas/evaluator.schema';
+export * from './schemas/export.schema';
+export * from './schemas/member-checkin.schema';
+export * from './schemas/group.schema';
+export * from './schemas/evaluation.schema';
+export * from './schemas/selection-process-admin.schema';

@@ -3,18 +3,14 @@ import { describe, expect, it } from "vitest";
 
 import app from "../src/index";
 
-/**
- * Testes de HTTP end-to-end (rota real, D1 real via miniflare). Desde a v3.0
- * o fluxo não chama nenhum serviço externo — não há mais stub de provedor de
- * email a montar aqui.
- */
+// Testes de HTTP end-to-end (rota real, D1 real via miniflare).
 let counter = 0;
 function uniqueCandidateInput() {
     counter += 1;
     return {
         name: `Candidato Route ${counter}`,
         email: `candidato-route-${counter}@example.com`,
-        phone: `7188888${String(counter).padStart(4, "0")}`,
+        phone: `7198888${String(counter).padStart(4, "0")}`,
         course: "eng-computacao",
         semester: 3,
         gender: "outro",
@@ -59,6 +55,36 @@ describe("POST /candidate/register (HTTP)", () => {
         expect(body.error.field).toBe("email");
     });
 
+    // A validação passou a ser por libphonenumber-js/max (FEAT-0006): os
+    // casos abaixo têm forma de telefone e a regex antiga aceitava todos.
+    it.each([
+        ["11111111111", "repetição óbvia, mas com 11 dígitos"],
+        ["(00) 00000-0000", "DDD 00 não existe"],
+        ["71888887777", "celular brasileiro começa com 9 depois do DDD"],
+        ["988887777", "sem DDD"],
+    ])("E4 - rejeita %s (%s)", async (phone) => {
+        const res = await postRegister({ ...uniqueCandidateInput(), phone });
+
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { code: string; field?: string } }>();
+        expect(body.error.field).toBe("phone");
+    });
+
+    it("normaliza para E.164 antes de gravar, qualquer que seja a máscara digitada", async () => {
+        const input = uniqueCandidateInput();
+        const digitado = `(71) 9${input.phone.slice(3, 7)}-${input.phone.slice(7)}`;
+
+        const res = await postRegister({ ...input, phone: digitado });
+        expect(res.status).toBe(201);
+
+        const body = await res.json<{ data: { id: string } }>();
+        const row = await env.DB.prepare("SELECT phone FROM candidates WHERE id = ?")
+            .bind(body.data.id)
+            .first<{ phone: string }>();
+
+        expect(row?.phone).toBe(`+55${input.phone}`);
+    });
+
     it("E4 - telefone com formato inválido retorna 400 com envelope de erro", async () => {
         const res = await postRegister({ ...uniqueCandidateInput(), phone: "123" });
 
@@ -94,6 +120,48 @@ describe("POST /candidate/register (HTTP)", () => {
         expect(res.status).toBe(201);
     });
 
+    it("FEAT-0014: specialNeeds true sem descrição retorna 400 apontando specialNeedsDescription", async () => {
+        const res = await postRegister({ ...uniqueCandidateInput(), specialNeeds: true });
+
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { field?: string } }>();
+        expect(body.error.field).toBe("specialNeedsDescription");
+    });
+
+    it("FEAT-0014: specialNeeds true com descrição só espaços retorna 400", async () => {
+        const res = await postRegister({
+            ...uniqueCandidateInput(),
+            specialNeeds: true,
+            specialNeedsDescription: "   ",
+        });
+
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { field?: string } }>();
+        expect(body.error.field).toBe("specialNeedsDescription");
+    });
+
+    it("FEAT-0014: specialNeeds true com descrição acima de 500 caracteres retorna 400", async () => {
+        const res = await postRegister({
+            ...uniqueCandidateInput(),
+            specialNeeds: true,
+            specialNeedsDescription: "a".repeat(501),
+        });
+
+        expect(res.status).toBe(400);
+        const body = await res.json<{ error: { field?: string } }>();
+        expect(body.error.field).toBe("specialNeedsDescription");
+    });
+
+    it("FEAT-0014: aceita specialNeeds true com descrição preenchida (201)", async () => {
+        const res = await postRegister({
+            ...uniqueCandidateInput(),
+            specialNeeds: true,
+            specialNeedsDescription: "Uso cadeira de rodas — preciso de acesso sem escadas.",
+        });
+
+        expect(res.status).toBe(201);
+    });
+
     it("E1 - segunda inscrição com o mesmo email retorna 409", async () => {
         const input = uniqueCandidateInput();
         expect((await postRegister(input)).status).toBe(201);
@@ -119,11 +187,6 @@ describe("POST /candidate/register (HTTP)", () => {
     });
 });
 
-/**
- * O middleware lê `MAINTENANCE_MODE` do env, então aqui o app é chamado
- * direto (`app.fetch`) com um env customizado — `SELF` sempre usa o env fixo
- * do wrangler.jsonc, onde a var é "false".
- */
 describe("Modo de manutenção", () => {
     function postRegisterWith(maintenanceMode: string) {
         const request = new Request("http://local.test/candidate/register", {

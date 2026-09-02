@@ -17,7 +17,7 @@ import { WizardShell } from "./wizard-shell";
 
 const MEJ_VIDEO_URL = process.env.NEXT_PUBLIC_MEJ_VIDEO_URL;
 
-/** Etapa 3 — Movimento EJ (FEAT-0001-UI v2.0, seção 4.3). */
+/** Etapa 3 — Movimento EJ. */
 export function MejStepForm() {
   const router = useRouter();
   const { answers, setStepData } = useRegistration();

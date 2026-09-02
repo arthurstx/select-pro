@@ -1,8 +1,4 @@
-/**
- * Rótulos e ordem das 6 etapas do wizard de inscrição (FEAT-0001-UI v2.0,
- * seção 3). Fonte única para o stepper visual — cada página de etapa importa
- * o `number` correspondente para indicar ao <WizardStepper /> qual destacar.
- */
+/** Rótulos e ordem das 6 etapas do wizard de inscrição. */
 export const WIZARD_STEPS = [
   { number: 1, label: "Dados Pessoais", path: "/inscricao" },
   { number: 2, label: "Como conheceu", path: "/inscricao/como-conheceu" },

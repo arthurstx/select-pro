@@ -6,15 +6,9 @@ import type {
 } from "shared";
 
 /**
- * Candidato + respostas do questionário, achatados numa linha só — o formato
- * que a sincronização com a planilha consome (FEAT-0002, seção 8.2).
- *
- * Interno da API de propósito: não é contrato entre front e back (o front não
- * sabe que a planilha existe), então não vai para `shared`.
- *
- * Os booleanos aparecem como `number` porque é o que o D1 devolve: `INTEGER`
- * 0/1, garantido pelos CHECK da tabela. `CandidateApplicationRow` os tipa como
- * `boolean`, que descreve o domínio mas não o retorno cru da query.
+ * Candidato + questionário achatados numa linha só, para a sincronização com
+ * a planilha (FEAT-0002, seção 8.2). Interno da API — não vai para `shared`.
+ * Booleanos como `number`: é o que o D1 devolve.
  */
 export interface CandidateWithApplicationRow extends CandidateRow {
   referral_source: ReferralSource;
@@ -23,39 +17,40 @@ export interface CandidateWithApplicationRow extends CandidateRow {
   motivation: string;
   saturday_restriction: number;
   special_needs: number;
+  special_needs_description: string | null;
 }
 
 export class CandidateRepository {
   constructor(private readonly db: D1Database) {}
 
-  async findByEmail(email: string): Promise<CandidateRow | null> {
+  async findById(id: string): Promise<CandidateRow | null> {
     return this.db
-      .prepare("SELECT * FROM candidates WHERE email = ?")
-      .bind(email)
-      .first<CandidateRow>();
-  }
-
-  async findByPhone(phone: string): Promise<CandidateRow | null> {
-    return this.db
-      .prepare("SELECT * FROM candidates WHERE phone = ?")
-      .bind(phone)
+      .prepare("SELECT * FROM candidates WHERE id = ?")
+      .bind(id)
       .first<CandidateRow>();
   }
 
   /**
-   * Todas as inscrições com o questionário, para a sincronização com a planilha
-   * (FEAT-0002, seção 4.1).
-   *
-   * `INNER JOIN` e não `LEFT`: `insertWithApplication` grava as duas linhas no
-   * mesmo batch, então candidato sem questionário não é um estado que exista.
-   * As colunas de `candidate_applications` são listadas uma a uma porque um
-   * `a.*` traria o `id` da inscrição e sobrescreveria o `id` do candidato — que
-   * é justamente a chave usada para deduplicar na planilha.
-   *
-   * Ordenado por `created_at` para que a planilha cresça em ordem cronológica;
-   * `id` desempata linhas gravadas no mesmo segundo (a precisão de
-   * `CURRENT_TIMESTAMP` no SQLite), sem o que a ordem seria indefinida.
+   * Duplicidade é por edição desde a FEAT-0006 — o mesmo email em processos
+   * diferentes é recandidatura, não conflito. É uma otimização de mensagem
+   * de erro; a barreira real é `UNIQUE (process_id, email)`.
    */
+  async findByEmailInProcess(email: string, processId: string): Promise<CandidateRow | null> {
+    return this.db
+      .prepare("SELECT * FROM candidates WHERE email = ? AND process_id = ?")
+      .bind(email, processId)
+      .first<CandidateRow>();
+  }
+
+  /** `phone` chega em E.164 — a comparação exata só é confiável porque o valor é canônico. */
+  async findByPhoneInProcess(phone: string, processId: string): Promise<CandidateRow | null> {
+    return this.db
+      .prepare("SELECT * FROM candidates WHERE phone = ? AND process_id = ?")
+      .bind(phone, processId)
+      .first<CandidateRow>();
+  }
+
+  /** Todas as inscrições com questionário, para a sincronização com a planilha (FEAT-0002, seção 4.1). */
   async listAllWithApplication(): Promise<CandidateWithApplicationRow[]> {
     const { results } = await this.db
       .prepare(
@@ -65,7 +60,8 @@ export class CandidateRepository {
                 a.experience,
                 a.motivation,
                 a.saturday_restriction,
-                a.special_needs
+                a.special_needs,
+                a.special_needs_description
            FROM candidates c
            INNER JOIN candidate_applications a ON a.candidate_id = c.id
           ORDER BY c.created_at ASC, c.id ASC`,
@@ -75,25 +71,20 @@ export class CandidateRepository {
     return results ?? [];
   }
 
-  /**
-   * Insere o candidato e sua inscrição (questionário) numa única transação
-   * (`db.batch` — FEAT-0001 v3.0, seção 9): as duas linhas entram juntas ou
-   * nenhuma delas entra. Em caso de violação de UNIQUE (email/phone), deixa
-   * o erro bruto do D1 subir — cabe ao service traduzi-lo via
-   * `parseD1ConstraintError` (E5, FEAT-0001 v3.0 seção 5).
-   */
+  /** Candidato + inscrição num `db.batch` só. Violação de UNIQUE sobe crua para o service traduzir. */
   async insertWithApplication(
     candidate: NewCandidate,
     application: Omit<NewCandidateApplication, "candidate_id">,
   ): Promise<CandidateRow> {
     const insertCandidate = this.db
       .prepare(
-        `INSERT INTO candidates (id, course, semester, gender, ethnicity, name, email, phone)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO candidates (id, process_id, course, semester, gender, ethnicity, name, email, phone)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                  RETURNING *`,
       )
       .bind(
         candidate.id,
+        candidate.process_id,
         candidate.course,
         candidate.semester,
         candidate.gender,
@@ -106,8 +97,8 @@ export class CandidateRepository {
     const insertApplication = this.db
       .prepare(
         `INSERT INTO candidate_applications
-                    (id, candidate_id, referral_source, referral_source_other, mej_acknowledged, experience, motivation, saturday_restriction, special_needs)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    (id, candidate_id, referral_source, referral_source_other, mej_acknowledged, experience, motivation, saturday_restriction, special_needs, special_needs_description)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         application.id,
@@ -119,6 +110,7 @@ export class CandidateRepository {
         application.motivation,
         application.saturday_restriction ? 1 : 0,
         application.special_needs ? 1 : 0,
+        application.special_needs_description,
       );
 
     const [candidateResult] = await this.db.batch<CandidateRow>([

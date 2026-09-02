@@ -1,2 +1,22 @@
 DOCS_PASSWORD=
 GOOGLE_SERVICE_ACCOUNT_KEY=
+
+# FEAT-0003 — cadastro e autenticação de membro.
+# Em produção estes três são secrets do Worker (`wrangler secret put`),
+# nunca vars do wrangler.jsonc.
+
+# Assina o access token (HS256). Qualquer string longa e aleatória serve;
+# gere com: openssl rand -base64 48
+JWT_SECRET=
+
+# service_role do banco da tec. Ignora RLS e dá acesso total àquele banco —
+# só pode existir no backend.
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Envio do email de recuperação de senha.
+RESEND_API_KEY=
+
+# Pula a checagem de membro na Supabase em POST /auth/register — qualquer
+# email vira conta local. Recomendado para dev local; NÃO defina isto em
+# staging/produção (lá o wrangler nem lê este arquivo, então nem precisaria).
+MEMBER_DIRECTORY_BYPASS=true

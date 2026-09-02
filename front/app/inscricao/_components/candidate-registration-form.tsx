@@ -6,6 +6,8 @@ import { Controller, useForm } from "react-hook-form";
 import {
   COURSE_LABELS,
   CourseSchema,
+  formatPhone,
+  formatPhoneAsYouType,
   GENDER_LABELS,
   GenderSchema,
   PersonalDataStepSchema,
@@ -33,13 +35,9 @@ import { WIZARD_STEPS } from "../_lib/wizard-steps";
 import { WizardNav } from "./wizard-nav";
 import { WizardShell } from "./wizard-shell";
 
-// COURSE_LABELS e GENDER_LABELS vêm de `shared`: os mesmos mapas são usados por
-// qualquer consumidor que precise exibir esses valores (painel, planilha,
-// export, email), sem duplicar a lista.
-
 const SEMESTERS = Array.from({ length: 10 }, (_, i) => i + 1);
 
-/** Etapa 1 — Dados Pessoais (FEAT-0001-UI v2.0, seção 4.1). */
+/** Etapa 1 — Dados Pessoais. */
 export function CandidateRegistrationForm() {
   const router = useRouter();
   const { answers, setStepData } = useRegistration();
@@ -49,11 +47,10 @@ export function CandidateRegistrationForm() {
     values: {
       name: answers.name ?? "",
       email: answers.email ?? "",
-      phone: answers.phone ?? "",
-      // Selects do Radix precisam de um valor definido desde o primeiro
-      // render (string vazia = "nada selecionado") para não alternar de
-      // não-controlado para controlado — "" nunca bate com nenhum
-      // SelectItem, então o placeholder continua visível até a escolha.
+      // O que fica salvo é E.164; ao voltar para esta etapa o campo mostra o
+      // formato nacional, igual ao que a pessoa digitou.
+      phone: answers.phone ? formatPhone(answers.phone) : "",
+      // "" nunca bate com nenhum SelectItem — mantém os Selects controlados desde o primeiro render.
       course: answers.course ?? ("" as PersonalDataStep["course"]),
       semester: answers.semester ?? ("" as unknown as PersonalDataStep["semester"]),
       gender: answers.gender ?? ("" as PersonalDataStep["gender"]),
@@ -99,13 +96,29 @@ export function CandidateRegistrationForm() {
 
             <Field data-invalid={!!form.formState.errors.phone}>
               <FieldLabel htmlFor="phone">Telefone</FieldLabel>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="(71) 98888-7777"
-                autoComplete="tel"
-                aria-invalid={!!form.formState.errors.phone}
-                {...form.register("phone")}
+              {/*
+                `Controller` em vez de `register` porque o valor é reescrito a
+                cada tecla pela máscara. O campo guarda o texto formatado; o
+                schema converte para E.164 no submit.
+              */}
+              <Controller
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="(71) 98888-7777"
+                    autoComplete="tel"
+                    aria-invalid={!!form.formState.errors.phone}
+                    name={field.name}
+                    ref={field.ref}
+                    onBlur={field.onBlur}
+                    value={formatPhoneAsYouType(field.value ?? "")}
+                    onChange={(event) => field.onChange(formatPhoneAsYouType(event.target.value))}
+                  />
+                )}
               />
               <FieldError errors={[form.formState.errors.phone]} />
             </Field>

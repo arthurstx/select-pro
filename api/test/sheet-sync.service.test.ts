@@ -3,21 +3,17 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { CellValue, SheetsClient } from "../src/lib/google-sheets";
 import { CandidateRepository } from "../src/repositories/candidates.repository";
+import { SelectionProcessRepository } from "../src/repositories/selection-process.repository";
 import { SHEET_HEADER, SheetSyncService } from "../src/services/sheet-sync.service";
 
-/**
- * Planilha falsa: guarda as linhas em memória e responde aos dois intervalos
- * que o service lê (cabeçalho e coluna de ids). Manter os intervalos explícitos
- * aqui é proposital — se o service passar a pedir outro, o teste falha em vez de
- * devolver `[]` silenciosamente e mascarar o erro.
- */
+/** Planilha falsa: guarda linhas em memória e responde aos dois intervalos que o service lê. */
 class FakeSheets implements SheetsClient {
     header: CellValue[] = [...SHEET_HEADER];
     rows: CellValue[][] = [];
     appendCalls = 0;
 
     async readValues(range: string): Promise<CellValue[][]> {
-        if (range.endsWith("!A1:O1")) return this.header.length > 0 ? [this.header] : [];
+        if (range.endsWith("!A1:P1")) return this.header.length > 0 ? [this.header] : [];
         if (range.endsWith("!A2:A")) return this.rows.map((row) => [row[0]]);
         throw new Error(`Intervalo inesperado: ${range}`);
     }
@@ -29,20 +25,24 @@ class FakeSheets implements SheetsClient {
 }
 
 let counter = 0;
-async function insertCandidate(repo: CandidateRepository) {
+async function insertCandidate(repo: CandidateRepository, overrides: { specialNeeds?: boolean; specialNeedsDescription?: string | null } = {}) {
     counter += 1;
     const id = crypto.randomUUID();
     const name = `Candidato ${counter}`;
 
+    const process = await new SelectionProcessRepository(env.DB).resolveCurrent();
+    const specialNeeds = overrides.specialNeeds ?? false;
+
     await repo.insertWithApplication(
         {
             id,
+            process_id: process.id,
             name,
             email: `candidato${counter}@example.com`,
-            phone: `7199999${String(counter).padStart(4, "0")}`,
+            phone: `+557199999${String(counter).padStart(4, "0")}`,
             course: "eng-computacao",
             semester: 3,
-            gender: "fem",
+            gender: "feminino",
             ethnicity: "parda",
         },
         {
@@ -53,7 +53,8 @@ async function insertCandidate(repo: CandidateRepository) {
             experience: "Projetos de extensão.",
             motivation: "Aplicar na prática.",
             saturday_restriction: true,
-            special_needs: false,
+            special_needs: specialNeeds,
+            special_needs_description: specialNeeds ? (overrides.specialNeedsDescription ?? null) : null,
         },
     );
 
@@ -93,7 +94,6 @@ describe("SheetSyncService", () => {
         expect(row).toBeDefined();
         expect(row).toHaveLength(SHEET_HEADER.length);
 
-        // Ordem da seção 8.2 da FEAT-0002.
         expect(row?.[2]).toBe(name);
         expect(row?.[5]).toBe("Engenharia de Computação"); // não o slug `eng-computacao`
         expect(row?.[7]).toBe("Feminino");
@@ -102,9 +102,21 @@ describe("SheetSyncService", () => {
         expect(row?.[10]).toBe("Cartaz no mural");
         expect(row?.[13]).toBe("Sim"); // saturday_restriction
         expect(row?.[14]).toBe("Não"); // special_needs
-
-        // `created_at` vai cru, no formato do SQLite (sem T/Z).
+        expect(row?.[15]).toBe(""); // special_needs_description — vazio quando special_needs é false
         expect(row?.[1]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    });
+
+    it("FEAT-0014: leva a descrição de necessidade especial para a planilha", async () => {
+        const { id } = await insertCandidate(repo, {
+            specialNeeds: true,
+            specialNeedsDescription: "Uso cadeira de rodas.",
+        });
+
+        await buildService().run();
+
+        const row = sheets.rows.find((candidate) => candidate[0] === id);
+        expect(row?.[14]).toBe("Sim");
+        expect(row?.[15]).toBe("Uso cadeira de rodas.");
     });
 
     it("não escreve nada quando a planilha já está em dia", async () => {

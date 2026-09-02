@@ -8,64 +8,303 @@ import type { MiddlewareHandler } from "hono/types";
 
 import { GoogleSheetsClient } from "./lib/google-sheets";
 import { logger } from "./lib/logger";
+import { AuthRepository } from "./repositories/auth.repository";
 import { CandidateRepository } from "./repositories/candidates.repository";
+import { authRouter } from "./routes/auth.routes";
 import { candidatesRouter } from "./routes/candidates.routes";
+import { checkinRouter } from "./routes/checkin.routes";
+import { dashboardRouter } from "./routes/dashboard.routes";
+import { evaluationRouter } from "./routes/evaluation.routes";
+import { evaluatorsRouter } from "./routes/evaluators.routes";
+import { exportsRouter } from "./routes/exports.routes";
+import { groupRouter } from "./routes/group.routes";
+import { memberCheckinRouter } from "./routes/member-checkin.routes";
+import { roomsRouter } from "./routes/rooms.routes";
+import { selectionProcessRouter } from "./routes/selection-process.routes";
+import { signupRequestsRouter } from "./routes/signup-requests.routes";
 import { SheetSyncService } from "./services/sheet-sync.service";
 
 const app = new OpenAPIHono<{ Bindings: CloudflareBindings }>();
 
 app.use(honoLogger());
 
-// Fluxo público sem sessão/cookies (FEAT-0001-UI, seção 2) — reflete a origin
-// da requisição em vez de credentials, não há estado de auth para proteger.
+// Fluxo público sem sessão/cookies — reflete a origin, sem credentials.
 app.use("/candidate/*", cors());
 
 /**
- * Modo de manutenção — fecha a janela de escrita durante migrations de banco.
- *
- * Migrations que reconstroem `candidates` (ver 0004) rodam em duas etapas
- * inevitavelmente separadas no tempo: primeiro o banco, depois o deploy do
- * Worker com os contratos novos. Sem este bloqueio, uma inscrição enviada
- * nesse intervalo seria gravada pela versão antiga do código — com os valores
- * antigos, e sem CHECK no banco para barrá-la.
- *
- * Fica depois do CORS para que o 503 chegue ao navegador como resposta da
- * API (com os headers de origin), e não como erro de CORS — assim o front
- * exibe a mensagem abaixo em vez de "Algo deu errado".
+ * `/auth/*` usa allowlist (`FRONT_ORIGIN`) em vez de refletir a origin:
+ * `credentials: true` com origin refletida entregaria o cookie de sessão a
+ * qualquer site (FEAT-0003, seção 9). Instanciado dentro do handler porque
+ * `cors()` precisa de `c.env`, que só existe por requisição.
  */
-app.use("/candidate/*", async (c, next) => {
-  // `wrangler types` infere o literal "false" a partir do valor commitado no
-  // wrangler.jsonc; em runtime a var vale "true" no deploy de manutenção.
-  // A anotação explícita como string é o que permite comparar os dois
-  const maintenanceMode: string = c.env.MAINTENANCE_MODE;
+app.use("/auth/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
 
-  if (maintenanceMode !== "true") {
-    return next();
-  }
+/**
+ * `/candidates/*` (plural, autenticado) é distinto de `/candidate/*`
+ * (singular, público): devolve email/telefone de candidatos, então não pode
+ * herdar o `cors()` que reflete qualquer origin. `allowMethods` precisa de
+ * PUT/DELETE — as duas rotas de escrita do check-in (FEAT-0005, seção 9).
+ */
+app.use("/candidates/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
 
-  logger.warn("maintenance.blocked", { path: c.req.path });
-  return c.json(
-    {
-      error: {
-        code: "MAINTENANCE_MODE",
-        message:
-          "As inscrições estão temporariamente indisponíveis por manutenção. Tente novamente em alguns minutos.",
-      },
-    },
-    503,
-  );
-});
+/**
+ * `/dashboard/*` devolve email, telefone e — para `admin` — gênero e etnia
+ * dos candidatos. Mesma allowlist de `/candidates/*`, e nunca o `cors()` que
+ * reflete qualquer origin. Só GET: a feature é inteiramente somente leitura.
+ *
+ * Prefixo novo não herda middleware nenhum — este bloco existe pelo mesmo
+ * motivo que a FEAT-0002 E7: lá o cron escapou do guard justamente assim.
+ */
+app.use("/dashboard/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/rooms/*` (FEAT-0011) — inteiramente admin-only, inclusive leitura.
+ * `allowMethods` precisa de PUT/DELETE (editar e excluir sala).
+ */
+app.use("/rooms/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/evaluators/*` (FEAT-0009) — inteiramente admin-only, inclusive leitura.
+ * `allowMethods` precisa de PUT (alternar cargo).
+ */
+app.use("/evaluators/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/exports/*` (FEAT-0016) — inteiramente admin-only. Mesma allowlist das
+ * demais rotas autenticadas; só GET, a feature é somente leitura (o efeito
+ * colateral é uma linha de auditoria, não uma rota de escrita própria).
+ */
+app.use("/exports/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/member-checkins/*` (FEAT-0010) — inteiramente admin-only. `allowMethods`
+ * precisa de PUT/DELETE (marcar/desmarcar check-in de membro).
+ */
+app.use("/member-checkins/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/groups/*` (FEAT-0012) — a maior parte é admin-only, mas `/groups/online/{id}/join` e
+ * `/groups/online/me` (FEAT-0018) são self-service do avaliador, não admin. `allowMethods`
+ * precisa de POST (`organize/*`, `join`), PATCH (mover candidato/avaliador já alocado), PUT
+ * (atribuição manual admin) e DELETE (`online/me`, sair do grupo online).
+ */
+app.use("/groups/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/evaluations/*` (FEAT-0013) — 4 rotas, todas exigem sessão. `allowMethods` precisa de
+ * PUT (registrar/editar avaliação). Nota da FEAT-0012/0010: este bloco é o que faltou nas
+ * duas primeiras vezes — não esquecer de novo em features futuras.
+ */
+app.use("/evaluations/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * `/selection-processes/*` (FEAT-0017) — inteiramente admin-only. `allowMethods`
+ * precisa de PUT (corrigir label/starts_at/ends_at); sem POST/DELETE — a
+ * criação continua só automática (resolveCurrent()), sem exclusão nesta versão.
+ */
+app.use("/selection-processes/*", (c, next) =>
+  cors({
+    origin: c.env.FRONT_ORIGIN.split(",").map((entry) => entry.trim()),
+    credentials: true,
+    allowMethods: ["GET", "PUT", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
+
+/**
+ * Modo de manutenção — fecha a janela de escrita durante migrations de
+ * banco. Fica depois do CORS para que o 503 chegue com os headers de
+ * origin, e não como erro de CORS.
+ */
+function maintenanceGuard(
+  message: string,
+): MiddlewareHandler<{ Bindings: CloudflareBindings }> {
+  return async (c, next) => {
+    const maintenanceMode: string = c.env.MAINTENANCE_MODE;
+
+    if (maintenanceMode !== "true") {
+      return next();
+    }
+
+    logger.warn("maintenance.blocked", { path: c.req.path });
+    return c.json({ error: { code: "MAINTENANCE_MODE", message } }, 503);
+  };
+}
+
+app.use(
+  "/candidate/*",
+  maintenanceGuard(
+    "As inscrições estão temporariamente indisponíveis por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/auth/*",
+  maintenanceGuard(
+    "O acesso está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/candidates/*",
+  maintenanceGuard(
+    "O check-in está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/dashboard/*",
+  maintenanceGuard(
+    "O painel está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/rooms/*",
+  maintenanceGuard(
+    "O cadastro de salas está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/evaluators/*",
+  maintenanceGuard(
+    "A gestão de avaliadores está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/exports/*",
+  maintenanceGuard(
+    "A exportação está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/member-checkins/*",
+  maintenanceGuard(
+    "O check-in de membros está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/groups/*",
+  maintenanceGuard(
+    "A organização de grupos está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/evaluations/*",
+  maintenanceGuard(
+    "A avaliação de candidatos está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
+
+app.use(
+  "/selection-processes/*",
+  maintenanceGuard(
+    "A correção de processos seletivos está temporariamente indisponível por manutenção. Tente novamente em alguns minutos.",
+  ),
+);
 
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
 
 app.route("/candidate", candidatesRouter);
+app.route("/auth", authRouter);
+app.route("/auth/signup-requests", signupRequestsRouter);
+app.route("/candidates", checkinRouter);
+app.route("/dashboard", dashboardRouter);
+app.route("/rooms", roomsRouter);
+app.route("/evaluators", evaluatorsRouter);
+app.route("/exports", exportsRouter);
+app.route("/member-checkins", memberCheckinRouter);
+app.route("/groups", groupRouter);
+app.route("/evaluations", evaluationRouter);
+app.route("/selection-processes", selectionProcessRouter);
 
-// Documentação OpenAPI — gerada a partir dos schemas Zod das rotas
-// registradas via `.openapi()` (ver api/.agents/validation/SKILL.md).
-// Protegida por Basic Auth: expõe todo o schema da API (DOCS_PASSWORD via
-// `wrangler secret put`, nunca em `vars`).
+app.openAPIRegistry.registerComponent("securitySchemes", "Bearer", {
+  type: "http",
+  scheme: "bearer",
+  bearerFormat: "JWT",
+});
+
+// Documentação OpenAPI, protegida por Basic Auth (DOCS_PASSWORD via `wrangler secret put`).
 const docsAuth: MiddlewareHandler<{ Bindings: CloudflareBindings }> = (
   c,
   next,
@@ -108,22 +347,11 @@ app.onError((err, c) => {
   );
 });
 
-/**
- * Sincronização das inscrições com a planilha do Google (FEAT-0002).
- *
- * Roda pelo Cron Trigger, fora do caminho da inscrição: uma falha aqui não
- * afeta `POST /candidate/register` de forma alguma — só atrasa a planilha.
- *
- * A composição das dependências acontece aqui pelo mesmo motivo que acontece no
- * handler das rotas (`api/.agents/architecture/SKILL.md`): é o primeiro ponto
- * com acesso ao `env`.
- */
+/** Cron de hora em hora: sincroniza a planilha (FEAT-0002) e limpa sessões/tokens vencidos. */
 const scheduled: ExportedHandlerScheduledHandler<CloudflareBindings> = async (
   _event,
   env,
 ) => {
-  // `wrangler types` infere o literal "false" a partir do valor commitado;
-  // em runtime a var vale "true" no deploy de manutenção (ver middleware acima).
   const maintenanceMode: string = env.MAINTENANCE_MODE;
 
   const service = new SheetSyncService(
@@ -132,16 +360,32 @@ const scheduled: ExportedHandlerScheduledHandler<CloudflareBindings> = async (
     { maintenanceMode: maintenanceMode === "true" },
   );
 
+  // Tarefas independentes: as duas rodam mesmo que uma falhe.
+  const failures: unknown[] = [];
+
   try {
     await service.run();
   } catch (err) {
     logger.error("sheet_sync.failed", {
       error: err instanceof Error ? err.message : String(err),
     });
-    // Repropaga de propósito: o log acima dá o evento estruturado, e o throw
-    // faz a Cloudflare marcar a execução do cron como falha no painel. Sem
-    // ele, um erro recorrente ficaria invisível em qualquer métrica.
-    throw err;
+    failures.push(err);
+  }
+
+  try {
+    await new AuthRepository(env.DB).pruneExpired();
+    logger.info("auth.prune.success", {});
+  } catch (err) {
+    logger.error("auth.prune.failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    failures.push(err);
+  }
+
+  // Repropaga para a Cloudflare marcar a execução do cron como falha no painel.
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) {
+    throw new AggregateError(failures, "Falhas no cron do Worker");
   }
 };
 

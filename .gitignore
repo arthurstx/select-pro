@@ -1,9 +1,13 @@
-task.md
 node_modules/
 .mcp.json
 .claude/settings.local.json
 .vercel
 .vscode/mcp.json
+
+# Worktrees criados por `claude --worktree` moram aqui dentro do próprio repo.
+# São checkouts inteiros: sem esta linha eles aparecem como `??` e um `git add .`
+# varreria um worktree completo para dentro do repositório.
+.claude/worktrees/
 
 # Só o lockfile da raiz é usado (npm workspaces)
 api/package-lock.json

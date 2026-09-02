@@ -1,26 +1,17 @@
 import { importPKCS8, SignJWT } from "jose";
 
-/** Escopo mínimo para ler e escrever valores numa planilha (FEAT-0002, seção 5.2 do guia). */
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 
-/** Célula de planilha: o job só escreve texto e número (FEAT-0002, seção 8.2). */
 export type CellValue = string | number;
 
-/**
- * Superfície mínima da planilha usada pelo service. Existe para que
- * `SheetSyncService` seja testável sem rede — a implementação real é
- * `GoogleSheetsClient` (FEAT-0002, seção 9).
- */
+/** Superfície mínima da planilha — permite testar `SheetSyncService` sem rede. */
 export interface SheetsClient {
-    /** Valores de um intervalo. Devolve `[]` quando o intervalo está vazio. */
     readValues(range: string): Promise<CellValue[][]>;
-    /** Acrescenta linhas ao fim do intervalo, sem sobrescrever nada. */
     appendRows(range: string, rows: CellValue[][]): Promise<void>;
 }
 
-/** Campos do JSON da service account que este cliente usa; o resto é metadado. */
 interface ServiceAccountCredentials {
     client_email: string;
     private_key: string;
@@ -31,7 +22,6 @@ function parseCredentials(rawJson: string): ServiceAccountCredentials {
     try {
         parsed = JSON.parse(rawJson);
     } catch {
-        // Sem detalhe do conteúdo: a mensagem vai para o log e o valor é a chave privada.
         throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY não é um JSON válido");
     }
 
@@ -46,13 +36,7 @@ function parseCredentials(rawJson: string): ServiceAccountCredentials {
 export class GoogleSheetsClient implements SheetsClient {
     private readonly credentials: ServiceAccountCredentials;
 
-    /**
-     * Token memoizado **por instância**, não entre execuções: uma execução do
-     * cron faz até três chamadas (cabeçalho, ids, append) e não há motivo para
-     * pedir um token novo em cada uma. Cachear entre execuções exigiria
-     * reintroduzir o KV, removido do projeto na FEAT-0001 v3.0 — complexidade
-     * maior que o ganho de um round-trip por hora (FEAT-0002, seção 9).
-     */
+    /** Memoizado por instância — uma execução do cron faz até três chamadas. */
     private tokenPromise: Promise<string> | null = null;
 
     constructor(
@@ -67,15 +51,14 @@ export class GoogleSheetsClient implements SheetsClient {
         const response = await this.authorizedFetch(url);
 
         const body = (await response.json()) as { values?: CellValue[][] };
-        // A API omite `values` quando o intervalo não tem nenhuma célula preenchida.
         return body.values ?? [];
     }
 
     async appendRows(range: string, rows: CellValue[][]): Promise<void> {
         if (rows.length === 0) return;
 
-        // `valueInputOption=RAW` é o que impede a planilha de interpretar um
-        // texto livre começando com "=" como fórmula (FEAT-0002, seção 8.2).
+        // `valueInputOption=RAW` impede a planilha de interpretar texto
+        // começando com "=" como fórmula.
         const query = new URLSearchParams({
             valueInputOption: "RAW",
             insertDataOption: "INSERT_ROWS",
@@ -98,9 +81,6 @@ export class GoogleSheetsClient implements SheetsClient {
         });
 
         if (!response.ok) {
-            // O corpo do erro do Google traz a causa real (planilha não
-            // compartilhada, id errado, quota) e não contém segredo — vale
-            // propagar para encurtar a depuração (FEAT-0002, E1-E3).
             const detail = await response.text().catch(() => "");
             throw new Error(`Sheets API ${response.status}: ${detail.slice(0, 500)}`);
         }
@@ -113,14 +93,8 @@ export class GoogleSheetsClient implements SheetsClient {
         return this.tokenPromise;
     }
 
-    /**
-     * Fluxo JWT bearer da service account: assina um JWT com a chave privada e
-     * troca por um access token de 1 hora. É o único modelo de auth do Google
-     * que funciona sem interação humana.
-     */
+    /** Fluxo JWT bearer da service account: único modelo de auth do Google sem interação humana. */
     private async requestAccessToken(): Promise<string> {
-        // `private_key` vem do JSON em PKCS#8 (com as quebras de linha já
-        // desescapadas pelo JSON.parse) — é o formato que `importPKCS8` espera.
         const key = await importPKCS8(this.credentials.private_key, "RS256");
 
         const jwt = await new SignJWT({ scope: SHEETS_SCOPE })

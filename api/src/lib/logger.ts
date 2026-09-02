@@ -1,11 +1,6 @@
 type LogLevel = "info" | "warn" | "error";
 
-/**
- * Logs estruturados (JSON por linha) — o Worker já tem `observability.enabled`
- * no wrangler.jsonc, então tudo que passa por console.* fica pesquisável no
- * Cloudflare Dashboard/Tail. Formato consistente facilita grep tanto local
- * (`wrangler dev`) quanto em produção.
- */
+/** Logs estruturados (JSON por linha) — pesquisáveis no Cloudflare Dashboard/Tail. */
 function emit(level: LogLevel, event: string, data?: Record<string, unknown>): void {
     const line = JSON.stringify({ level, event, time: new Date().toISOString(), ...data });
 
