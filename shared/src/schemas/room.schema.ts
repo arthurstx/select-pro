@@ -16,30 +16,35 @@ export function deriveRoomCapacity(size: number): { hostCount: number; maxGroups
 }
 
 /**
- * FEAT-0020 — quantos grupos presenciais formar para `candidateCount` candidatos, mantendo
- * 3-5 candidatos por grupo (research.md, Decisão 2). Começa do menor número de grupos que
- * garante que ninguém passa de 5, depois reduz até a média bater 3 por grupo. `maxGroups`
- * (capacidade física da sala, D5) sempre vence como teto — nunca recomenda mais grupos do que
- * a sala comporta. Função pura: consumida pela organização real (`group-organization.ts`) e
- * pela simulação do front (sem round-trip), mesmo padrão de `deriveRoomCapacity`.
+ * FEAT-0020, ajustado na FEAT-0022 — quantos grupos (presencial OU online, mesma faixa desde a
+ * FEAT-0022) formar para `candidateCount` candidatos, mantendo 5-7 candidatos por grupo, 5 como
+ * o tamanho ideal. Começa do menor número de grupos que garante que ninguém passa de 7, depois
+ * reduz até a média bater 5 por grupo — mas só reduz se isso não empurrar a média acima de 7
+ * (`candidateCount / (groups - 1) <= 7`): no intervalo 8-9 candidatos não existe divisão que
+ * respeite 5 como piso E 7 como teto ao mesmo tempo (1 grupo estoura o teto, 2 grupos furam o
+ * piso) — nesse caso o teto vence, formando 2 grupos abaixo do ideal em vez de 1 grupo grande
+ * demais. `maxGroups` (capacidade física da sala, D5) sempre vence como teto — nunca recomenda
+ * mais grupos do que a sala comporta. Função pura: consumida pela organização real
+ * (`group-organization.ts`, presencial e online) e pela simulação do front (sem round-trip),
+ * mesmo padrão de `deriveRoomCapacity`.
  */
 export function derivePresencialGroupCount(candidateCount: number, maxGroups: number = Infinity): number {
     if (candidateCount <= 0) return 0;
-    if (candidateCount <= 5) return 1; // grupo único, mesmo abaixo de 3 (edge case — pouca gente)
+    if (candidateCount <= 7) return 1; // grupo único, mesmo abaixo de 5 (edge case — pouca gente)
 
-    let groups = Math.min(maxGroups, Math.ceil(candidateCount / 5));
-    while (groups > 1 && candidateCount / groups < 3) groups -= 1;
+    let groups = Math.min(maxGroups, Math.ceil(candidateCount / 7));
+    while (groups > 1 && candidateCount / groups < 5 && candidateCount / (groups - 1) <= 7) groups -= 1;
 
     return Math.max(1, groups);
 }
 
 /**
- * FEAT-0020 — quantos avaliadores um grupo presencial de `size` candidatos deve ter: 1 para
- * grupo de 3, 2 para grupo de 4-5 (research.md, Decisão 3). Host nunca entra nessa conta — é
- * alocado à sala, não ao grupo (FR-007, `deriveRoomCapacity`).
+ * FEAT-0020, ajustado na FEAT-0022 — quantos avaliadores um grupo presencial de `size`
+ * candidatos deve ter: 1 para grupo de 5 (o ideal), 2 para grupo de 6-7. Host nunca entra
+ * nessa conta — é alocado à sala, não ao grupo (FR-007, `deriveRoomCapacity`).
  */
 export function deriveEvaluatorTargetForGroupSize(size: number): 1 | 2 {
-    return size >= 4 ? 2 : 1;
+    return size >= 6 ? 2 : 1;
 }
 
 /**
@@ -94,17 +99,18 @@ export function calculateHostDeficit(
 }
 
 /**
- * FEAT-0022 (US2) — classifica um grupo presencial frente à configuração ideal: 4-5 candidatos
- * com 2 avaliadores é ideal; 3 candidatos com 1 avaliador é aceitável; qualquer outra
- * combinação (incluindo grupo fora de 3-5, ou dentro de 3-5 mas com avaliador a mais/a menos do
- * esperado) fica fora do ideal. Só classifica — não muda o algoritmo real de organização.
+ * FEAT-0022 (US2), ajustado — classifica um grupo presencial frente à configuração ideal: 5
+ * candidatos (o tamanho ideal) com 1 avaliador é ideal; 6-7 candidatos com 2 avaliadores é
+ * aceitável; qualquer outra combinação (fora de 5-7, ou dentro de 5-7 mas com avaliador a
+ * mais/a menos do esperado) fica fora do ideal. Só classifica — não muda o algoritmo real de
+ * organização.
  */
 export function classifyPresencialGroup(
     candidateCount: number,
     evaluatorCount: number,
 ): "ideal" | "aceitavel" | "fora_do_ideal" {
-    if ((candidateCount === 4 || candidateCount === 5) && evaluatorCount === 2) return "ideal";
-    if (candidateCount === 3 && evaluatorCount === 1) return "aceitavel";
+    if (candidateCount === 5 && evaluatorCount === 1) return "ideal";
+    if ((candidateCount === 6 || candidateCount === 7) && evaluatorCount === 2) return "aceitavel";
     return "fora_do_ideal";
 }
 

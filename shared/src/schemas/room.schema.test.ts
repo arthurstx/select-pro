@@ -34,46 +34,57 @@ test("mesma capacidade sempre produz o mesmo resultado (SC-002)", () => {
   assert.deepEqual(deriveRoomCapacity(60), deriveRoomCapacity(60));
 });
 
-// FEAT-0020 — derivePresencialGroupCount: sempre 3-5 candidatos por grupo.
+// FEAT-0020, ajustado na FEAT-0022 — derivePresencialGroupCount: 5-7 candidatos por grupo, 5 o ideal.
 
 test("derivePresencialGroupCount — 0 candidatos: 0 grupos", () => {
   assert.equal(derivePresencialGroupCount(0), 0);
 });
 
-test("derivePresencialGroupCount — até 5 candidatos: 1 grupo único, mesmo abaixo de 3", () => {
+test("derivePresencialGroupCount — até 7 candidatos: 1 grupo único, mesmo abaixo de 5", () => {
   assert.equal(derivePresencialGroupCount(1), 1);
-  assert.equal(derivePresencialGroupCount(3), 1);
   assert.equal(derivePresencialGroupCount(5), 1);
+  assert.equal(derivePresencialGroupCount(7), 1);
 });
 
-test("derivePresencialGroupCount — 6 candidatos: 2 grupos de 3, não 1 grupo de 6", () => {
-  assert.equal(derivePresencialGroupCount(6), 2);
+test("derivePresencialGroupCount — 8 ou 9 candidatos: gap do intervalo 5-7 — 2 grupos abaixo do ideal, nunca 1 grupo acima do teto", () => {
+  assert.equal(derivePresencialGroupCount(8), 2);
+  assert.equal(derivePresencialGroupCount(9), 2);
 });
 
-test("derivePresencialGroupCount — 13 candidatos: 3 grupos (média ~4.3, dentro de 3-5)", () => {
-  const groups = derivePresencialGroupCount(13);
+test("derivePresencialGroupCount — 10 candidatos: 2 grupos de 5 (ideal)", () => {
+  assert.equal(derivePresencialGroupCount(10), 2);
+});
+
+test("derivePresencialGroupCount — 14 candidatos: 2 grupos de 7 (no teto)", () => {
+  assert.equal(derivePresencialGroupCount(14), 2);
+});
+
+test("derivePresencialGroupCount — 15 candidatos: 3 grupos (média 5, dentro de 5-7)", () => {
+  const groups = derivePresencialGroupCount(15);
   assert.equal(groups, 3);
-  assert.ok(13 / groups >= 3 && 13 / groups <= 5);
+  assert.ok(15 / groups >= 5 && 15 / groups <= 7);
 });
 
-test("derivePresencialGroupCount — 25 candidatos: 5 grupos de 5", () => {
-  assert.equal(derivePresencialGroupCount(25), 5);
+test("derivePresencialGroupCount — 35 candidatos: 5 grupos de 7 (no teto)", () => {
+  assert.equal(derivePresencialGroupCount(35), 5);
 });
 
 test("derivePresencialGroupCount — respeita o teto de maxGroups (capacidade física da sala)", () => {
-  // 10 candidatos, sala que só comporta 2 grupos (D5, ≤50 lugares) — cabe exato: 5 e 5.
-  assert.equal(derivePresencialGroupCount(10, 2), 2);
+  // 15 candidatos exigiriam 3 grupos pra ficar no ideal (5 cada), mas a sala só comporta 2
+  // grupos (D5) — o teto de sala vence. Na prática o service já limita `count` antes de chamar
+  // esta função pra isso nunca ultrapassar o máximo de 7 por grupo de verdade.
+  assert.equal(derivePresencialGroupCount(15, 2), 2);
 });
 
-// FEAT-0020 — deriveEvaluatorTargetForGroupSize: 1 pra grupo de 3, 2 pra grupo de 4-5.
+// FEAT-0020, ajustado na FEAT-0022 — deriveEvaluatorTargetForGroupSize: 1 pra grupo de 5 (ideal), 2 pra grupo de 6-7.
 
-test("deriveEvaluatorTargetForGroupSize — 3 candidatos: 1 avaliador", () => {
-  assert.equal(deriveEvaluatorTargetForGroupSize(3), 1);
+test("deriveEvaluatorTargetForGroupSize — 5 candidatos (ideal): 1 avaliador", () => {
+  assert.equal(deriveEvaluatorTargetForGroupSize(5), 1);
 });
 
-test("deriveEvaluatorTargetForGroupSize — 4 e 5 candidatos: 2 avaliadores", () => {
-  assert.equal(deriveEvaluatorTargetForGroupSize(4), 2);
-  assert.equal(deriveEvaluatorTargetForGroupSize(5), 2);
+test("deriveEvaluatorTargetForGroupSize — 6 e 7 candidatos: 2 avaliadores", () => {
+  assert.equal(deriveEvaluatorTargetForGroupSize(6), 2);
+  assert.equal(deriveEvaluatorTargetForGroupSize(7), 2);
 });
 
 // FEAT-0020 — recommendRoomsForGroups: maior faixa primeiro (D5).
@@ -123,21 +134,21 @@ test("calculateHostDeficit — hosts presentes sobrando: déficit fica em 0, nun
   assert.deepEqual(calculateHostDeficit([50], 5), { required: 1, deficit: 0 });
 });
 
-// FEAT-0022 — classifyPresencialGroup: ideal (4-5 + 2 avaliadores), aceitável (3 + 1), fora do ideal (resto).
+// FEAT-0022, ajustado — classifyPresencialGroup: ideal (5 + 1 avaliador), aceitável (6-7 + 2), fora do ideal (resto).
 
-test("classifyPresencialGroup — 4 ou 5 candidatos com 2 avaliadores: ideal", () => {
-  assert.equal(classifyPresencialGroup(4, 2), "ideal");
-  assert.equal(classifyPresencialGroup(5, 2), "ideal");
+test("classifyPresencialGroup — 5 candidatos (ideal) com 1 avaliador: ideal", () => {
+  assert.equal(classifyPresencialGroup(5, 1), "ideal");
 });
 
-test("classifyPresencialGroup — 3 candidatos com 1 avaliador: aceitável", () => {
-  assert.equal(classifyPresencialGroup(3, 1), "aceitavel");
+test("classifyPresencialGroup — 6 ou 7 candidatos com 2 avaliadores: aceitável", () => {
+  assert.equal(classifyPresencialGroup(6, 2), "aceitavel");
+  assert.equal(classifyPresencialGroup(7, 2), "aceitavel");
 });
 
 test("classifyPresencialGroup — qualquer outra combinação: fora do ideal", () => {
-  assert.equal(classifyPresencialGroup(4, 1), "fora_do_ideal"); // grupo de 4 sem o segundo avaliador
-  assert.equal(classifyPresencialGroup(3, 2), "fora_do_ideal"); // grupo de 3 com avaliador a mais
-  assert.equal(classifyPresencialGroup(6, 2), "fora_do_ideal"); // grupo maior que o permitido
-  assert.equal(classifyPresencialGroup(2, 1), "fora_do_ideal"); // grupo menor que o mínimo
+  assert.equal(classifyPresencialGroup(5, 2), "fora_do_ideal"); // ideal (5) com avaliador a mais
+  assert.equal(classifyPresencialGroup(6, 1), "fora_do_ideal"); // 6 candidatos sem o segundo avaliador
+  assert.equal(classifyPresencialGroup(8, 2), "fora_do_ideal"); // grupo maior que o permitido
+  assert.equal(classifyPresencialGroup(4, 1), "fora_do_ideal"); // grupo menor que o mínimo
   assert.equal(classifyPresencialGroup(5, 0), "fora_do_ideal"); // sem avaliador nenhum
 });

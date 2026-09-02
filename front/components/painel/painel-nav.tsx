@@ -45,35 +45,39 @@ export function isPainelNavGroup(entry: PainelNavEntry): entry is PainelNavGroup
 
 export const PAINEL_NAV_ITEMS: PainelNavEntry[] = [
   { href: "/painel", label: "Painel", icon: LayoutDashboardIcon },
-  // FEAT-0008 — restrita a admin na própria página; aparece pra todos aqui
-  // pelo mesmo motivo dos outros itens (o guard real é a API, não o menu).
-  { href: "/painel/solicitacoes", label: "Solicitações", icon: UserCheckIcon },
-  // FEAT-0011 — mesmo motivo.
-  { href: "/painel/salas", label: "Salas", icon: DoorOpenIcon },
-  // FEAT-0009 — mesmo motivo.
-  { href: "/painel/avaliadores", label: "Avaliadores", icon: UsersIcon },
-  // FEAT-0010 — mesmo motivo.
-  { href: "/painel/check-in-membros", label: "Check-in de Membros", icon: UserRoundCheckIcon },
   // FEAT-0019 — Grupos + Check-in de cada modalidade, agrupados por dia/fluxo (presencial
-  // e online não compartilham avaliadores nem acontecem no mesmo dia).
+  // e online não compartilham avaliadores nem acontecem no mesmo dia). Salas entrou aqui
+  // depois (pedido do usuário) — é recurso do presencial (D5), sem equivalente online.
+  // Itens em ordem alfabética dentro do grupo.
   {
     label: "Presencial",
     icon: UsersRoundIcon,
     children: [
-      { href: "/painel/grupos/presencial", label: "Grupos Presenciais", icon: UsersRoundIcon },
       { href: "/painel/check-in/presencial", label: "Check-in Presencial", icon: ClipboardCheckIcon },
+      { href: "/painel/grupos/presencial", label: "Grupos Presenciais", icon: UsersRoundIcon },
+      { href: "/painel/salas", label: "Salas", icon: DoorOpenIcon },
     ],
   },
   {
     label: "Online",
     icon: VideoIcon,
     children: [
-      { href: "/painel/grupos/online", label: "Grupos Online", icon: VideoIcon },
       { href: "/painel/check-in/online", label: "Check-in Online", icon: ClipboardCheckIcon },
+      { href: "/painel/grupos/online", label: "Grupos Online", icon: VideoIcon },
     ],
   },
-  // FEAT-0013 — mesmo motivo dos itens de folha. Tela do avaliador/host (não do admin), mas
-  // o guard real segue sendo a API, não o menu (mesma nota acima).
+  // Agrupador pedido pelo usuário — cadastro/gestão de quem avalia, separado da operação
+  // presencial/online do dia do processo seletivo. Itens em ordem alfabética.
+  {
+    label: "Membros",
+    icon: UsersIcon,
+    children: [
+      { href: "/painel/avaliadores", label: "Avaliadores", icon: UsersIcon },
+      { href: "/painel/check-in-membros", label: "Check-in de Membros", icon: UserRoundCheckIcon },
+      { href: "/painel/solicitacoes", label: "Solicitações", icon: UserCheckIcon },
+    ],
+  },
+  // FEAT-0013 — tela do avaliador/host (não do admin), guard real é a API, não o menu.
   { href: "/painel/minhas-avaliacoes", label: "Minhas Avaliações", icon: StarIcon },
   { href: "/painel/avaliacoes", label: "Avaliações", icon: ClipboardListIcon },
   // FEAT-0017 — mesmo motivo.

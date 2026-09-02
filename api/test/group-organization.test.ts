@@ -133,34 +133,36 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
         expect(result.groups[0]?.evaluatorUserIds).toEqual(["e1", "e2"]);
     });
 
-    it("FEAT-0020 (FR-003) — grupos formados têm sempre entre 3 e 5 candidatos", () => {
+    it("FEAT-0020/FEAT-0022 (FR-003) — grupos formados têm sempre entre 5 e 7 candidatos", () => {
         const sala = room({ name: "Sala 1", size: 100 }); // maxGroups=4 (D5, >80)
         const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
 
         const result = organizePresencialGroups(candidates, [sala], []);
 
         const sizes = result.groups.map((g) => g.candidateIds.length);
-        expect(sizes.every((size) => size >= 3 && size <= 5)).toBe(true);
+        expect(sizes.every((size) => size >= 5 && size <= 7)).toBe(true);
         expect(sizes.reduce((a, b) => a + b, 0)).toBe(13);
     });
 
-    it("FEAT-0020 (FR-004) — capacidade insuficiente ainda reporta unallocatedCandidateCount corretamente", () => {
-        // Sala de 50 (D5: maxGroups=2) comporta no máximo 2*5=10 candidatos em grupos válidos,
-        // mesmo tendo "espaço físico" pra mais — capacidade real é min(size, maxGroups*5).
+    it("FEAT-0020/FEAT-0022 (FR-004) — capacidade insuficiente ainda reporta unallocatedCandidateCount corretamente", () => {
+        // Sala de 50 (D5: maxGroups=2) comporta no máximo 2*7=14 candidatos em grupos válidos,
+        // mesmo tendo "espaço físico" pra mais — capacidade real é min(size, maxGroups*7).
         const sala = room({ name: "Sala 1", size: 50 });
         const candidates = Array.from({ length: 15 }, (_, i) => candidate({ id: `c${i}` }));
 
         const result = organizePresencialGroups(candidates, [sala], []);
 
         const allocated = result.groups.flatMap((g) => g.candidateIds);
-        expect(allocated).toHaveLength(10);
-        expect(result.unallocatedCandidateCount).toBe(5);
+        expect(allocated).toHaveLength(14);
+        expect(result.unallocatedCandidateCount).toBe(1);
     });
 
-    it("FEAT-0020 (FR-005/FR-006) — com avaliador de sobra só pro 2º de UM grupo, todo mundo já tem 1 antes de alguém ter 2", () => {
+    it("FEAT-0020/FEAT-0022 (FR-005/FR-006) — com avaliador de sobra só pro 2º de UM grupo, todo mundo já tem 1 antes de alguém ter 2", () => {
         const sala = room({ name: "Sala 1", size: 100 }); // maxGroups=4
-        // 13 candidatos -> 3 grupos (research.md Decisão 2): [5, 4, 4] candidatos, todos alvo 2.
-        const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
+        // 17 candidatos -> 3 grupos (5-7 cada, research.md Decisão 2 ajustada): [6, 6, 5]
+        // candidatos — os dois de 6 pedem 2 avaliadores (deriveEvaluatorTargetForGroupSize), o
+        // de 5 (o ideal) pede só 1.
+        const candidates = Array.from({ length: 17 }, (_, i) => candidate({ id: `c${i}` }));
         // 3 avaliadores cobrem o "1 por grupo" de todo mundo; o 4º é o único 2º avaliador possível.
         const members = Array.from({ length: 4 }, (_, i) => member(`e${i}`));
 
@@ -170,12 +172,12 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
         // Todo grupo já tem pelo menos 1 (pass 1 completa antes de qualquer 2º — pass 2).
         expect(counts.every((c) => c >= 1)).toBe(true);
         // Só um grupo tem 2 (o 4º avaliador, único "extra") — nunca um grupo com 2 enquanto
-        // outro (de tamanho igual, 4-5) ainda está com 0.
+        // outro (de tamanho igual, 6) ainda está com 1.
         expect(counts.filter((c) => c === 2)).toHaveLength(1);
         expect(counts.filter((c) => c === 0)).toHaveLength(0);
     });
 
-    it("FEAT-0020 (FR-005) — com avaliadores suficientes, grupo de 3 tem exatamente 1 e grupo de 4-5 tem exatamente 2", () => {
+    it("FEAT-0020/FEAT-0022 (FR-005) — com avaliadores suficientes, grupo de 5 (ideal) tem exatamente 1 e grupo de 6-7 tem exatamente 2", () => {
         const sala = room({ name: "Sala 1", size: 100 });
         const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
         const members = Array.from({ length: 6 }, (_, i) => member(`e${i}`)); // avaliadores de sobra
@@ -183,19 +185,19 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
         const result = organizePresencialGroups(candidates, [sala], members);
 
         for (const group of result.groups) {
-            const expected = group.candidateIds.length >= 4 ? 2 : 1;
+            const expected = group.candidateIds.length >= 6 ? 2 : 1;
             expect(group.evaluatorUserIds.length).toBe(expected);
         }
     });
 
     it("FEAT-0021 — host da sala aparece em TODOS os grupos daquela sala", () => {
         const sala = room({ name: "Sala 1", size: 100 }); // D5: 2 hosts, maxGroups=4
-        const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` })); // -> 3 grupos
+        const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` })); // -> 2 grupos (5-7 cada)
         const members = [member("h1", "host")];
 
         const result = organizePresencialGroups(candidates, [sala], members);
 
-        expect(result.groups).toHaveLength(3);
+        expect(result.groups).toHaveLength(2);
         for (const group of result.groups) {
             expect(group.evaluatorUserIds).toContain("h1");
         }
@@ -305,30 +307,30 @@ describe("organizeOnlineGroups (FEAT-0022 — só candidatos, D1, sem sala/avali
         expect(groups[0].candidateIds).toHaveLength(2);
     });
 
-    it("8, 9 ou 10 candidatos: 2 grupos de 4-5 (faixa ideal, FR-014)", () => {
-        for (const total of [8, 9, 10]) {
+    it("10 ou 15 candidatos: grupos de exatamente 5 (o ideal), FR-014", () => {
+        expect(organizeOnlineGroups(Array.from({ length: 10 }, (_, i) => candidate({ id: `o10-${i}`, attendance: "online" as const })))).toHaveLength(2);
+        const fifteen = Array.from({ length: 15 }, (_, i) => candidate({ id: `o15-${i}`, attendance: "online" as const }));
+        const groups = organizeOnlineGroups(fifteen);
+        expect(groups).toHaveLength(3);
+        expect(groups.every((g) => g.candidateIds.length === 5)).toBe(true);
+    });
+
+    it("8 ou 9 candidatos: gap do intervalo 5-7 — 2 grupos abaixo do ideal, nunca 1 grupo acima do teto de 7 (FR-014)", () => {
+        for (const total of [8, 9]) {
             const candidates = Array.from({ length: total }, (_, i) => candidate({ id: `o${total}-${i}`, attendance: "online" as const }));
             const groups = organizeOnlineGroups(candidates);
             expect(groups).toHaveLength(2);
-            for (const g of groups) expect(g.candidateIds.length).toBeGreaterThanOrEqual(4);
+            for (const g of groups) expect(g.candidateIds.length).toBeLessThanOrEqual(7);
         }
     });
 
-    it("6 candidatos: 2 grupos de 3, nunca 1 grupo de 6 (evita grupo grande quando dá pra redistribuir, FR-014)", () => {
-        const candidates = Array.from({ length: 6 }, (_, i) => candidate({ id: `o${i}`, attendance: "online" as const }));
-
-        const groups = organizeOnlineGroups(candidates);
-
-        expect(groups).toHaveLength(2);
-        expect(groups.every((g) => g.candidateIds.length === 3)).toBe(true);
-    });
-
-    it("11 candidatos: aceita um grupo de 3 quando a divisão perfeita não é possível (FR-014)", () => {
-        const candidates = Array.from({ length: 11 }, (_, i) => candidate({ id: `o${i}`, attendance: "online" as const }));
+    it("20 candidatos: 3 grupos entre 5 e 7 quando a divisão perfeita (5+5+5=15) não é possível (FR-014)", () => {
+        const candidates = Array.from({ length: 20 }, (_, i) => candidate({ id: `o${i}`, attendance: "online" as const }));
 
         const groups = organizeOnlineGroups(candidates);
 
         expect(groups).toHaveLength(3);
-        expect(groups.every((g) => g.candidateIds.length >= 3 && g.candidateIds.length <= 5)).toBe(true);
+        expect(groups.every((g) => g.candidateIds.length >= 5 && g.candidateIds.length <= 7)).toBe(true);
+        expect(groups.flatMap((g) => g.candidateIds)).toHaveLength(20);
     });
 });

@@ -38,6 +38,7 @@ import {
 } from "@/lib/group/queries";
 
 import { GenderBadge } from "./gender-badge";
+import { describeGroupOrganizeError } from "./group-error-message";
 import { MemberName } from "./member-name";
 
 /**
@@ -80,7 +81,8 @@ export function SimulateOrganizeModal() {
         // participa, os slots recalculados não têm mais relação com o que foi arrastado antes.
         setLocalGroups(data.groups);
       },
-      onError: () => toast.error("Não foi possível calcular a simulação."),
+      onError: (error) =>
+        toast.error(describeGroupOrganizeError(error, "presencial", "Não foi possível calcular a simulação.")),
     });
   }
 
@@ -95,7 +97,8 @@ export function SimulateOrganizeModal() {
           setSelected(new Set(avaliadorIds));
           setLocalGroups(data.groups);
         },
-        onError: () => toast.error("Não foi possível calcular a simulação."),
+        onError: (error) =>
+          toast.error(describeGroupOrganizeError(error, "presencial", "Não foi possível calcular a simulação.")),
       });
     } else {
       setSelected(null);
@@ -216,8 +219,8 @@ export function SimulateOrganizeModal() {
       );
       void queryClient.invalidateQueries({ queryKey: ["evaluators"] }); // reflete promoções/rebaixamentos
       handleOpenChange(false);
-    } catch {
-      toast.error("Não foi possível organizar os grupos.");
+    } catch (error) {
+      toast.error(describeGroupOrganizeError(error, "presencial", "Não foi possível organizar os grupos."));
     }
   }
 
@@ -250,8 +253,8 @@ export function SimulateOrganizeModal() {
       idealGroups,
       idealRooms: roomPlan.reduce((sum, tier) => sum + tier.roomsNeeded, 0),
       idealHosts: roomPlan.reduce((sum, tier) => sum + tier.hostCount * tier.roomsNeeded, 0),
-      minEvaluators: idealGroups * deriveEvaluatorTargetForGroupSize(3),
-      maxEvaluators: idealGroups * deriveEvaluatorTargetForGroupSize(5),
+      minEvaluators: idealGroups * deriveEvaluatorTargetForGroupSize(5),
+      maxEvaluators: idealGroups * deriveEvaluatorTargetForGroupSize(7),
     };
   }, [preview.data]);
 
@@ -261,9 +264,9 @@ export function SimulateOrganizeModal() {
    * FEAT-0022 (US1/US2) — um único passe sobre `groupsToShow` monta os dois diagnósticos:
    * déficit de host (`calculateHostDeficit`, soma por SALA distinta, não por grupo — uma sala
    * com 2 grupos conta uma vez) e classificação de cada grupo (`classifyPresencialGroup`).
-   * `deviations` é a lista pro resumo do topo — inclui tanto "aceitável" (3 candidatos, abaixo
-   * do ideal) quanto "fora do ideal", já que o pedido original cita "sala com 1 grupo de 3
-   * candidatos" como exemplo de ponto fora da recomendação principal.
+   * `deviations` é a lista pro resumo do topo — inclui tanto "aceitável" (6-7 candidatos, acima
+   * do ideal de 5) quanto "fora do ideal", já que o pedido original cita "sala com 1 grupo fora
+   * do tamanho ideal" como exemplo de ponto fora da recomendação principal.
    */
   const organizationDiagnostics = useMemo(() => {
     const hostsByRoom = new Map<string, Set<string>>();
@@ -297,7 +300,7 @@ export function SimulateOrganizeModal() {
       if (classification === "fora_do_ideal") {
         deviations.push(`${label} tem um grupo fora do ideal (${g.candidates.length} candidato(s), ${evaluatorCount} avaliador(es)).`);
       } else if (classification === "aceitavel") {
-        deviations.push(`${label} tem 1 grupo de 3 candidatos (aceitável, mas abaixo do ideal de 4-5).`);
+        deviations.push(`${label} tem 1 grupo de ${g.candidates.length} candidatos (aceitável, mas acima do ideal de 5).`);
       }
     }
 
@@ -329,8 +332,8 @@ export function SimulateOrganizeModal() {
         idealGroups,
         idealRooms: roomPlan.reduce((sum, tier) => sum + tier.roomsNeeded, 0),
         idealHosts: roomPlan.reduce((sum, tier) => sum + tier.hostCount * tier.roomsNeeded, 0),
-        minEvaluators: idealGroups * deriveEvaluatorTargetForGroupSize(3),
-        maxEvaluators: idealGroups * deriveEvaluatorTargetForGroupSize(5),
+        minEvaluators: idealGroups * deriveEvaluatorTargetForGroupSize(5),
+        maxEvaluators: idealGroups * deriveEvaluatorTargetForGroupSize(7),
       };
     });
   }, []);

@@ -37,17 +37,18 @@ export function organizePresencialGroups(
 
     const sortedRooms = [...rooms].sort((a, b) => a.name.localeCompare(b.name));
 
-    // FEAT-0020: a capacidade real de uma sala não é mais só `room.size` (lugares físicos) —
-    // é `min(size, maxGroups * 5)`, porque nenhum grupo pode passar de 5 (FR-003). Uma sala de
-    // 50 lugares mas só 2 grupos (D5) não comporta 50 pessoas em grupos válidos, comporta 10.
-    // Acumula salas (já em ordem de nome) até cobrir o total de presentes, ou esgotar
-    // (FR-012/013 tratam "sem sala nenhuma"/"capacidade insuficiente" fora daqui, no service).
+    // FEAT-0020, ajustado na FEAT-0022: a capacidade real de uma sala não é mais só `room.size`
+    // (lugares físicos) — é `min(size, maxGroups * 7)`, porque nenhum grupo pode passar de 7
+    // (FR-003). Uma sala de 50 lugares mas só 2 grupos (D5) não comporta 50 pessoas em grupos
+    // válidos, comporta 14. Acumula salas (já em ordem de nome) até cobrir o total de
+    // presentes, ou esgotar (FR-012/013 tratam "sem sala nenhuma"/"capacidade insuficiente"
+    // fora daqui, no service).
     const roomAssignments: { room: RoomRow; count: number; maxGroups: number }[] = [];
     let remaining = candidates.length;
     for (const room of sortedRooms) {
         if (remaining <= 0) break;
         const { maxGroups } = deriveRoomCapacity(room.size);
-        const roomCapacity = Math.min(room.size, maxGroups * 5);
+        const roomCapacity = Math.min(room.size, maxGroups * 7);
         const count = Math.min(remaining, roomCapacity);
         if (count <= 0) continue;
         roomAssignments.push({ room, count, maxGroups });
@@ -141,10 +142,10 @@ function distributeHostsToRooms(
 /**
  * FEAT-0022 (US4, FR-014) — candidatos online presentes → grupos só com candidatos, sem sala
  * (o online nunca teve sala de verdade). Tamanho de grupo via `derivePresencialGroupCount`
- * (sem `maxGroups` — o online não tem teto de sala): já implementa a faixa pedida (4-5 ideal,
- * 3 mínimo aceitável quando não dá pra evitar, nunca deixa 6+ quando redistribuir é possível —
- * conferido manualmente em research.md D1). Antes desta feature o tamanho vinha da MÉDIA das
- * salas cadastradas (`averageRoomGroupSize`, removida) — sem noção nenhuma de faixa ideal.
+ * (sem `maxGroups` — o online não tem teto de sala): mesma faixa 5-7 (5 ideal) usada no
+ * presencial, ajustada após o lançamento (ver docstring da função em `shared`). Antes desta
+ * feature o tamanho vinha da MÉDIA das salas cadastradas (`averageRoomGroupSize`, removida) —
+ * sem noção nenhuma de faixa ideal.
  */
 export function organizeOnlineGroups(candidates: PresentCandidateRow[]): GroupToInsert[] {
     if (candidates.length === 0) {
@@ -215,11 +216,12 @@ export function distributeByGender(
 }
 
 /**
- * FEAT-0020 (FR-005/FR-006/FR-007) — 1 avaliador por grupo de 3, 2 por grupo de 4-5,
- * priorizando completar o segundo avaliador dos grupos maiores antes de qualquer outra coisa.
- * Host NUNCA entra no pool — é alocado à sala (`deriveRoomCapacity`), não ao grupo. Substitui
- * o balanceamento "por menor grupo" da FEAT-0012: a semântica mudou de "equilibrar igual" pra
- * "priorizar completar os grupos maiores primeiro" (research.md, Decisão 3).
+ * FEAT-0020 (FR-005/FR-006/FR-007), ajustado na FEAT-0022 — 1 avaliador por grupo de 5 (o
+ * ideal), 2 por grupo de 6-7, priorizando completar o segundo avaliador dos grupos maiores
+ * antes de qualquer outra coisa. Host NUNCA entra no pool — é alocado à sala
+ * (`deriveRoomCapacity`), não ao grupo. Substitui o balanceamento "por menor grupo" da
+ * FEAT-0012: a semântica mudou de "equilibrar igual" pra "priorizar completar os grupos
+ * maiores primeiro" (research.md, Decisão 3).
  */
 function distributeEvaluatorsByTarget(members: PresentMemberRow[], candidateSlots: string[][]): string[][] {
     const evaluatorSlots: string[][] = candidateSlots.map(() => []);

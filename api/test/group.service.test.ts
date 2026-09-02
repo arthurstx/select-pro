@@ -635,10 +635,10 @@ describe("GroupService.assignEvaluatorToOnlineGroup / leaveOnlineGroup (US2/US3,
 
 describe("GroupService.moveCandidate / moveEvaluator (US2, FR-009/FR-010 — FEAT-0012, presencial)", () => {
     /**
-     * 2 mulheres + 4 homens (6 no total — FEAT-0020: com só 4, `derivePresencialGroupCount`
-     * forma 1 grupo único; precisa de 6 pra forçar 2 grupos de 3 numa sala de 50, D5
-     * maxGroups=2). Distribuição determinística (`distributeByGender`) — grupo A fica com as
-     * 2 mulheres + 1 homem, grupo B só com homens.
+     * 2 mulheres + 8 homens (10 no total — FEAT-0022: a faixa agora é 5-7, `derivePresencialGroupCount`
+     * só forma 1 grupo único até 7 candidatos; precisa de 10 pra forçar 2 grupos de 5 numa sala
+     * de 50, D5 maxGroups=2). Distribuição determinística (`distributeByGender`) — grupo A fica
+     * com as 2 mulheres + 3 homens, grupo B só com homens.
      */
     async function setupTwoPresencialGroups(now: Date) {
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(now);
@@ -649,12 +649,10 @@ describe("GroupService.moveCandidate / moveEvaluator (US2, FR-009/FR-010 — FEA
             await insertCheckedCandidate(process.id, actorId, { gender: "feminino" }),
             await insertCheckedCandidate(process.id, actorId, { gender: "feminino" }),
         ];
-        const men = [
-            await insertCheckedCandidate(process.id, actorId, { gender: "masculino" }),
-            await insertCheckedCandidate(process.id, actorId, { gender: "masculino" }),
-            await insertCheckedCandidate(process.id, actorId, { gender: "masculino" }),
-            await insertCheckedCandidate(process.id, actorId, { gender: "masculino" }),
-        ];
+        const men: string[] = [];
+        for (let i = 0; i < 8; i++) {
+            men.push(await insertCheckedCandidate(process.id, actorId, { gender: "masculino" }));
+        }
 
         const organized = await service().organizePresencial(undefined, now);
         if (!organized.isRight()) throw new Error("setup falhou");
@@ -734,8 +732,9 @@ describe("GroupService.moveCandidate / moveEvaluator (US2, FR-009/FR-010 — FEA
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
         await insertRoom(50);
-        // 6 candidatos — FEAT-0020: precisa de 2 grupos de verdade pra "mover pro outro grupo" fazer sentido.
-        for (let i = 0; i < 6; i++) await insertCheckedCandidate(process.id, actorId);
+        // 10 candidatos — FEAT-0022 (faixa 5-7): precisa de mais de 7 pra formar 2 grupos de
+        // verdade, senão "mover pro outro grupo" não faz sentido (grupo único).
+        for (let i = 0; i < 10; i++) await insertCheckedCandidate(process.id, actorId);
         const evaluatorId = await insertCheckedMember(process.id, actorId);
 
         const organized = await service().organizePresencial(undefined, NOW);

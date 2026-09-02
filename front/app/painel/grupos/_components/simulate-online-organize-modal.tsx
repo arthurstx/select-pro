@@ -19,6 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useGroupsQuery, useOrganizeOnlineMutation, usePreviewOnlineMutation } from "@/lib/group/queries";
 
 import { GenderBadge } from "./gender-badge";
+import { describeGroupOrganizeError } from "./group-error-message";
 
 /**
  * FEAT-0022 (US4) — mesmo conceito de simular-antes-de-aplicar do presencial (FEAT-0021),
@@ -36,7 +37,8 @@ export function SimulateOnlineOrganizeModal() {
     setOpen(next);
     if (next) {
       preview.mutate(undefined, {
-        onError: () => toast.error("Não foi possível calcular a simulação."),
+        onError: (error) =>
+          toast.error(describeGroupOrganizeError(error, "online", "Não foi possível calcular a simulação.")),
       });
     }
   }
@@ -64,7 +66,8 @@ export function SimulateOnlineOrganizeModal() {
         toast.success("Grupos online organizados.");
         handleOpenChange(false);
       },
-      onError: () => toast.error("Não foi possível organizar os grupos."),
+      onError: (error) =>
+        toast.error(describeGroupOrganizeError(error, "online", "Não foi possível organizar os grupos.")),
     });
   }
 
