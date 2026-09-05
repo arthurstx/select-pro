@@ -98,3 +98,13 @@ O admin abre uma tela com todos os candidatos presentes e, para cada um, vê qua
 - O comentário por avaliação é sempre opcional; não há um mínimo de caracteres nem obrigatoriedade condicionada à cor escolhida.
 - "Grupo presencial" aqui é sempre o mais recente formado pela organização de grupos corrente (FEAT-0012) — não existe histórico de "qual grupo o candidato estava quando foi avaliado" além do que já está implícito no momento em que a avaliação foi salva.
 - A pontuação ponderada (FR-012) é exibida como referência para o admin comparar candidatos, mas fora de escopo desta versão: um ranking ordenado/exportável a partir dela, ou qualquer regra que a use para desempatar/decidir veredito — o veredito continua sendo exclusivamente D2 (veto vermelho) + D6 (mínimo de 2).
+
+## Emendas
+
+### 2026-09-05 — Nota vira blocos clicáveis (UI)
+
+Pedido do usuário: *"não gostei de como é dada a nota atualmente; em vez de ser um campo para digitar o número, apenas coloque 6 blocos de 0 a 5 para a pessoa clicar"*.
+
+O `input[type=number]` de cada critério foi substituído por 6 blocos (0 a 5) num radiogroup — `front/app/painel/minhas-avaliacoes/_components/score-selector.tsx`. Motivo: a tela é usada no celular, durante a dinâmica, com pressa; o campo numérico abria teclado, aceitava valor fora da escala antes da validação e não mostrava a escala.
+
+**Não muda contrato nem comportamento**: o `ScoresSchema` continua `int` de 0 a 5, o payload é o mesmo e o padrão de uma avaliação nova segue 0 em todos os critérios. Por isso é emenda de UI, não spec nova — o FR-002 vale como está escrito.
