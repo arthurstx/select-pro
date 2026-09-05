@@ -119,7 +119,12 @@ staging/produção (ver "Pendências operacionais").
 - [ ] **Tela de logs do admin via webhook** (item 3 da FEAT-0006 original). O dado já é
       gravado desde a FEAT-0005 (`checkin_events`, append-only). Falta a tela e o webhook.
       Não entrou no backlog 008–016 — fica aqui para não sumir de novo.
-- [ ] CRUD de processos seletivos.
+- [ ] CRUD de processos seletivos. Inclui tela de admin para configurar
+      início/fim de inscrições por edição — hoje (2026-09-04) existe uma trava
+      temporária hardcoded em `api/src/lib/candidate-registration-deadline.ts`
+      (prazo fixo `2026-09-04 23:59` Brasília) bloqueando `POST
+      /candidate/register` com `403 REGISTRATION_CLOSED`; virá spec própria
+      quando essa tela for priorizada.
 - [x] Contador "X de Y presentes" no cabeçalho do check-in — implementado direto em
       `develop` (tarefa pequena, extensão óbvia do contrato existente, sem ciclo completo
       do spec-kit — ver "Convenção" acima). `ListCandidatesResponseSchema.data` ganha

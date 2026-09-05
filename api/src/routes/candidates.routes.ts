@@ -10,6 +10,7 @@ import type { ZodError } from "zod";
 import {
   EmailAlreadyRegisteredError,
   PhoneAlreadyRegisteredError,
+  RegistrationClosedError,
 } from "../core/errors/candidate-errors";
 import { httpError } from "../lib/http-error";
 import { CandidateRepository } from "../repositories/candidates.repository";
@@ -76,6 +77,10 @@ const registerRoute = createRoute({
         "Email inválido (E3), telefone inválido (E4) ou origem 'outros' sem descrição (E6)",
       content: { "application/json": { schema: ErrorResponseSchema } },
     },
+    403: {
+      description: "Prazo de inscrição encerrado",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
     409: {
       description: "Email ou telefone já cadastrado (E1/E2/E5)",
       content: { "application/json": { schema: ErrorResponseSchema } },
@@ -101,6 +106,9 @@ candidatesRouter.openapi(
       }
       if (error instanceof PhoneAlreadyRegisteredError) {
         throw httpError(409, error.code, error.message, error.field);
+      }
+      if (error instanceof RegistrationClosedError) {
+        throw httpError(403, error.code, error.message);
       }
       throw httpError(500, "INTERNAL_ERROR", "Erro inesperado");
     }
