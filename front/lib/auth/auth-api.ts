@@ -12,6 +12,7 @@ import {
   type MeResponse,
   type RegisterMemberDTO,
   type ResetPasswordDTO,
+  type SelfDeclaredSignupDTO,
   type SignupDecisionDTO,
   type SignupRequestDetail,
   type SignupRequestStatus,
@@ -36,26 +37,31 @@ async function postPublic(path: string, body?: unknown): Promise<Response> {
 }
 
 /**
- * `POST /auth/register` bifurca por status do membro (FEAT-0008): `active`
- * responde 201 com sessão; `inactive`/`trainee` responde 202 sem conta —
- * checar o status ANTES de decidir qual schema faz o parse, ou um cadastro
- * pendente vira ZodError em vez de um resultado tratável.
+ * `POST /auth/register` — trilha do membro Efetivo (FEAT-0008, emenda
+ * 2026-09-04). Desde a emenda, só existe a resposta 201: um status
+ * diferente de `active` na Supabase é recusado (403), não vira mais
+ * pendência. Trainee/pós-júnior usam `createSignupRequest` abaixo.
  */
-export type RegisterResult =
-  | { kind: "session"; session: AuthSessionResponse["data"] }
-  | { kind: "pending_approval"; message: string };
-
-export async function registerMember(payload: RegisterMemberDTO): Promise<RegisterResult> {
+export async function registerMember(payload: RegisterMemberDTO): Promise<AuthSessionResponse["data"]> {
   const response = await postPublic("/auth/register", payload);
   if (!response.ok) throw await toApiError(response);
 
-  const json = await response.json();
+  return AuthSessionResponseSchema.parse(await response.json()).data;
+}
 
-  if (response.status === 202) {
-    return { kind: "pending_approval", message: RegisterPendingResponseSchema.parse(json).data.message };
-  }
+/**
+ * `POST /auth/signup-requests` — trilha auto-declarada de trainee/pós-júnior
+ * (FEAT-0008, emenda 2026-09-04). Não abre sessão: a conta só nasce quando
+ * um admin aprova (`decideSignupRequest`, mais abaixo). Pública, como o
+ * cadastro de efetivo.
+ */
+export async function createSignupRequest(
+  payload: SelfDeclaredSignupDTO,
+): Promise<{ message: string }> {
+  const response = await postPublic("/auth/signup-requests", payload);
+  if (!response.ok) throw await toApiError(response);
 
-  return { kind: "session", session: AuthSessionResponseSchema.parse(json).data };
+  return RegisterPendingResponseSchema.parse(await response.json()).data;
 }
 
 export async function login(payload: LoginDTO): Promise<AuthSessionResponse["data"]> {

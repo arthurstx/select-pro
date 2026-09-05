@@ -78,7 +78,7 @@ async function insertCheckedCandidate(
  * mesma garantia que já vale em produção (FEAT-0003/0008). Espelha `insertEvaluator` de
  * `evaluators.service.test.ts`.
  */
-async function insertMemberProfile(userId: string, status: "active" | "inactive" | "trainee" = "active") {
+async function insertMemberProfile(userId: string, status: "active" | "post_junior" | "trainee" = "active") {
     counter += 1;
     await env.DB.prepare(
         `INSERT INTO member_profiles

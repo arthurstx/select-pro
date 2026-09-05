@@ -1,4 +1,10 @@
-import type { EvaluatorRole, EvaluatorRoleFilter, EvaluatorSummary, MemberStatus, SelectionProcessRow } from "shared";
+import {
+    type EvaluatorRole,
+    type EvaluatorRoleFilter,
+    type EvaluatorSummary,
+    type SelectionProcessRow,
+    normalizeStoredMemberStatus,
+} from "shared";
 
 import { type Either, left, right } from "../core/either";
 import { NoActiveSelectionProcessError } from "../core/errors/checkin-errors";
@@ -78,13 +84,20 @@ export class EvaluatorsService {
 }
 
 function toSummary(row: EvaluatorRow): EvaluatorSummary {
+    // `normalizeStoredMemberStatus` (não um cast cru): traduz o legado
+    // `inactive` pré-migration-0016 e detecta dado corrompido em vez de
+    // deixá-lo vazar como `ZodError` no parse do front (FEAT-0008, R7).
+    const memberStatus = normalizeStoredMemberStatus(row.memberStatus);
+    if (!memberStatus) {
+        logger.error("evaluators.unknown_member_status", { userId: row.user_id, raw: row.memberStatus });
+        throw new Error(`memberStatus desconhecido para o avaliador ${row.user_id}: ${row.memberStatus}`);
+    }
+
     return {
         userId: row.user_id,
         name: row.name,
         email: row.email,
-        // Sem checagem: já passou por `isRecognizedMemberStatus` na criação da conta
-        // (FEAT-0003/0008) — mesmo nível de confiança de signup-requests.service.ts:264.
-        memberStatus: row.memberStatus as MemberStatus,
+        memberStatus,
         role: row.role,
     };
 }

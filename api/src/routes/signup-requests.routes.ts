@@ -4,7 +4,9 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
     AuthErrorCode,
     ErrorResponseSchema,
+    RegisterPendingResponseSchema,
     ROLES,
+    SelfDeclaredSignupSchema,
     SignupDecisionSchema,
     SignupRequestDetailResponseSchema,
     SignupRequestListResponseSchema,
@@ -12,14 +14,21 @@ import {
 } from "shared";
 import type { ZodError } from "zod";
 
+import { type DomainError, mapValidationError } from "../lib/auth-validation-error";
 import { httpError } from "../lib/http-error";
 import { type AuthEnv, requireAuth } from "../middlewares/require-auth";
 import { requireRole } from "../middlewares/require-role";
+import { PENDING_APPROVAL_MESSAGE } from "../services/signup-requests.service";
 import { buildSignupRequestsService } from "./auth.routes";
 
 export const signupRequestsRouter = new OpenAPIHono<AuthEnv>();
 
-/** Só a decisão e a fila são exclusivas de admin — a leitura por token é pública (R2). */
+/**
+ * Só a decisão e a fila são exclusivas de admin — a leitura por token é
+ * pública (R2), assim como a criação auto-declarada (FEAT-0008, emenda
+ * 2026-09-04, FR-001-D: qualquer e-mail pode abrir uma solicitação, o admin
+ * é o único portão).
+ */
 const ADMIN_ONLY = [requireAuth, requireRole(ROLES.ADMIN)];
 
 const TokenParamsSchema = z.object({
@@ -44,26 +53,75 @@ const STATUS_BY_ERROR_CODE: Record<string, ContentfulStatusCode> = {
     [AuthErrorCode.SIGNUP_REQUEST_NOT_FOUND]: 404,
     [AuthErrorCode.SIGNUP_REQUEST_EXPIRED]: 404,
     [AuthErrorCode.SIGNUP_REQUEST_ALREADY_DECIDED]: 409,
+    [AuthErrorCode.EMAIL_ALREADY_REGISTERED]: 409,
+    [AuthErrorCode.WEAK_PASSWORD]: 400,
 };
 
-interface DomainError {
-    code: string;
-    message: string;
-}
-
 function throwDomainError(error: DomainError): never {
-    throw httpError(STATUS_BY_ERROR_CODE[error.code] ?? 500, error.code, error.message);
+    throw httpError(STATUS_BY_ERROR_CODE[error.code] ?? 500, error.code, error.message, error.field);
 }
 
+/**
+ * `mapValidationError` (não um hook ad-hoc próprio, como antes): o corpo de
+ * `POST /` tem 9 campos, e o front precisa saber qual deles falhou para
+ * destacar o campo certo no formulário — o hook anterior descartava o
+ * `field` (FEAT-0008, emenda 2026-09-04).
+ */
 function validationHook(result: { success: boolean; error?: ZodError }, c: Context<AuthEnv>) {
     if (!result.success && result.error) {
-        const issue = result.error.issues[0];
-        return c.json(
-            { error: { code: "VALIDATION_ERROR", message: issue?.message ?? "Dados inválidos" } },
-            400,
-        );
+        return c.json({ error: mapValidationError(result.error) }, 400);
     }
 }
+
+// ============================================================
+// POST /auth/signup-requests — trilha auto-declarada (FEAT-0008, emenda 2026-09-04)
+// ============================================================
+
+const createRequestRoute = createRoute({
+    method: "post",
+    path: "/",
+    tags: ["Signup Requests"],
+    summary: "Abre uma solicitação de cadastro auto-declarada (trainee ou pós-júnior)",
+    description:
+        "Não consulta o banco da tec (Supabase): todo dado de perfil vem deste payload, e a aprovação de um admin é o único portão (FR-001-D). `memberStatus` aceita só `trainee`/`post_junior` — `active` não é um valor válido aqui, de propósito, para que o escalonamento de privilégio seja impossível por construção.",
+    request: {
+        body: {
+            required: true,
+            content: { "application/json": { schema: SelfDeclaredSignupSchema } },
+        },
+    },
+    responses: {
+        202: {
+            description: "Solicitação registrada, aguardando aprovação",
+            content: { "application/json": { schema: RegisterPendingResponseSchema } },
+        },
+        400: {
+            description: "Payload inválido ou senha fora da política",
+            content: { "application/json": { schema: ErrorResponseSchema } },
+        },
+        409: {
+            description: "Já existe conta com este email",
+            content: { "application/json": { schema: ErrorResponseSchema } },
+        },
+    },
+});
+
+signupRequestsRouter.openapi(
+    createRequestRoute,
+    async (c) => {
+        const result = await buildSignupRequestsService(c).createSelfDeclared(c.req.valid("json"));
+
+        if (result.isLeft()) {
+            throwDomainError(result.value);
+        }
+
+        return c.json(
+            { data: { status: "pending_approval" as const, message: PENDING_APPROVAL_MESSAGE } },
+            202,
+        );
+    },
+    validationHook,
+);
 
 // ============================================================
 // GET /auth/signup-requests — fila do admin (US3)

@@ -84,3 +84,77 @@ exportado de `shared/src/schemas/member.schema.ts`. Retorna `true` para
 **Rationale**: nomeado pelo que a regra *decide* (quem pode ancorar um
 trainee num grupo), não pelo valor que compara — isso é o que a feature 012
 vai consumir sem precisar saber que `"inactive"` significa pós-júnior.
+
+---
+
+## Emenda de 2026-09-04 — Supabase só devolve efetivados
+
+A partir de agora a Supabase da tec contém apenas membros efetivados/ativos.
+Pós-júnior e trainee não existem mais nesse diretório — precisam se
+auto-declarar. R6-R8 documentam as decisões técnicas dessa mudança.
+
+## R6 — Duas rotas, não uma união discriminada
+
+**Decision**: `POST /auth/register` continua sendo a trilha do efetivo (só
+`{email, password}`, 201 sempre — a resposta 202 sai). Nasce
+`POST /auth/signup-requests` (pública) para a trilha auto-declarada
+(trainee/pós-júnior), 202 sempre.
+
+**Rationale**: com união discriminada num endpoint só, o requisito "o
+cliente não pode se declarar active" viraria um `z.literal` dentro de um
+branch — uma barreira que um refactor futuro pode afrouxar sem ninguém
+notar. Com rotas separadas, a rota que abre sessão não tem campo de status
+no payload, e a que aceita status só aceita o enum de dois valores — a
+barreira existe por construção. Além disso, `mapValidationError`
+(`api/src/routes/auth.routes.ts`) lê `error.issues[0].path[0]`; um
+`discriminatedUnion` com discriminador ausente produz `path: []` e mensagem
+em inglês do Zod, que vazaria para a tela. E os tipos de erro de cada rota
+deixam de mentir: `NotAMemberError`/`MemberDirectoryUnavailableError` não
+existem na trilha auto-declarada, que nunca toca a Supabase.
+
+**Alternatives considered**: `discriminatedUnion` num único
+`POST /auth/register` — rejeitado pelos motivos acima. Um `kind` opcional no
+mesmo body sem união tipada — rejeitado, mesma fragilidade de checagem em
+runtime sem o compilador ajudando.
+
+## R7 — Rename `inactive` → `post_junior`: aditivo, mas acoplado ao deploy
+
+**Decision**: migration `0016` faz dois `UPDATE` (ver `data-model.md`),
+classificada como aditiva (Princípio III — sem DDL, sem cascade, idempotente,
+dispensa `MAINTENANCE_MODE`). Mas migration e deploy do Worker precisam ser
+tratados como uma unidade: entre os dois, os lados discordam nas duas
+direções (migration primeiro → código velho não reconhece `post_junior`;
+deploy primeiro → código novo não reconhece `inactive`), e os schemas
+estritos de `evaluator.schema.ts`/`group.schema.ts` falhariam o parse em
+qualquer um dos dois casos.
+
+**Mitigation**: `normalizeStoredMemberStatus()` (traduz `inactive` →
+`post_junior`) aplicado na **leitura** das linhas do nosso D1 — em
+`evaluators.service.ts`, `signup-requests.service.ts` e onde
+`group.repository.ts` alimenta `group.schema` — em vez de confiar na ordem
+do deploy. Isso também elimina os casts sem validação (`as MemberStatus`) que
+já existiam nesses pontos antes desta emenda.
+
+**Escopo da tradução**: só o **nosso** D1. No caminho da Supabase, um
+`inactive`/`trainee` residual continua caindo em `MemberNotActiveError`
+(403) — ver R8, é o comportamento correto sob a nova premissa.
+
+## R8 — Status não-`active` da Supabase: 403, não mais fila
+
+**Decision**: a trilha Efetivo passa a exigir `member.status === "active"`
+explicitamente. Qualquer outro valor (incluindo um `inactive`/`trainee`
+residual que ainda apareça na Supabase) responde 403, com mensagem orientando
+a tentar Trainee/Pós-júnior. Antes desta emenda, `inactive`/`trainee`
+caíam na fila de aprovação (US1 original); agora não caem mais.
+
+**Rationale**: sob a nova premissa, a Supabase é a fonte de verdade de quem
+é efetivo. Um valor residual lá é resíduo da migração de dados da própria
+tec, não um caso de uso — se ainda caísse na fila, existiriam duas formas de
+criar uma `signup_request` com semânticas diferentes (uma com dados
+conferidos externamente, outra auto-declarada), e a garantia de FR-001-D
+("o admin é o único portão para auto-declarados") valeria só para metade dos
+casos.
+
+**Alternatives considered**: manter o comportamento antigo (cair na fila) —
+rejeitado pelo motivo acima; seria uma terceira via de criar `signup_request`
+sem os dados que a US2 precisa mostrar ao admin.

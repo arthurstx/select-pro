@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import type { TecMember } from "shared";
+import type { SelfDeclaredSignupDTO } from "shared";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Mailer } from "../src/lib/mailer";
@@ -9,6 +9,10 @@ import { SignupRequestsService } from "../src/services/signup-requests.service";
 
 // Testes do service contra o D1 real do miniflare (mesmo padrão de
 // auth.service.test.ts) — o provedor de email é um dublê.
+//
+// `createSelfDeclared` (FEAT-0008, emenda 2026-09-04) substitui o antigo
+// `create(member: TecMember, ...)`: não consulta a Supabase, todo dado de
+// perfil vem do próprio payload auto-declarado.
 
 class FakeMailer implements Mailer {
     resetSent: { to: string; resetUrl: string }[] = [];
@@ -42,23 +46,19 @@ const SIGNUP_APPROVAL_EMAIL = "gentegestao@cimatecjr.com.br";
 
 let counter = 0;
 
-function tecMember(overrides: Partial<TecMember> = {}): TecMember {
+function selfDeclaredInput(overrides: Partial<SelfDeclaredSignupDTO> = {}): SelfDeclaredSignupDTO {
     counter += 1;
 
     return {
-        id: `00000000-0000-4000-8000-${counter.toString(16).padStart(12, "0")}`,
-        full_name: `Membro ${counter}`,
-        email: `membro-sr-${counter}@cimatecjr.com.br`,
-        phone: `7198887${String(counter).padStart(4, "0")}`,
-        birth_date: "2003-05-12",
-        course: "Engenharia de Computação",
-        semester: 5,
-        gender: "Masculino",
-        ethnicity: "Parda",
-        status: "inactive",
-        manager: false,
-        created_at: "2026-01-01T00:00:00.000Z",
-        updated_at: "2026-01-01T00:00:00.000Z",
+        email: `trainee-sr-${counter}@example.com`,
+        password: "senha-de-teste",
+        memberStatus: "trainee",
+        fullName: `Candidato Auto-declarado ${counter}`,
+        phone: `+557198887${String(counter).padStart(4, "0")}`,
+        course: "eng-computacao",
+        semester: 3,
+        gender: "masculino",
+        ethnicity: "parda",
         ...overrides,
     };
 }
@@ -110,56 +110,124 @@ describe("SignupRequestsService", () => {
     }
 
     // ============================================================
-    // create()
+    // createSelfDeclared()
     // ============================================================
 
-    describe("create", () => {
-        it("grava a solicitação com o snapshot do membro e o hash da senha", async () => {
-            const member = tecMember();
+    describe("createSelfDeclared", () => {
+        it("grava a solicitação com os dados do formulário e o hash da senha", async () => {
+            const input = selfDeclaredInput();
 
-            await service.create(member, member.email, "hash-da-senha");
+            const result = await service.createSelfDeclared(input);
             await settleDeferred();
 
+            expect(result.isRight()).toBe(true);
+
             const row = await env.DB.prepare("SELECT * FROM signup_requests WHERE email = ?")
-                .bind(member.email)
+                .bind(input.email)
                 .first<Record<string, unknown>>();
 
             expect(row).toBeTruthy();
             expect(row?.status).toBe("pending");
-            expect(row?.password_hash).toBe("hash-da-senha");
-            expect(row?.member_id).toBe(member.id);
-            expect(row?.full_name).toBe(member.full_name);
-            expect(row?.member_status).toBe("inactive");
+            expect(row?.password_hash).not.toBe(input.password);
+            expect(row?.full_name).toBe(input.fullName);
+            expect(row?.phone).toBe(input.phone);
+            expect(row?.course).toBe(input.course);
+            expect(row?.member_status).toBe("trainee");
+            expect(row?.manager).toBe(0);
+            expect(row?.birth_date).toBeNull();
             expect(row?.decided_by).toBeNull();
         });
 
-        it("despacha o email de aprovação para a caixa institucional, não para o membro", async () => {
-            const member = tecMember();
+        it("gera um member_id sintético prefixado — nunca colide com um uuid da Supabase", async () => {
+            const input = selfDeclaredInput();
 
-            await service.create(member, member.email, "hash");
+            await service.createSelfDeclared(input);
+            await settleDeferred();
+
+            const row = await env.DB.prepare("SELECT member_id FROM signup_requests WHERE email = ?")
+                .bind(input.email)
+                .first<{ member_id: string }>();
+
+            expect(row?.member_id).toMatch(/^self:[0-9a-f-]{36}$/);
+        });
+
+        it("não cria nada em users nem sessions", async () => {
+            const input = selfDeclaredInput();
+
+            await service.createSelfDeclared(input);
+            await settleDeferred();
+
+            const user = await env.DB.prepare("SELECT COUNT(*) AS total FROM users WHERE email = ?")
+                .bind(input.email)
+                .first<{ total: number }>();
+            expect(user?.total).toBe(0);
+        });
+
+        it("post_junior também é aceito", async () => {
+            const input = selfDeclaredInput({ memberStatus: "post_junior" });
+
+            const result = await service.createSelfDeclared(input);
+            await settleDeferred();
+
+            expect(result.isRight()).toBe(true);
+            const row = await env.DB.prepare("SELECT member_status FROM signup_requests WHERE email = ?")
+                .bind(input.email)
+                .first<{ member_status: string }>();
+            expect(row?.member_status).toBe("post_junior");
+        });
+
+        it("despacha o email de aprovação para a caixa institucional, não para o solicitante", async () => {
+            const input = selfDeclaredInput();
+
+            await service.createSelfDeclared(input);
             await settleDeferred();
 
             expect(mailer.approvalRequestsSent).toHaveLength(1);
             expect(mailer.approvalRequestsSent[0].to).toBe(SIGNUP_APPROVAL_EMAIL);
-            expect(mailer.approvalRequestsSent[0].memberName).toBe(member.full_name);
-            expect(mailer.approvalRequestsSent[0].memberStatusLabel).toBe("pós-júnior");
+            expect(mailer.approvalRequestsSent[0].memberName).toBe(input.fullName);
+            expect(mailer.approvalRequestsSent[0].memberStatusLabel).toBe("Trainee");
             expect(mailer.approvalRequestsSent[0].reviewUrl).toMatch(
                 new RegExp(`^${FRONT_ORIGIN}/solicitacoes/`),
             );
         });
 
-        it("FR-016 - chamada repetida com pending existente não duplica nem reenvia email", async () => {
-            const member = tecMember();
+        it("recusa quando já existe conta com este email (conflito, não pendência)", async () => {
+            const input = selfDeclaredInput();
+            await env.DB.prepare(
+                `INSERT INTO users (id, role_id, email, name, password) VALUES (?, 'avaliador', ?, 'Já Cadastrado', 'hash')`,
+            )
+                .bind(crypto.randomUUID(), input.email)
+                .run();
 
-            await service.create(member, member.email, "hash-1");
-            await settleDeferred();
-            await service.create(member, member.email, "hash-2");
-            await settleDeferred();
+            const result = await service.createSelfDeclared(input);
+
+            expect(result.isLeft()).toBe(true);
+            if (result.isLeft()) expect(result.value.code).toBe("EMAIL_ALREADY_REGISTERED");
 
             const count = await env.DB.prepare(
                 "SELECT COUNT(*) AS total FROM signup_requests WHERE email = ?",
             )
-                .bind(member.email)
+                .bind(input.email)
+                .first<{ total: number }>();
+            expect(count?.total).toBe(0);
+        });
+
+        it("FR-016 - chamada repetida com pending existente não duplica nem reenvia email", async () => {
+            const email = `trainee-repeat-${++counter}@example.com`;
+
+            await service.createSelfDeclared(selfDeclaredInput({ email, password: "senha-1" }));
+            await settleDeferred();
+            const second = await service.createSelfDeclared(
+                selfDeclaredInput({ email, password: "senha-2" }),
+            );
+            await settleDeferred();
+
+            expect(second.isRight()).toBe(true);
+
+            const count = await env.DB.prepare(
+                "SELECT COUNT(*) AS total FROM signup_requests WHERE email = ?",
+            )
+                .bind(email)
                 .first<{ total: number }>();
 
             expect(count?.total).toBe(1);
@@ -167,39 +235,39 @@ describe("SignupRequestsService", () => {
         });
 
         it("FR-018 - após uma recusa, uma nova solicitação para o mesmo email é aceita", async () => {
-            const member = tecMember();
+            const email = `trainee-rejected-${++counter}@example.com`;
 
-            await service.create(member, member.email, "hash-1");
+            await service.createSelfDeclared(selfDeclaredInput({ email }));
             await settleDeferred();
 
-            const first = await repository.findPendingByEmail(member.email);
+            const first = await repository.findPendingByEmail(email);
             expect(first).toBeTruthy();
             await repository.decide(first!.id, ADMIN_USER_ID, "rejected");
 
-            await service.create(member, member.email, "hash-2");
+            await service.createSelfDeclared(selfDeclaredInput({ email }));
             await settleDeferred();
 
             const count = await env.DB.prepare(
                 "SELECT COUNT(*) AS total FROM signup_requests WHERE email = ?",
             )
-                .bind(member.email)
+                .bind(email)
                 .first<{ total: number }>();
 
             expect(count?.total).toBe(2);
             expect(mailer.approvalRequestsSent).toHaveLength(2);
 
-            const pending = await repository.findPendingByEmail(member.email);
+            const pending = await repository.findPendingByEmail(email);
             expect(pending?.status).toBe("pending");
         });
 
         it("SC-006 - falha no envio de email não impede o registro da solicitação", async () => {
-            const member = tecMember();
+            const input = selfDeclaredInput();
             mailer.shouldFail = true;
 
-            await service.create(member, member.email, "hash");
+            await service.createSelfDeclared(input);
             await expect(settleDeferred()).resolves.toBeUndefined();
 
-            const row = await repository.findPendingByEmail(member.email);
+            const row = await repository.findPendingByEmail(input.email);
             expect(row).toBeTruthy();
         });
     });
@@ -209,9 +277,9 @@ describe("SignupRequestsService", () => {
     // ============================================================
 
     describe("getByToken", () => {
-        async function createAndGetToken(overrides: Partial<TecMember> = {}): Promise<string> {
-            const member = tecMember(overrides);
-            await service.create(member, member.email, "hash");
+        async function createAndGetToken(overrides: Partial<SelfDeclaredSignupDTO> = {}): Promise<string> {
+            const input = selfDeclaredInput(overrides);
+            await service.createSelfDeclared(input);
             await settleDeferred();
 
             return extractToken(mailer.approvalRequestsSent.at(-1)!.reviewUrl);
@@ -227,6 +295,15 @@ describe("SignupRequestsService", () => {
             expect(second.isRight()).toBe(true);
             if (first.isRight()) expect(first.value.status).toBe("pending");
             if (second.isRight()) expect(second.value.status).toBe("pending");
+        });
+
+        it("devolve selfDeclared: true para uma solicitação auto-declarada", async () => {
+            const token = await createAndGetToken();
+
+            const result = await service.getByToken(token);
+
+            expect(result.isRight()).toBe(true);
+            if (result.isRight()) expect(result.value.selfDeclared).toBe(true);
         });
 
         it("token inexistente responde SIGNUP_REQUEST_NOT_FOUND", async () => {
@@ -255,17 +332,17 @@ describe("SignupRequestsService", () => {
     // ============================================================
 
     describe("decide", () => {
-        async function createPending(overrides: Partial<TecMember> = {}) {
-            const member = tecMember(overrides);
-            await service.create(member, member.email, "hash-da-senha");
+        async function createPending(overrides: Partial<SelfDeclaredSignupDTO> = {}) {
+            const input = selfDeclaredInput(overrides);
+            await service.createSelfDeclared(input);
             await settleDeferred();
 
-            const row = await repository.findPendingByEmail(member.email);
-            return { member, requestId: row!.id };
+            const row = await repository.findPendingByEmail(input.email);
+            return { input, requestId: row!.id, memberId: row!.member_id };
         }
 
         it("aprovar cria users+member_profiles SEM sessão, e grava autor/horário", async () => {
-            const { member, requestId } = await createPending();
+            const { input, requestId, memberId } = await createPending();
 
             const result = await service.decide(requestId, ADMIN_USER_ID, "approve");
             await settleDeferred();
@@ -273,10 +350,9 @@ describe("SignupRequestsService", () => {
             expect(result.isRight()).toBe(true);
 
             const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?")
-                .bind(member.email)
+                .bind(input.email)
                 .first<Record<string, unknown>>();
             expect(user).toBeTruthy();
-            expect(user?.password).toBe("hash-da-senha");
             expect(user?.role_id).toBe("avaliador");
 
             const sessions = await env.DB.prepare(
@@ -285,6 +361,14 @@ describe("SignupRequestsService", () => {
                 .bind(user?.id)
                 .first<{ total: number }>();
             expect(sessions?.total).toBe(0);
+
+            const profile = await env.DB.prepare(
+                "SELECT * FROM member_profiles WHERE user_id = ?",
+            )
+                .bind(user?.id)
+                .first<Record<string, unknown>>();
+            expect(profile?.member_id).toBe(memberId);
+            expect(profile?.status).toBe("trainee");
 
             const request = await env.DB.prepare("SELECT * FROM signup_requests WHERE id = ?")
                 .bind(requestId)
@@ -295,17 +379,17 @@ describe("SignupRequestsService", () => {
         });
 
         it("aprovar dispara o email de resultado para o solicitante", async () => {
-            const { member, requestId } = await createPending();
+            const { input, requestId } = await createPending();
 
             await service.decide(requestId, ADMIN_USER_ID, "approve");
             await settleDeferred();
 
             expect(mailer.decisionResultsSent).toHaveLength(1);
-            expect(mailer.decisionResultsSent[0]).toEqual({ to: member.email, approved: true });
+            expect(mailer.decisionResultsSent[0]).toEqual({ to: input.email, approved: true });
         });
 
         it("recusar NÃO cria conta, só grava a decisão", async () => {
-            const { member, requestId } = await createPending();
+            const { input, requestId } = await createPending();
 
             const result = await service.decide(requestId, ADMIN_USER_ID, "reject");
             await settleDeferred();
@@ -313,11 +397,11 @@ describe("SignupRequestsService", () => {
             expect(result.isRight()).toBe(true);
 
             const user = await env.DB.prepare("SELECT COUNT(*) AS total FROM users WHERE email = ?")
-                .bind(member.email)
+                .bind(input.email)
                 .first<{ total: number }>();
             expect(user?.total).toBe(0);
 
-            expect(mailer.decisionResultsSent[0]).toEqual({ to: member.email, approved: false });
+            expect(mailer.decisionResultsSent[0]).toEqual({ to: input.email, approved: false });
         });
 
         it("FR-010/SC-004 - decidir uma solicitação já decidida responde ALREADY_DECIDED", async () => {
@@ -344,11 +428,11 @@ describe("SignupRequestsService", () => {
 
     describe("list", () => {
         it("lista só o status pedido", async () => {
-            const a = tecMember();
-            const b = tecMember();
-            await service.create(a, a.email, "hash");
+            const a = selfDeclaredInput();
+            const b = selfDeclaredInput();
+            await service.createSelfDeclared(a);
             await settleDeferred();
-            await service.create(b, b.email, "hash");
+            await service.createSelfDeclared(b);
             await settleDeferred();
 
             const pending = await service.list("pending");
@@ -364,28 +448,72 @@ describe("SignupRequestsService", () => {
             expect(approvedEmails).not.toContain(b.email);
         });
 
-        it("FR-019 - priorRejectionCount conta recusas anteriores do mesmo email", async () => {
-            const member = tecMember();
-
-            const first = await createPendingFor(member.email, member);
-            await repository.decide(first, ADMIN_USER_ID, "rejected");
-
-            const second = await createPendingFor(member.email, member);
-            await repository.decide(second, ADMIN_USER_ID, "rejected");
-
-            await createPendingFor(member.email, member);
+        it("marca selfDeclared: true para toda solicitação auto-declarada", async () => {
+            const input = selfDeclaredInput();
+            await service.createSelfDeclared(input);
+            await settleDeferred();
 
             const pending = await service.list("pending");
-            const entry = pending.find((r) => r.email === member.email);
+            const entry = pending.find((r) => r.email === input.email);
+
+            expect(entry?.selfDeclared).toBe(true);
+        });
+
+        it("FR-019 - priorRejectionCount conta recusas anteriores do mesmo email", async () => {
+            const email = `trainee-priorrej-${++counter}@example.com`;
+
+            const first = await createPendingFor(email);
+            await repository.decide(first, ADMIN_USER_ID, "rejected");
+
+            const second = await createPendingFor(email);
+            await repository.decide(second, ADMIN_USER_ID, "rejected");
+
+            await createPendingFor(email);
+
+            const pending = await service.list("pending");
+            const entry = pending.find((r) => r.email === email);
 
             expect(entry?.priorRejectionCount).toBe(2);
         });
 
-        async function createPendingFor(email: string, member: TecMember): Promise<string> {
-            await service.create(member, email, "hash");
+        async function createPendingFor(email: string): Promise<string> {
+            await service.createSelfDeclared(selfDeclaredInput({ email }));
             await settleDeferred();
             const row = await repository.findPendingByEmail(email);
             return row!.id;
         }
+    });
+
+    // ============================================================
+    // toSummary() — legado pré-migration-0016 e dado corrompido
+    // ============================================================
+
+    describe("normalização de member_status legado", () => {
+        it("uma linha legada 'inactive' aparece como post_junior na listagem", async () => {
+            const input = selfDeclaredInput();
+            await service.createSelfDeclared(input);
+            await settleDeferred();
+
+            await env.DB.prepare("UPDATE signup_requests SET member_status = 'inactive' WHERE email = ?")
+                .bind(input.email)
+                .run();
+
+            const pending = await service.list("pending");
+            const entry = pending.find((r) => r.email === input.email);
+
+            expect(entry?.memberStatus).toBe("post_junior");
+        });
+
+        it("um member_status desconhecido lança em vez de vazar silenciosamente", async () => {
+            const input = selfDeclaredInput();
+            await service.createSelfDeclared(input);
+            await settleDeferred();
+
+            await env.DB.prepare("UPDATE signup_requests SET member_status = 'alumni' WHERE email = ?")
+                .bind(input.email)
+                .run();
+
+            await expect(service.list("pending")).rejects.toThrow(/member_status desconhecido/);
+        });
     });
 });

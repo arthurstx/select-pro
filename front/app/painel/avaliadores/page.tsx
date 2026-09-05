@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SearchIcon, UsersIcon } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { EvaluatorRole, EvaluatorRoleFilter, MemberStatus } from "shared";
+import { MEMBER_STATUS_LABELS, type EvaluatorRole, type EvaluatorRoleFilter } from "shared";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,12 +12,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { listEvaluators, setEvaluatorRole } from "@/lib/evaluators/evaluators-api";
 import { cn } from "@/lib/utils";
-
-const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = {
-  active: "Efetivado",
-  inactive: "Pós-júnior",
-  trainee: "Trainee",
-};
 
 const ROLE_FILTER_OPTIONS: { value: EvaluatorRoleFilter; label: string }[] = [
   { value: "all", label: "Todos" },
@@ -171,7 +165,7 @@ export default function AvaliadoresPage() {
                     <TableCell className="font-medium">{evaluator.name}</TableCell>
                     <TableCell className="text-muted-foreground">{evaluator.email}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{MEMBER_STATUS_LABEL[evaluator.memberStatus]}</Badge>
+                      <Badge variant="secondary">{MEMBER_STATUS_LABELS[evaluator.memberStatus]}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant={isHost ? "default" : "outline"}>{isHost ? "Host" : "Avaliador"}</Badge>

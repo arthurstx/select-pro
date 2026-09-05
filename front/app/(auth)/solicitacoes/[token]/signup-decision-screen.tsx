@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangleIcon } from "lucide-react";
 import Link from "next/link";
-import { ROLES, type MemberStatus } from "shared";
+import { MEMBER_STATUS_LABELS, ROLES, type MemberStatus } from "shared";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,6 @@ import { AUTH_ROUTES } from "@/lib/auth/routes";
 
 import { AuthCard } from "../../_components/auth-card";
 import { AuthNoticeAlert } from "../../_components/auth-alert";
-
-const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = {
-  active: "Efetivado",
-  inactive: "Pós-júnior",
-  trainee: "Trainee",
-};
 
 /**
  * Destino do link do email (FEAT-0008, US2). A leitura é pública (FR-007);
@@ -154,14 +148,25 @@ export function SignupDecisionScreen({ token }: { token: string }) {
 function RequestSummary({
   request,
 }: {
-  request: { fullName: string; email: string; memberStatus: MemberStatus; priorRejectionCount: number };
+  request: {
+    fullName: string;
+    email: string;
+    memberStatus: MemberStatus;
+    priorRejectionCount: number;
+    selfDeclared: boolean;
+  };
 }) {
   return (
     <div>
       <p className="font-heading text-foreground text-lg font-semibold">{request.fullName}</p>
       <p className="text-muted-foreground text-sm">{request.email}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{MEMBER_STATUS_LABEL[request.memberStatus]}</Badge>
+        <Badge variant="secondary">{MEMBER_STATUS_LABELS[request.memberStatus]}</Badge>
+        {request.selfDeclared && (
+          <Badge variant="outline" className="text-muted-foreground">
+            Dados auto-declarados
+          </Badge>
+        )}
         {request.priorRejectionCount > 0 && (
           <Badge variant="outline" className="text-muted-foreground">
             {request.priorRejectionCount === 1

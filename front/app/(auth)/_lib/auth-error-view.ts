@@ -4,10 +4,28 @@ import { ApiError } from "@/lib/api/api-error";
 
 import { AUTH_ROUTES } from "@/lib/auth/routes";
 
+/**
+ * Campos que algum formulário de auth pode ter — inclui os 6 do cadastro
+ * auto-declarado (FEAT-0008, emenda 2026-09-04) além dos 2 originais.
+ * `describeRegisterError` é o único caminho que produz os novos; os
+ * formulários que não têm todos os campos (login, reset) guardam o
+ * `setError` checando se o campo existe antes de aplicar.
+ */
+export type AuthErrorField =
+  | "email"
+  | "password"
+  | "memberStatus"
+  | "fullName"
+  | "phone"
+  | "course"
+  | "semester"
+  | "gender"
+  | "ethnicity";
+
 /** Como um erro da API vira tela — camada de copy, não um contrato com o backend. */
 export interface AuthErrorView {
   message: string;
-  field?: "email" | "password";
+  field?: AuthErrorField;
   action?: { href: string; label: string };
 }
 
@@ -45,7 +63,7 @@ export function describeRegisterError(error: unknown): AuthErrorView {
     case AuthErrorCode.MEMBER_NOT_ACTIVE:
       return {
         message:
-          "Seu cadastro de membro não está ativo. Procure a diretoria para regularizar seu vínculo antes de criar a conta.",
+          "Seu cadastro na tec não consta como efetivo. Se você é trainee ou pós-júnior, escolha a opção correspondente acima.",
       };
 
     case AuthErrorCode.MEMBER_DIRECTORY_UNAVAILABLE:
@@ -55,6 +73,14 @@ export function describeRegisterError(error: unknown): AuthErrorView {
 
     case AuthErrorCode.WEAK_PASSWORD:
       return { message: (error as ApiError).message, field: "password" };
+
+    // FEAT-0008 (emenda 2026-09-04) — validação do payload auto-declarado
+    // (9 campos): aponta o campo exato para o formulário destacar.
+    case "VALIDATION_ERROR":
+      return {
+        message: (error as ApiError).message,
+        field: (error as ApiError).field as AuthErrorField | undefined,
+      };
 
     default:
       return fallbackView(error);

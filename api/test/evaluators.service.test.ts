@@ -15,7 +15,7 @@ function service(): EvaluatorsService {
     return new EvaluatorsService(new EvaluatorsRepository(env.DB), new SelectionProcessRepository(env.DB));
 }
 
-type EvaluatorOverrides = { status?: "active" | "inactive" | "trainee"; role?: "admin" | "avaliador"; deactivated?: boolean };
+type EvaluatorOverrides = { status?: "active" | "post_junior" | "trainee"; role?: "admin" | "avaliador"; deactivated?: boolean };
 
 async function insertEvaluator(overrides: EvaluatorOverrides = {}) {
     counter += 1;

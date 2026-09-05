@@ -20,8 +20,16 @@ torna este arquivo confiável em vez de mais um registro que ninguém confere.
       (migration `0007`). Terceiro item da spec original (tela de logs) ficou de fora — ver
       backlog abaixo.
 - [x] **FEAT-0007** — Dashboard de inscrições (`front/app/painel/`, `api/src/routes/dashboard.routes.ts`).
-- [x] **FEAT-0008** — Status de membro (`active`/`inactive`/`trainee`) e aprovação de
+- [x] **FEAT-0008** — Status de membro (`active`/`post_junior`/`trainee`) e aprovação de
       cadastro de pós-júnior/trainee. Migration `0008`. `specs/008-member-status-approval/`.
+      **Emenda de 2026-09-04** (mesma spec, sem ciclo novo): a Supabase da tec passou a
+      devolver só efetivados. Cadastro (`/cadastro`) ganhou 3 opções — Efetivo continua
+      consultando a Supabase; Trainee/Pós-júnior se auto-declaram (nome, telefone, curso,
+      semestre, gênero, etnia) numa rota nova e pública, `POST /auth/signup-requests`, sem
+      tocar a Supabase (`SignupRequestsService.createSelfDeclared`). `POST /auth/register`
+      passou a exigir `status === "active"` — qualquer outro valor é 403, não vira mais fila.
+      Rename de dado `inactive` → `post_junior` (migration `0016`, aditiva — dois `UPDATE`).
+      Ver `research.md` R6-R8 e `data-model.md` da spec para o detalhe técnico.
 - [x] **FEAT-0011** — Cadastro de salas, com hosts/limite de grupos derivados da capacidade
       (D5). Migration `0009`. `specs/011-cadastro-de-salas/`.
 - [x] **FEAT-0009** — Papel de host por edição do processo seletivo + painel de avaliadores
@@ -133,13 +141,15 @@ staging/produção (ver "Pendências operacionais").
 ## Pendências operacionais (não são código)
 
 - [ ] Aplicar migrations `0008` a `0016` em staging, depois produção (staging sempre primeiro
+- [ ] Aplicar migrations `0008` a `0016` em staging, depois produção (staging sempre primeiro
       — Princípio III da constitution). Migration `0014` reconstrói `groups`/`group_evaluators`/
       `group_candidates`; `0015` dropa `metrics` e reconstrói `evaluations`/`evaluation_scores`
       — confirmar que todas seguem vazias nesses ambientes antes de aplicar (research.md
-      D-tech1 da FEAT-0012 e da FEAT-0013). Migration `0016` (FEAT-0023) **destrói
-      `rooms.size`** convertendo cada sala em `comum`/`anfiteatro` (`size > 80` → anfiteatro):
-      guardar `SELECT id, name, size FROM rooms` antes de aplicar, e revisar depois as salas
-      que eram da faixa 51–80 (viram `comum`, ou seja 1 host / 2 grupos em vez de 2/3).
+      D-tech1 da FEAT-0012 e da FEAT-0013). `0016` (rename `inactive`→`post_junior`, emenda da
+      FEAT-0008) é aditiva mas **acoplada ao deploy do Worker** — ver `research.md` R7 da
+      008; aplicar migration e fazer o deploy na mesma janela, ou confiar em
+      `normalizeStoredMemberStatus` para tolerar a defasagem. Verificar com
+      `SELECT status, COUNT(*) FROM member_profiles GROUP BY status;` antes/depois.
 - [ ] Calibrar as iterações do PBKDF2 (FEAT-0003) medindo CPU em produção — `wrangler dev`
       não aplica o teto de 10 ms.
 - [ ] Criar a regra de Rate Limiting do WAF em `/auth/*` (FEAT-0003) — o plano Free só dá

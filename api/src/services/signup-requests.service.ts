@@ -1,13 +1,19 @@
 import {
     type MemberStatus,
+    type SelfDeclaredSignupDTO,
     type SignupRequestDetail,
     type SignupRequestSummary,
-    type TecMember,
+    isSelfDeclaredMemberId,
+    MEMBER_STATUS_LABELS,
+    newSelfDeclaredMemberId,
+    normalizeStoredMemberStatus,
     ROLES,
+    SelfDeclaredMemberStatusSchema,
 } from "shared";
 
 import { type Either, left, right } from "../core/either";
 import {
+    EmailAlreadyRegisteredError,
     SignupRequestAlreadyDecidedError,
     SignupRequestExpiredError,
     SignupRequestNotFoundError,
@@ -15,6 +21,7 @@ import {
 import { logger } from "../lib/logger";
 import type { Mailer } from "../lib/mailer";
 import { generateOpaqueToken, hashOpaqueToken } from "../lib/opaque-token";
+import { hashPassword } from "../lib/password";
 import type { AuthRepository } from "../repositories/auth.repository";
 import type {
     SignupRequestsRepository,
@@ -27,15 +34,9 @@ export const SIGNUP_APPROVAL_TOKEN_TTL_SECONDS = 604_800;
 export const PENDING_APPROVAL_MESSAGE =
     "Seu cadastro foi recebido e está aguardando aprovação de um administrador. Você será avisado por email quando houver uma decisão.";
 
-/** Rótulo em português para o e-mail do admin — não é contrato, só texto de mensagem. */
-const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = {
-    active: "efetivado",
-    inactive: "pós-júnior",
-    trainee: "trainee",
-};
-
 export type SignupRequestReadError = SignupRequestNotFoundError | SignupRequestExpiredError;
 export type SignupRequestDecisionError = SignupRequestNotFoundError | SignupRequestAlreadyDecidedError;
+export type SelfDeclaredSignupError = EmailAlreadyRegisteredError;
 
 export interface SignupRequestsServiceDeps {
     repository: SignupRequestsRepository;
@@ -51,20 +52,40 @@ export class SignupRequestsService {
     constructor(private readonly deps: SignupRequestsServiceDeps) {}
 
     /**
-     * Registra a solicitação e despacha o e-mail para o admin, fora do
-     * caminho crítico (`defer`, nunca rejeita — mesmo padrão de
-     * `AuthService.dispatchPasswordReset`). Idempotente (FR-016/R3): uma
+     * `POST /auth/signup-requests` — trilha auto-declarada de trainee/pós-júnior
+     * (FEAT-0008, emenda 2026-09-04). Substitui o antigo `create(member:
+     * TecMember, ...)`, que delegava do `register()` da Supabase — esse
+     * caminho não existe mais: a Supabase só devolve `active`, e
+     * pós-júnior/trainee não são mais "encontrados" lá, são descritos aqui.
+     *
+     * Não consulta a Supabase em nenhum momento. Despacha o e-mail para o
+     * admin fora do caminho crítico (`defer`, nunca rejeita — mesmo padrão
+     * de `AuthService.dispatchPasswordReset`). Idempotente (FR-016/R3): uma
      * solicitação `pending` já existente para o email não gera duplicata nem
      * segundo e-mail — nem por checagem prévia, nem pela corrida (o índice
      * único parcial do banco é a rede de segurança final).
      */
-    async create(member: TecMember, email: string, passwordHash: string): Promise<void> {
-        const existing = await this.deps.repository.findPendingByEmail(email);
-        if (existing) {
-            logger.info("signup_requests.create.already_pending", { email });
-            return;
+    async createSelfDeclared(input: SelfDeclaredSignupDTO): Promise<Either<SelfDeclaredSignupError, void>> {
+        // Guarda redundante ao schema, de propósito: `active` aqui seria
+        // escalonamento de privilégio — é o único status que cria conta sem
+        // aprovação. `SelfDeclaredMemberStatusSchema` já barra isso no
+        // parse da rota; esta checagem cobre quem chamar o service direto.
+        if (!SelfDeclaredMemberStatusSchema.safeParse(input.memberStatus).success) {
+            throw new Error(`Status auto-declarado inválido: ${input.memberStatus}`);
         }
 
+        if (await this.deps.authRepository.findUserByEmail(input.email)) {
+            logger.warn("signup_requests.create_self_declared.email_conflict", { email: input.email });
+            return left(new EmailAlreadyRegisteredError());
+        }
+
+        const existing = await this.deps.repository.findPendingByEmail(input.email);
+        if (existing) {
+            logger.info("signup_requests.create_self_declared.already_pending", { email: input.email });
+            return right(undefined);
+        }
+
+        const passwordHash = await hashPassword(input.password);
         const requestId = crypto.randomUUID();
         const token = generateOpaqueToken();
 
@@ -72,18 +93,22 @@ export class SignupRequestsService {
             await this.deps.repository.create(
                 {
                     id: requestId,
-                    email,
+                    email: input.email,
                     password_hash: passwordHash,
-                    member_id: member.id,
-                    full_name: member.full_name,
-                    phone: member.phone,
-                    birth_date: member.birth_date,
-                    course: member.course,
-                    semester: member.semester,
-                    gender: member.gender,
-                    ethnicity: member.ethnicity,
-                    member_status: member.status ?? "",
-                    manager: member.manager,
+                    // Quem se auto-declara nunca teve uuid da Supabase — ver
+                    // shared/src/schemas/member.schema.ts.
+                    member_id: newSelfDeclaredMemberId(),
+                    full_name: input.fullName,
+                    phone: input.phone,
+                    // Não pedido no formulário auto-declarado (decisão do plano).
+                    birth_date: null,
+                    course: input.course,
+                    semester: input.semester,
+                    gender: input.gender,
+                    ethnicity: input.ethnicity,
+                    member_status: input.memberStatus,
+                    // Não existe cargo de "manager" para quem se auto-declara.
+                    manager: false,
                 },
                 {
                     id: crypto.randomUUID(),
@@ -99,15 +124,29 @@ export class SignupRequestsService {
             // venceu e já criou a `pending` (índice único parcial, R3).
             // Idempotente também aqui — mesmo efeito de "já existe".
             if (err instanceof Error && err.message.includes("UNIQUE constraint failed")) {
-                logger.info("signup_requests.create.race_already_pending", { email });
-                return;
+                logger.info("signup_requests.create_self_declared.race_already_pending", {
+                    email: input.email,
+                });
+                return right(undefined);
             }
             throw err;
         }
 
-        logger.info("signup_requests.create.success", { requestId, email, memberId: member.id });
+        logger.info("signup_requests.create_self_declared.success", {
+            requestId,
+            email: input.email,
+        });
 
-        this.deps.defer(this.dispatchApprovalRequest({ email, memberName: member.full_name, status: member.status ?? "", reviewUrl: this.buildReviewUrl(token) }));
+        this.deps.defer(
+            this.dispatchApprovalRequest({
+                email: input.email,
+                memberName: input.fullName,
+                status: input.memberStatus,
+                reviewUrl: this.buildReviewUrl(token),
+            }),
+        );
+
+        return right(undefined);
     }
 
     /** Nunca rejeita: a solicitação já foi gravada, um erro aqui não pode virar resposta diferente. */
@@ -121,7 +160,7 @@ export class SignupRequestsService {
             await this.deps.mailer.sendSignupApprovalRequest({
                 to: this.deps.signupApprovalEmail,
                 memberName: params.memberName,
-                memberStatusLabel: MEMBER_STATUS_LABEL[params.status as MemberStatus] ?? params.status,
+                memberStatusLabel: MEMBER_STATUS_LABELS[params.status as MemberStatus] ?? params.status,
                 reviewUrl: params.reviewUrl,
             });
             logger.info("signup_requests.approval_request.dispatched", {});
@@ -254,6 +293,7 @@ export class SignupRequestsService {
         id: string;
         full_name: string;
         email: string;
+        member_id: string;
         member_status: string;
         created_at: string;
     }): Promise<SignupRequestSummary> {
@@ -261,10 +301,29 @@ export class SignupRequestsService {
             id: row.id,
             fullName: row.full_name,
             email: row.email,
-            memberStatus: row.member_status as MemberStatus,
+            memberStatus: this.toMemberStatus(row.member_status),
             createdAt: row.created_at,
             priorRejectionCount: await this.deps.repository.countRejectedByEmail(row.email),
+            selfDeclared: isSelfDeclaredMemberId(row.member_id),
         };
+    }
+
+    /**
+     * Valida em vez de castar: os únicos escritores desta coluna são código
+     * nosso com enum validado (`MemberStatusSchema`/`SelfDeclaredMemberStatusSchema`),
+     * então um valor fora do enum é dado corrompido, não um caso esperado.
+     * `normalizeStoredMemberStatus` traduz o legado `inactive` pré-migration-0016
+     * (ver research.md da 008, R7) — lançar aqui, e não em silêncio, evita que
+     * o dado corrompido só apareça como `ZodError` no parse do front, longe
+     * da causa.
+     */
+    private toMemberStatus(raw: string): MemberStatus {
+        const status = normalizeStoredMemberStatus(raw);
+        if (!status) {
+            logger.error("signup_requests.unknown_member_status", { raw });
+            throw new Error(`member_status desconhecido na solicitação: ${raw}`);
+        }
+        return status;
     }
 
     private async toDetail(row: SignupRequestWithTokenExpiry): Promise<SignupRequestDetail> {

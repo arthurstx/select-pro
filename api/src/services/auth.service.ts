@@ -7,7 +7,6 @@ import {
     type RegisterMemberDTO,
     type ResetPasswordDTO,
     isRecognizedMemberStatus,
-    requiresApproval,
     ROLES,
 } from "shared";
 
@@ -32,7 +31,6 @@ import type { MemberDirectory } from "../lib/member-directory";
 import { generateOpaqueToken, hashOpaqueToken } from "../lib/opaque-token";
 import { hashPassword, passwordNeedsRehash, verifyPassword } from "../lib/password";
 import type { AuthRepository, UserWithRole } from "../repositories/auth.repository";
-import type { SignupRequestsService } from "./signup-requests.service";
 
 /** 7 dias. */
 export const REFRESH_TOKEN_TTL_SECONDS = 604_800;
@@ -58,16 +56,6 @@ export interface IssuedSession {
 
 export type RenewedSession = Omit<IssuedSession, "user">;
 
-/**
- * `register()` bifurca por `requiresApproval` (FEAT-0008): membro `active`
- * ganha sessão de imediato; `inactive`/`trainee` só gera uma solicitação
- * pendente — nenhuma conta existe ainda (research.md da 008, R1). O
- * discriminante `kind` deixa a rota decidir 201 vs 202 sem duplicar a regra.
- */
-export type RegisterResult =
-    | { kind: "session"; session: IssuedSession }
-    | { kind: "pending_approval" };
-
 export type RegisterError =
     | EmailAlreadyRegisteredError
     | NotAMemberError
@@ -87,8 +75,6 @@ export interface AuthServiceDeps {
     mailer: Mailer;
     jwtSecret: string;
     frontOrigin: string;
-    /** FEAT-0008 — para onde `register()` delega quando `requiresApproval(member.status)`. */
-    signupRequests: SignupRequestsService;
     /** `c.executionCtx.waitUntil` embrulhado, para o service não conhecer HTTP. */
     defer: (promise: Promise<unknown>) => void;
 }
@@ -100,10 +86,18 @@ export class AuthService {
     // Cadastro — POST /auth/register
     // ============================================================
 
+    /**
+     * Trilha do membro Efetivo (FEAT-0008, emenda 2026-09-04). Desde a
+     * emenda, a Supabase só devolve `active` — este método não bifurca mais
+     * para pendência: qualquer status diferente de `active` é recusado
+     * (403), inclusive um `inactive`/`trainee` residual que ainda apareça
+     * por lá (research.md da 008, R8). Trainee/pós-júnior se cadastram por
+     * `SignupRequestsService.createSelfDeclared`, sem passar por aqui.
+     */
     async register(
         input: RegisterMemberDTO,
         context: RequestContext,
-    ): Promise<Either<RegisterError, RegisterResult>> {
+    ): Promise<Either<RegisterError, IssuedSession>> {
         const existing = await this.deps.repository.findUserByEmail(input.email);
         if (existing) {
             logger.warn("auth.register.email_conflict", { email: input.email });
@@ -135,14 +129,19 @@ export class AuthService {
             return left(new MemberNotActiveError());
         }
 
-        const passwordHash = await hashPassword(input.password);
-
-        // FEAT-0008 (FR-004): pós-júnior e trainee não ganham conta direto —
-        // vira solicitação pendente. Nenhum `users`/`sessions` é criado aqui.
-        if (requiresApproval(member.status)) {
-            await this.deps.signupRequests.create(member, input.email, passwordHash);
-            return right({ kind: "pending_approval" });
+        if (member.status !== "active") {
+            logger.warn("auth.register.member_not_active", {
+                email: input.email,
+                status: member.status,
+            });
+            return left(
+                new MemberNotActiveError(
+                    "Seu cadastro na tec não consta como efetivo. Se você é trainee ou pós-júnior, escolha a opção correspondente no cadastro.",
+                ),
+            );
         }
+
+        const passwordHash = await hashPassword(input.password);
 
         const userId = crypto.randomUUID();
         const session = await this.buildSession(userId, crypto.randomUUID(), context);
@@ -203,13 +202,12 @@ export class AuthService {
 
         logger.info("auth.register.success", { userId, email: input.email, memberId: member.id });
 
-        return right({
-            kind: "session",
-            session: await this.issueSession(
+        return right(
+            await this.issueSession(
                 { id: userId, email: input.email, name: member.full_name, role: ROLES.AVALIADOR },
                 session,
             ),
-        });
+        );
     }
 
     // ============================================================

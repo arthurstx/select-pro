@@ -12,11 +12,11 @@ import {
     MeResponseSchema,
     RefreshResponseSchema,
     RegisterMemberSchema,
-    RegisterPendingResponseSchema,
     ResetPasswordSchema,
 } from "shared";
 import type { ZodError } from "zod";
 
+import { type DomainError, mapValidationError } from "../lib/auth-validation-error";
 import { httpError } from "../lib/http-error";
 import { logger } from "../lib/logger";
 import { LocalMemberDirectory } from "../lib/local-member-directory";
@@ -26,7 +26,7 @@ import { type AuthEnv, requireAuth } from "../middlewares/require-auth";
 import { AuthRepository } from "../repositories/auth.repository";
 import { AuthService, REFRESH_TOKEN_TTL_SECONDS } from "../services/auth.service";
 import { SignupRequestsRepository } from "../repositories/signup-requests.repository";
-import { PENDING_APPROVAL_MESSAGE, SignupRequestsService } from "../services/signup-requests.service";
+import { SignupRequestsService } from "../services/signup-requests.service";
 
 export const authRouter = new OpenAPIHono<AuthEnv>();
 
@@ -98,7 +98,6 @@ function buildService(c: Context<AuthEnv>): AuthService {
         mailer: new ResendMailer(c.env.RESEND_API_KEY, c.env.RESEND_FROM_EMAIL),
         jwtSecret: c.env.JWT_SECRET,
         frontOrigin: c.env.FRONT_ORIGIN.split(",")[0].trim(),
-        signupRequests: buildSignupRequestsService(c),
         defer: (promise) => c.executionCtx.waitUntil(promise),
     });
 }
@@ -118,12 +117,6 @@ const STATUS_BY_ERROR_CODE: Record<string, ContentfulStatusCode> = {
     [AuthErrorCode.WEAK_PASSWORD]: 400,
 };
 
-interface DomainError {
-    code: string;
-    message: string;
-    field?: string;
-}
-
 function throwDomainError(error: DomainError): never {
     throw httpError(
         STATUS_BY_ERROR_CODE[error.code] ?? 500,
@@ -131,25 +124,6 @@ function throwDomainError(error: DomainError): never {
         error.message,
         error.field,
     );
-}
-
-function mapValidationError(error: ZodError): DomainError {
-    const issue = error.issues[0];
-    const field = issue?.path[0];
-
-    if (field === "password") {
-        return {
-            code: AuthErrorCode.WEAK_PASSWORD,
-            message: issue.message,
-            field: "password",
-        };
-    }
-
-    return {
-        code: "VALIDATION_ERROR",
-        message: issue?.message ?? "Dados inválidos",
-        field: typeof field === "string" ? field : undefined,
-    };
 }
 
 function validationHook(result: { success: boolean; error?: ZodError }, c: Context<AuthEnv>) {
@@ -170,9 +144,9 @@ const registerRoute = createRoute({
     method: "post",
     path: "/register",
     tags: ["Auth"],
-    summary: "Cria a conta de um membro da CIMATEC jr, ou solicita aprovação",
+    summary: "Cria a conta de um membro efetivado da CIMATEC jr",
     description:
-        "Verifica se o email consta como membro no banco da tec (Supabase). Membro efetivado (`active`) tem conta, perfil e sessão criados no mesmo batch — o cadastro já autentica. Pós-júnior (`inactive`) e trainee geram uma solicitação pendente (FEAT-0008): nenhuma conta é criada até um admin aprovar.",
+        "Trilha do membro Efetivo (FEAT-0008, emenda 2026-09-04). Verifica se o email consta no banco da tec (Supabase) com `status === \"active\"` — conta, perfil e sessão são criados no mesmo batch, o cadastro já autentica. Qualquer outro status (não encontrado, ou reconhecido mas diferente de `active`) é recusado com 403: desde a emenda, a Supabase só devolve efetivados, e trainee/pós-júnior se cadastram por `POST /auth/signup-requests`, não por aqui.",
     request: {
         body: {
             required: true,
@@ -184,17 +158,12 @@ const registerRoute = createRoute({
             description: "Conta criada e sessão iniciada (membro `active`)",
             content: { "application/json": { schema: AuthSessionResponseSchema } },
         },
-        202: {
-            description:
-                "Solicitação de cadastro registrada, aguardando aprovação (membro `inactive`/`trainee` — FEAT-0008)",
-            content: { "application/json": { schema: RegisterPendingResponseSchema } },
-        },
         400: {
             description: "Senha fora da política ou payload inválido (E4)",
             content: { "application/json": { schema: ErrorResponseSchema } },
         },
         403: {
-            description: "Email não é de membro (E2) ou membro não elegível (E3)",
+            description: "Email não é de membro (E2) ou não está ativo na tec (E3)",
             content: { "application/json": { schema: ErrorResponseSchema } },
         },
         409: {
@@ -217,14 +186,7 @@ authRouter.openapi(
             throwDomainError(result.value);
         }
 
-        if (result.value.kind === "pending_approval") {
-            return c.json(
-                { data: { status: "pending_approval" as const, message: PENDING_APPROVAL_MESSAGE } },
-                202,
-            );
-        }
-
-        const { refreshToken, ...session } = result.value.session;
+        const { refreshToken, ...session } = result.value;
         setRefreshCookie(c, refreshToken);
 
         return c.json({ data: session }, 201);

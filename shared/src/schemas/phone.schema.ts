@@ -1,4 +1,5 @@
 import { AsYouType, parsePhoneNumberFromString } from "libphonenumber-js/max";
+import { z } from "zod";
 
 // Telefone em formato canônico E.164 (FEAT-0006, seção 8.2).
 //
@@ -83,3 +84,36 @@ export function formatPhoneAsYouType(input: string): string {
     // faria a máscara reinterpretar o número inteiro e reescrever o campo.
     return new AsYouType(COUNTRY).input(digits.slice(0, 11));
 }
+
+/**
+ * Valida e **normaliza para E.164** (FEAT-0006, seção 4.3). Único zod de
+ * telefone do projeto — extraído de `candidate.schema.ts` (FEAT-0023) para
+ * ser reusável pelo cadastro auto-declarado de trainee/pós-júnior.
+ *
+ * A normalização vive aqui, no schema, e não no service: assim front e API
+ * usam exatamente o mesmo código, e a checagem prévia de duplicidade passa a
+ * comparar valores canônicos. Antes disso ela errava por diferença de
+ * máscara — `(71) 98888-7777` e `71988887777` eram duas linhas distintas que
+ * passavam pelo `UNIQUE`.
+ *
+ * Não há mais regex de formato: `toE164` usa `libphonenumber-js/max`, que
+ * cobre tudo que a regex cobria e mais o que ela não tinha como saber — DDD
+ * inexistente, celular que não começa com 9, número repetido. A regex antiga
+ * aceitava `(00) 00000-0000`.
+ *
+ * O `transform` é idempotente: o E.164 que sai daqui é aceito de volta na
+ * entrada, então a API revalidar o que o front já normalizou é no-op.
+ */
+export const PhoneSchema = z.string().transform((value, ctx) => {
+    const normalized = toE164(value);
+
+    if (!normalized) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Informe um telefone válido com DDD",
+        });
+        return z.NEVER;
+    }
+
+    return normalized;
+});
