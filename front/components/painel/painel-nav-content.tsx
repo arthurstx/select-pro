@@ -3,11 +3,12 @@
 import { ChevronDownIcon, ListChecksIcon, LogOutIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/lib/auth/auth-context";
+import { asRole, filterNavForRole } from "@/lib/auth/route-roles";
 import { cn } from "@/lib/utils";
 
 import { isPainelNavGroup, PAINEL_NAV_ITEMS, type PainelNavGroup, type PainelNavItem } from "./painel-nav";
@@ -21,11 +22,16 @@ import { isPainelNavGroup, PAINEL_NAV_ITEMS, type PainelNavGroup, type PainelNav
  *
  * `onNavigate` existe só para o mobile fechar a gaveta ao seguir um link; no
  * desktop não é passado e a sidebar é permanente.
+ *
+ * A lista é podada pelo papel do usuário: mostrar um destino que a API vai
+ * negar com 403 confunde mais do que ajuda. O guard de verdade continua sendo
+ * a API — e, para quem digita a URL, o `RouteRoleGuard` no layout.
  */
 export function PainelNavContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
   const [leaving, setLeaving] = useState(false);
+  const items = useMemo(() => filterNavForRole(PAINEL_NAV_ITEMS, asRole(user?.role)), [user?.role]);
 
   return (
     <>
@@ -42,7 +48,7 @@ export function PainelNavContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3" aria-label="Navegação principal">
-        {PAINEL_NAV_ITEMS.map((item) =>
+        {items.map((item) =>
           isPainelNavGroup(item) ? (
             <NavGroup key={item.label} group={item} pathname={pathname} onNavigate={onNavigate} />
           ) : (

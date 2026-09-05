@@ -19,6 +19,9 @@ import {
  * essas telas não existem ainda, e um link que não leva a lugar nenhum é
  * pior do que nenhum link. Quando a spec de cada uma chegar, ela entra aqui
  * (FEAT-0005-UI, seção 12).
+ *
+ * Quem pode ver cada item não mora aqui: a matriz de papéis por rota está em
+ * `lib/auth/route-roles.ts` e a poda acontece no `PainelNavContent`.
  */
 export interface PainelNavItem {
   href: string;
@@ -77,9 +80,9 @@ export const PAINEL_NAV_ITEMS: PainelNavEntry[] = [
       { href: "/painel/solicitacoes", label: "Solicitações", icon: UserCheckIcon },
     ],
   },
-  // FEAT-0013 — tela do avaliador/host (não do admin), guard real é a API, não o menu.
+  // FEAT-0013 — tela do avaliador/host, escondida do admin (`route-roles.ts`).
   { href: "/painel/minhas-avaliacoes", label: "Minhas Avaliações", icon: StarIcon },
   { href: "/painel/avaliacoes", label: "Avaliações", icon: ClipboardListIcon },
-  // FEAT-0017 — mesmo motivo.
+  // FEAT-0017 — só admin, idem.
   { href: "/painel/processos", label: "Processos seletivos", icon: CalendarCogIcon },
 ];
