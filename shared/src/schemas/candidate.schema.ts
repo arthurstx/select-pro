@@ -223,6 +223,7 @@ export const CandidateErrorCode = {
     PHONE_ALREADY_REGISTERED: "PHONE_ALREADY_REGISTERED", // E2, E5
     INVALID_EMAIL: "INVALID_EMAIL", // E3
     INVALID_PHONE: "INVALID_PHONE", // E4
+    REGISTRATION_CLOSED: "REGISTRATION_CLOSED", // prazo de inscrição encerrado (trava temporária, 2026-09-04)
 } as const;
 
 export type CandidateErrorCode = (typeof CandidateErrorCode)[keyof typeof CandidateErrorCode];

@@ -1,13 +1,18 @@
 import type { CandidateRow, NewCandidate, NewCandidateApplication, RegisterRequest } from "shared";
 
 import { type Either, left, right } from "../core/either";
-import { EmailAlreadyRegisteredError, PhoneAlreadyRegisteredError } from "../core/errors/candidate-errors";
+import {
+    EmailAlreadyRegisteredError,
+    PhoneAlreadyRegisteredError,
+    RegistrationClosedError,
+} from "../core/errors/candidate-errors";
+import { isRegistrationOpen } from "../lib/candidate-registration-deadline";
 import { parseD1ConstraintError } from "../lib/d1-errors";
 import { logger } from "../lib/logger";
 import type { CandidateRepository } from "../repositories/candidates.repository";
 import type { SelectionProcessRepository } from "../repositories/selection-process.repository";
 
-type RegisterError = EmailAlreadyRegisteredError | PhoneAlreadyRegisteredError;
+type RegisterError = EmailAlreadyRegisteredError | PhoneAlreadyRegisteredError | RegistrationClosedError;
 type RegisterResult = { id: string; status: "registered"; name: string; email: string; createdAt: string };
 
 export class CandidateService {
@@ -18,6 +23,14 @@ export class CandidateService {
 
     /** Inscrição em passo único: valida e grava candidato + questionário no mesmo batch. */
     async register(input: RegisterRequest): Promise<Either<RegisterError, RegisterResult>> {
+        // Trava temporária de prazo (2026-09-04): checada antes de qualquer
+        // acesso a banco. Ver `lib/candidate-registration-deadline.ts` para o
+        // plano de tornar isso configurável por edição no admin.
+        if (!isRegistrationOpen(new Date())) {
+            logger.warn("candidate.register.registration_closed", { email: input.email });
+            return left(new RegistrationClosedError());
+        }
+
         // A edição corrente é resolvida (e criada, se faltar) antes de
         // qualquer checagem: desde a FEAT-0006 a unicidade é escopada nela,
         // então sem a edição não há como saber o que é duplicata.

@@ -21,3 +21,13 @@ export class PhoneAlreadyRegisteredError extends Error {
         this.name = "PhoneAlreadyRegisteredError";
     }
 }
+
+/** Trava temporária de prazo de inscrição — ver `lib/candidate-registration-deadline.ts`. */
+export class RegistrationClosedError extends Error {
+    readonly code = CandidateErrorCode.REGISTRATION_CLOSED;
+
+    constructor(message = "As inscrições estão encerradas") {
+        super(message);
+        this.name = "RegistrationClosedError";
+    }
+}
