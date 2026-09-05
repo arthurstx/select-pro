@@ -1,4 +1,4 @@
-import type { Attendance, EvaluatorRole, Gender, GroupModality, MemberStatus, RoomRow } from "shared";
+import type { Attendance, EvaluatorRole, Gender, GroupModality, MemberStatus, RoomRow, RoomType } from "shared";
 
 /** Candidato presente (check-in feito), com os dois dados que o algoritmo precisa (D1/D7). */
 export interface PresentCandidateRow {
@@ -33,8 +33,8 @@ export interface GroupRow {
     modality: GroupModality;
     room_id: string | null;
     room_name: string | null;
-    /** FEAT-0022 — alimenta `GroupSummary.room.size`, pro front reaproveitar `deriveRoomCapacity` sem round-trip. */
-    room_size: number | null;
+    /** FEAT-0022 — alimenta `GroupSummary.room.type`, pro front reaproveitar `deriveRoomCapacity` sem round-trip. */
+    room_type: RoomType | null;
     name: string;
 }
 
@@ -170,7 +170,7 @@ export class GroupRepository {
     async listGroups(processId: string): Promise<GroupRow[]> {
         const { results } = await this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.type AS room_type, g.name
                    FROM groups g
                    LEFT JOIN rooms r ON r.id = g.room_id
                   WHERE g.process_id = ?
@@ -227,7 +227,7 @@ export class GroupRepository {
     async getGroupRow(groupId: string): Promise<GroupRow | null> {
         return this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.type AS room_type, g.name
                    FROM groups g
                    LEFT JOIN rooms r ON r.id = g.room_id
                   WHERE g.id = ?`,
@@ -275,7 +275,7 @@ export class GroupRepository {
     async findGroupById(groupId: string, processId: string): Promise<GroupRow | null> {
         return this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.type AS room_type, g.name
                    FROM groups g
                    LEFT JOIN rooms r ON r.id = g.room_id
                   WHERE g.id = ? AND g.process_id = ?`,
@@ -288,7 +288,7 @@ export class GroupRepository {
     async findCandidateGroup(candidateId: string, processId: string): Promise<GroupRow | null> {
         return this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.type AS room_type, g.name
                    FROM group_candidates gc
                    INNER JOIN groups g ON g.id = gc.group_id
                    LEFT JOIN rooms r ON r.id = g.room_id
@@ -301,7 +301,7 @@ export class GroupRepository {
     async findEvaluatorGroup(userId: string, processId: string): Promise<GroupRow | null> {
         return this.db
             .prepare(
-                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.size AS room_size, g.name
+                `SELECT g.id, g.modality, g.room_id, r.name AS room_name, r.type AS room_type, g.name
                    FROM group_evaluators ge
                    INNER JOIN groups g ON g.id = ge.group_id
                    LEFT JOIN rooms r ON r.id = g.room_id

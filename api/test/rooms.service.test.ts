@@ -27,12 +27,12 @@ describe("RoomsService", () => {
     // ============================================================
 
     describe("create", () => {
-        it("grava e devolve hostCount/maxGroups calculados a partir da capacidade", async () => {
-            const result = await service.create({ name: uniqueName(), size: 40 });
+        it("grava e devolve hostCount/maxGroups calculados a partir da classificação", async () => {
+            const result = await service.create({ name: uniqueName(), type: "comum" });
 
             expect(result.isRight()).toBe(true);
             if (result.isRight()) {
-                expect(result.value.size).toBe(40);
+                expect(result.value.type).toBe("comum");
                 expect(result.value.hostCount).toBe(1);
                 expect(result.value.maxGroups).toBe(2);
             }
@@ -40,9 +40,9 @@ describe("RoomsService", () => {
 
         it("FR-005 - nome já existente é recusado, sem inserir linha nova", async () => {
             const name = uniqueName();
-            await service.create({ name, size: 40 });
+            await service.create({ name, type: "comum" });
 
-            const second = await service.create({ name, size: 65 });
+            const second = await service.create({ name, type: "anfiteatro" });
 
             expect(second.isLeft()).toBe(true);
             if (second.isLeft()) expect(second.value.code).toBe("ROOM_NAME_ALREADY_EXISTS");
@@ -59,11 +59,11 @@ describe("RoomsService", () => {
     // ============================================================
 
     describe("list", () => {
-        it("devolve todas as salas com o cálculo correto por faixa", async () => {
+        it("devolve todas as salas com o cálculo correto por classificação", async () => {
             const a = uniqueName();
             const b = uniqueName();
-            await service.create({ name: a, size: 40 });
-            await service.create({ name: b, size: 120 });
+            await service.create({ name: a, type: "comum" });
+            await service.create({ name: b, type: "anfiteatro" });
 
             const rooms = await service.list();
 
@@ -79,35 +79,35 @@ describe("RoomsService", () => {
     // ============================================================
 
     describe("update", () => {
-        it("recalcula hostCount/maxGroups ao mudar size, cruzando faixa", async () => {
-            const created = await service.create({ name: uniqueName(), size: 45 });
+        it("recalcula hostCount/maxGroups ao reclassificar a sala", async () => {
+            const created = await service.create({ name: uniqueName(), type: "comum" });
             if (!created.isRight()) throw new Error("setup falhou");
 
-            const updated = await service.update(created.value.id, { name: created.value.name, size: 60 });
+            const updated = await service.update(created.value.id, { name: created.value.name, type: "anfiteatro" });
 
             expect(updated.isRight()).toBe(true);
             if (updated.isRight()) {
-                expect(updated.value.size).toBe(60);
+                expect(updated.value.type).toBe("anfiteatro");
                 expect(updated.value.hostCount).toBe(2);
-                expect(updated.value.maxGroups).toBe(3);
+                expect(updated.value.maxGroups).toBe(4);
             }
         });
 
         it("renomear para nome já usado por outra sala é recusado", async () => {
             const nameA = uniqueName();
             const nameB = uniqueName();
-            await service.create({ name: nameA, size: 40 });
-            const roomB = await service.create({ name: nameB, size: 40 });
+            await service.create({ name: nameA, type: "comum" });
+            const roomB = await service.create({ name: nameB, type: "comum" });
             if (!roomB.isRight()) throw new Error("setup falhou");
 
-            const result = await service.update(roomB.value.id, { name: nameA, size: 40 });
+            const result = await service.update(roomB.value.id, { name: nameA, type: "comum" });
 
             expect(result.isLeft()).toBe(true);
             if (result.isLeft()) expect(result.value.code).toBe("ROOM_NAME_ALREADY_EXISTS");
         });
 
         it("id inexistente retorna ROOM_NOT_FOUND", async () => {
-            const result = await service.update(crypto.randomUUID(), { name: uniqueName(), size: 40 });
+            const result = await service.update(crypto.randomUUID(), { name: uniqueName(), type: "comum" });
 
             expect(result.isLeft()).toBe(true);
             if (result.isLeft()) expect(result.value.code).toBe("ROOM_NOT_FOUND");
@@ -120,7 +120,7 @@ describe("RoomsService", () => {
 
     describe("delete", () => {
         it("remove sala sem grupo vinculado", async () => {
-            const created = await service.create({ name: uniqueName(), size: 40 });
+            const created = await service.create({ name: uniqueName(), type: "comum" });
             if (!created.isRight()) throw new Error("setup falhou");
 
             const result = await service.delete(created.value.id);
@@ -131,7 +131,7 @@ describe("RoomsService", () => {
         });
 
         it("FR-009 - sala com grupo vinculado não pode ser excluída", async () => {
-            const created = await service.create({ name: uniqueName(), size: 40 });
+            const created = await service.create({ name: uniqueName(), type: "comum" });
             if (!created.isRight()) throw new Error("setup falhou");
 
             // Seed direto via SQL — simula o vínculo que a FEAT-0012 cria de verdade.

@@ -10,28 +10,18 @@ import {
   recommendRoomsForGroups,
 } from "./room.schema.ts";
 
-// Fronteiras exatas das faixas (D5, CONTEXT.md) — 50/51 e 80/81 são os
-// pontos onde um off-by-one quebraria silenciosamente.
+// FEAT-0023 — host e grupos vêm da classificação da sala, não da lotação.
 
-test("até 50 pessoas: 1 host, 2 grupos", () => {
-  assert.deepEqual(deriveRoomCapacity(1), { hostCount: 1, maxGroups: 2 });
-  assert.deepEqual(deriveRoomCapacity(40), { hostCount: 1, maxGroups: 2 });
-  assert.deepEqual(deriveRoomCapacity(50), { hostCount: 1, maxGroups: 2 });
+test("sala comum: 1 host, 2 grupos", () => {
+  assert.deepEqual(deriveRoomCapacity("comum"), { hostCount: 1, maxGroups: 2 });
 });
 
-test("51 a 80 pessoas: 2 hosts, 3 grupos", () => {
-  assert.deepEqual(deriveRoomCapacity(51), { hostCount: 2, maxGroups: 3 });
-  assert.deepEqual(deriveRoomCapacity(65), { hostCount: 2, maxGroups: 3 });
-  assert.deepEqual(deriveRoomCapacity(80), { hostCount: 2, maxGroups: 3 });
+test("anfiteatro: 2 hosts, 4 grupos", () => {
+  assert.deepEqual(deriveRoomCapacity("anfiteatro"), { hostCount: 2, maxGroups: 4 });
 });
 
-test("mais de 80 pessoas: 2 hosts, 4 grupos", () => {
-  assert.deepEqual(deriveRoomCapacity(81), { hostCount: 2, maxGroups: 4 });
-  assert.deepEqual(deriveRoomCapacity(120), { hostCount: 2, maxGroups: 4 });
-});
-
-test("mesma capacidade sempre produz o mesmo resultado (SC-002)", () => {
-  assert.deepEqual(deriveRoomCapacity(60), deriveRoomCapacity(60));
+test("mesma classificação sempre produz o mesmo resultado (SC-002)", () => {
+  assert.deepEqual(deriveRoomCapacity("comum"), deriveRoomCapacity("comum"));
 });
 
 // FEAT-0020, ajustado na FEAT-0022 — derivePresencialGroupCount: 5-7 candidatos por grupo, 5 o ideal.
@@ -70,8 +60,8 @@ test("derivePresencialGroupCount — 35 candidatos: 5 grupos de 7 (no teto)", ()
 });
 
 test("derivePresencialGroupCount — respeita o teto de maxGroups (capacidade física da sala)", () => {
-  // 15 candidatos exigiriam 3 grupos pra ficar no ideal (5 cada), mas a sala só comporta 2
-  // grupos (D5) — o teto de sala vence. Na prática o service já limita `count` antes de chamar
+  // 15 candidatos exigiriam 3 grupos pra ficar no ideal (5 cada), mas a sala comum só comporta
+  // 2 grupos (FEAT-0023) — o teto de sala vence. Na prática o service já limita `count` antes de chamar
   // esta função pra isso nunca ultrapassar o máximo de 7 por grupo de verdade.
   assert.equal(derivePresencialGroupCount(15, 2), 2);
 });
@@ -87,29 +77,29 @@ test("deriveEvaluatorTargetForGroupSize — 6 e 7 candidatos: 2 avaliadores", ()
   assert.equal(deriveEvaluatorTargetForGroupSize(7), 2);
 });
 
-// FEAT-0020 — recommendRoomsForGroups: maior faixa primeiro (D5).
+// FEAT-0020, ajustado na FEAT-0023 — recommendRoomsForGroups: anfiteatro primeiro.
 
 test("recommendRoomsForGroups — 0 grupos: recomendação vazia", () => {
   assert.deepEqual(recommendRoomsForGroups(0), []);
 });
 
-test("recommendRoomsForGroups — 4 grupos: 1 sala grande (4 grupos/2 hosts)", () => {
-  assert.deepEqual(recommendRoomsForGroups(4), [{ maxGroups: 4, hostCount: 2, roomsNeeded: 1 }]);
+test("recommendRoomsForGroups — 4 grupos: 1 anfiteatro (4 grupos/2 hosts)", () => {
+  assert.deepEqual(recommendRoomsForGroups(4), [{ type: "anfiteatro", maxGroups: 4, hostCount: 2, roomsNeeded: 1 }]);
 });
 
-test("recommendRoomsForGroups — 8 grupos: 2 salas grandes", () => {
-  assert.deepEqual(recommendRoomsForGroups(8), [{ maxGroups: 4, hostCount: 2, roomsNeeded: 2 }]);
+test("recommendRoomsForGroups — 8 grupos: 2 anfiteatros", () => {
+  assert.deepEqual(recommendRoomsForGroups(8), [{ type: "anfiteatro", maxGroups: 4, hostCount: 2, roomsNeeded: 2 }]);
 });
 
-test("recommendRoomsForGroups — 5 grupos: 1 sala grande (4) + 1 sala pequena (2, sobra 1 cabe nela)", () => {
+test("recommendRoomsForGroups — 5 grupos: 1 anfiteatro (4) + 1 sala comum (2, sobra 1 cabe nela)", () => {
   assert.deepEqual(recommendRoomsForGroups(5), [
-    { maxGroups: 4, hostCount: 2, roomsNeeded: 1 },
-    { maxGroups: 2, hostCount: 1, roomsNeeded: 1 },
+    { type: "anfiteatro", maxGroups: 4, hostCount: 2, roomsNeeded: 1 },
+    { type: "comum", maxGroups: 2, hostCount: 1, roomsNeeded: 1 },
   ]);
 });
 
-test("recommendRoomsForGroups — 1 grupo: 1 sala pequena (a menor que já comporta 1)", () => {
-  assert.deepEqual(recommendRoomsForGroups(1), [{ maxGroups: 2, hostCount: 1, roomsNeeded: 1 }]);
+test("recommendRoomsForGroups — 1 grupo: 1 sala comum (a menor que já comporta 1)", () => {
+  assert.deepEqual(recommendRoomsForGroups(1), [{ type: "comum", maxGroups: 2, hostCount: 1, roomsNeeded: 1 }]);
 });
 
 // FEAT-0022 — calculateHostDeficit: quantos hosts a estrutura de salas usada realmente exige.
@@ -118,20 +108,20 @@ test("calculateHostDeficit — sem salas usadas: nada é necessário", () => {
   assert.deepEqual(calculateHostDeficit([], 0), { required: 0, deficit: 0 });
 });
 
-test("calculateHostDeficit — 1 sala pequena (1 host) com host presente: sem déficit", () => {
-  assert.deepEqual(calculateHostDeficit([50], 1), { required: 1, deficit: 0 });
+test("calculateHostDeficit — 1 sala comum (1 host) com host presente: sem déficit", () => {
+  assert.deepEqual(calculateHostDeficit(["comum"], 1), { required: 1, deficit: 0 });
 });
 
-test("calculateHostDeficit — 1 sala pequena, nenhum host presente: falta 1", () => {
-  assert.deepEqual(calculateHostDeficit([50], 0), { required: 1, deficit: 1 });
+test("calculateHostDeficit — 1 sala comum, nenhum host presente: falta 1", () => {
+  assert.deepEqual(calculateHostDeficit(["comum"], 0), { required: 1, deficit: 1 });
 });
 
-test("calculateHostDeficit — 2 salas grandes (2 hosts cada) com só 1 host presente: falta 3", () => {
-  assert.deepEqual(calculateHostDeficit([90, 90], 1), { required: 4, deficit: 3 });
+test("calculateHostDeficit — 2 anfiteatros (2 hosts cada) com só 1 host presente: falta 3", () => {
+  assert.deepEqual(calculateHostDeficit(["anfiteatro", "anfiteatro"], 1), { required: 4, deficit: 3 });
 });
 
 test("calculateHostDeficit — hosts presentes sobrando: déficit fica em 0, nunca negativo", () => {
-  assert.deepEqual(calculateHostDeficit([50], 5), { required: 1, deficit: 0 });
+  assert.deepEqual(calculateHostDeficit(["comum"], 5), { required: 1, deficit: 0 });
 });
 
 // FEAT-0022, ajustado — classifyPresencialGroup: ideal (5 + 1 avaliador), aceitável (6-7 + 2), fora do ideal (resto).

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { RoomType } from "shared";
 
 import { distributeByGender, organizeOnlineGroups, organizePresencialGroups } from "../src/services/group-organization";
 import type { PresentCandidateRow, PresentMemberRow } from "../src/repositories/group.repository";
@@ -18,8 +19,8 @@ function candidate(overrides: Partial<PresentCandidateRow> & { id: string }): Pr
     };
 }
 
-function room(overrides: { id?: string; name: string; size: number }) {
-    return { id: overrides.id ?? crypto.randomUUID(), name: overrides.name, size: overrides.size };
+function room(overrides: { id?: string; name: string; type: RoomType }) {
+    return { id: overrides.id ?? crypto.randomUUID(), name: overrides.name, type: overrides.type };
 }
 
 function member(id: string, role: PresentMemberRow["role"] = "avaliador"): PresentMemberRow {
@@ -74,9 +75,9 @@ describe("distributeByGender (D1 — nunca exatamente 1 mulher por grupo)", () =
     });
 });
 
-describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
-    it("uma sala de até 50: 2 grupos (D5)", () => {
-        const sala = room({ name: "Sala 1", size: 50 });
+describe("organizePresencialGroups (classificação via deriveRoomCapacity)", () => {
+    it("uma sala comum: 2 grupos (FEAT-0023)", () => {
+        const sala = room({ name: "Sala 1", type: "comum" });
         const candidates = Array.from({ length: 10 }, (_, i) => candidate({ id: `c${i}`, gender: "masculino" }));
 
         const result = organizePresencialGroups(candidates, [sala], []);
@@ -87,16 +88,17 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("mais candidatos presenciais do que a capacidade das salas: aloca o que couber, reporta o resto (FR-013)", () => {
-        const sala = room({ name: "Sala 1", size: 2 });
-        const candidates = Array.from({ length: 5 }, (_, i) => candidate({ id: `c${i}`, gender: "masculino" }));
+        // Sala comum: 2 grupos × 7 = 14 candidatos, o menor teto possível (FEAT-0023).
+        const sala = room({ name: "Sala 1", type: "comum" });
+        const candidates = Array.from({ length: 17 }, (_, i) => candidate({ id: `c${i}`, gender: "masculino" }));
 
         const result = organizePresencialGroups(candidates, [sala], []);
 
         const allocated = result.groups.flatMap((g) => g.candidateIds);
-        expect(allocated).toHaveLength(2);
+        expect(allocated).toHaveLength(14);
         expect(result.unallocatedCandidateCount).toBe(3);
         // FR-013: quem chegou primeiro (início do array, já ordenado por checked_in_at) é alocado primeiro.
-        expect(allocated).toEqual(["c0", "c1"]);
+        expect(allocated.sort()).toEqual(Array.from({ length: 14 }, (_, i) => `c${i}`).sort());
     });
 
     it("sem sala nenhuma: todos ficam não alocados, nenhum grupo formado", () => {
@@ -109,8 +111,8 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("menos candidatos do que as salas comportam: usa só o necessário, sem grupo vazio", () => {
-        const sala1 = room({ name: "Sala 1", size: 50 });
-        const sala2 = room({ name: "Sala 2", size: 50 });
+        const sala1 = room({ name: "Sala 1", type: "comum" });
+        const sala2 = room({ name: "Sala 2", type: "comum" });
         const candidates = [candidate({ id: "c0" })];
 
         const result = organizePresencialGroups(candidates, [sala1, sala2], []);
@@ -120,7 +122,7 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("FEAT-0020/FEAT-0021 — avaliador conta pro alvo do grupo, host vira responsável da sala (não do grupo)", () => {
-        const sala = room({ name: "Sala 1", size: 50 }); // D5: 1 host, maxGroups=2
+        const sala = room({ name: "Sala 1", type: "comum" }); // 1 host, maxGroups=2
         const candidates = Array.from({ length: 4 }, (_, i) => candidate({ id: `c${i}` }));
         const members = [member("e1"), member("e2", "host")];
 
@@ -134,7 +136,7 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("FEAT-0020/FEAT-0022 (FR-003) — grupos formados têm sempre entre 5 e 7 candidatos", () => {
-        const sala = room({ name: "Sala 1", size: 100 }); // maxGroups=4 (D5, >80)
+        const sala = room({ name: "Sala 1", type: "anfiteatro" }); // maxGroups=4
         const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
 
         const result = organizePresencialGroups(candidates, [sala], []);
@@ -145,9 +147,9 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("FEAT-0020/FEAT-0022 (FR-004) — capacidade insuficiente ainda reporta unallocatedCandidateCount corretamente", () => {
-        // Sala de 50 (D5: maxGroups=2) comporta no máximo 2*7=14 candidatos em grupos válidos,
-        // mesmo tendo "espaço físico" pra mais — capacidade real é min(size, maxGroups*7).
-        const sala = room({ name: "Sala 1", size: 50 });
+        // Sala comum (maxGroups=2) comporta no máximo 2*7=14 candidatos — a capacidade é
+        // `maxGroups * 7`, derivada da classificação (FEAT-0023).
+        const sala = room({ name: "Sala 1", type: "comum" });
         const candidates = Array.from({ length: 15 }, (_, i) => candidate({ id: `c${i}` }));
 
         const result = organizePresencialGroups(candidates, [sala], []);
@@ -158,7 +160,7 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("FEAT-0020/FEAT-0022 (FR-005/FR-006) — com avaliador de sobra só pro 2º de UM grupo, todo mundo já tem 1 antes de alguém ter 2", () => {
-        const sala = room({ name: "Sala 1", size: 100 }); // maxGroups=4
+        const sala = room({ name: "Sala 1", type: "anfiteatro" }); // maxGroups=4
         // 17 candidatos -> 3 grupos (5-7 cada, research.md Decisão 2 ajustada): [6, 6, 5]
         // candidatos — os dois de 6 pedem 2 avaliadores (deriveEvaluatorTargetForGroupSize), o
         // de 5 (o ideal) pede só 1.
@@ -178,7 +180,7 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("FEAT-0020/FEAT-0022 (FR-005) — com avaliadores suficientes, grupo de 5 (ideal) tem exatamente 1 e grupo de 6-7 tem exatamente 2", () => {
-        const sala = room({ name: "Sala 1", size: 100 });
+        const sala = room({ name: "Sala 1", type: "anfiteatro" });
         const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
         const members = Array.from({ length: 6 }, (_, i) => member(`e${i}`)); // avaliadores de sobra
 
@@ -191,7 +193,7 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("FEAT-0021 — host da sala aparece em TODOS os grupos daquela sala", () => {
-        const sala = room({ name: "Sala 1", size: 100 }); // D5: 2 hosts, maxGroups=4
+        const sala = room({ name: "Sala 1", type: "anfiteatro" }); // 2 hosts, maxGroups=4
         const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` })); // -> 2 grupos (5-7 cada)
         const members = [member("h1", "host")];
 
@@ -204,7 +206,7 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("FEAT-0021 — sala com D5 de 2 hosts recebe até 2, nunca mais que isso", () => {
-        const sala = room({ name: "Sala 1", size: 100 }); // D5: 2 hosts
+        const sala = room({ name: "Sala 1", type: "anfiteatro" }); // 2 hosts
         const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
         const members = [member("h1", "host"), member("h2", "host"), member("h3", "host")];
 
@@ -218,7 +220,7 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("FEAT-0021 — hosts insuficientes: sala fica com menos hosts que o ideal, sem erro", () => {
-        const sala = room({ name: "Sala 1", size: 100 }); // D5: 2 hosts
+        const sala = room({ name: "Sala 1", type: "anfiteatro" }); // 2 hosts
         const candidates = Array.from({ length: 13 }, (_, i) => candidate({ id: `c${i}` }));
         const members = [member("h1", "host")]; // só 1, D5 pede 2
 
@@ -231,8 +233,8 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("FEAT-0021 — segunda sala usada só recebe host depois da primeira estar completa", () => {
-        const sala1 = room({ id: "sala-a", name: "Sala A", size: 50 }); // D5: 1 host, maxGroups=2
-        const sala2 = room({ id: "sala-b", name: "Sala B", size: 50 }); // D5: 1 host
+        const sala1 = room({ id: "sala-a", name: "Sala A", type: "comum" }); // 1 host, maxGroups=2
+        const sala2 = room({ id: "sala-b", name: "Sala B", type: "comum" }); // 1 host
         // Candidatos suficientes pra estourar a capacidade da sala1 (min(50,2*5)=10) e usar a sala2.
         const candidates = Array.from({ length: 15 }, (_, i) => candidate({ id: `c${i}` }));
         const members = [member("h1", "host"), member("h2", "host")];
@@ -248,7 +250,7 @@ describe("organizePresencialGroups (D5 via deriveRoomCapacity)", () => {
     });
 
     it("sem nenhum avaliador presente: grupos são formados mesmo assim, sem avaliador alocado", () => {
-        const sala = room({ name: "Sala 1", size: 50 });
+        const sala = room({ name: "Sala 1", type: "comum" });
         const candidates = [candidate({ id: "c0" })];
 
         const result = organizePresencialGroups(candidates, [sala], []);

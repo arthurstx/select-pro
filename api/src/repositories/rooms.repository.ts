@@ -1,7 +1,7 @@
-import type { NewRoom, RoomRow } from "shared";
+import type { NewRoom, RoomRow, RoomType } from "shared";
 
 /**
- * SQL puro sobre `rooms(id, name, size)`. Sem lógica de faixa aqui —
+ * SQL puro sobre `rooms(id, name, type)`. Sem lógica de classificação aqui —
  * `hostCount`/`maxGroups` são derivados em `shared` (`deriveRoomCapacity`),
  * aplicados pelo service na borda de saída.
  */
@@ -10,8 +10,8 @@ export class RoomsRepository {
 
     async create(room: NewRoom): Promise<RoomRow> {
         const result = await this.db
-            .prepare("INSERT INTO rooms (id, name, size) VALUES (?, ?, ?) RETURNING *")
-            .bind(room.id, room.name, room.size)
+            .prepare("INSERT INTO rooms (id, name, type) VALUES (?, ?, ?) RETURNING *")
+            .bind(room.id, room.name, room.type)
             .first<RoomRow>();
 
         // RETURNING sempre devolve a linha inserida num INSERT bem-sucedido.
@@ -35,15 +35,15 @@ export class RoomsRepository {
     }
 
     /**
-     * `name`/`size` obrigatórios, não `RoomUpdate` de `shared` (que é
+     * `name`/`type` obrigatórios, não `RoomUpdate` de `shared` (que é
      * `Partial` — feito para PATCH). Este `PUT` substitui os dois campos
      * juntos sempre; um tipo parcial aqui deixaria `undefined` virar `NULL`
      * no bind.
      */
-    async update(update: { id: string; name: string; size: number }): Promise<RoomRow | null> {
+    async update(update: { id: string; name: string; type: RoomType }): Promise<RoomRow | null> {
         return this.db
-            .prepare("UPDATE rooms SET name = ?, size = ? WHERE id = ? RETURNING *")
-            .bind(update.name, update.size, update.id)
+            .prepare("UPDATE rooms SET name = ?, type = ? WHERE id = ? RETURNING *")
+            .bind(update.name, update.type, update.id)
             .first<RoomRow>();
     }
 
