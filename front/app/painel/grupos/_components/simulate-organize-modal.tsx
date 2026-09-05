@@ -13,6 +13,7 @@ import {
   recommendRoomsForGroups,
   type AvailableEvaluator,
   type GroupSummary,
+  type RoomType,
 } from "shared";
 
 import { Button } from "@/components/ui/button";
@@ -270,10 +271,10 @@ export function SimulateOrganizeModal() {
    */
   const organizationDiagnostics = useMemo(() => {
     const hostsByRoom = new Map<string, Set<string>>();
-    const roomInfo = new Map<string, { name: string; size: number }>();
+    const roomInfo = new Map<string, { name: string; type: RoomType }>();
     for (const g of groupsToShow) {
       if (!g.room) continue;
-      if (!roomInfo.has(g.room.id)) roomInfo.set(g.room.id, { name: g.room.name, size: g.room.size });
+      if (!roomInfo.has(g.room.id)) roomInfo.set(g.room.id, { name: g.room.name, type: g.room.type });
       const hostSet = hostsByRoom.get(g.room.id) ?? new Set<string>();
       for (const e of g.evaluators) if (e.role === "host") hostSet.add(e.userId);
       hostsByRoom.set(g.room.id, hostSet);
@@ -283,7 +284,7 @@ export function SimulateOrganizeModal() {
     const roomDiagnostics = new Map<string, { hostCount: number; hostExpected: number }>();
     for (const [roomId, info] of roomInfo) {
       const hostCount = hostsByRoom.get(roomId)?.size ?? 0;
-      const hostExpected = deriveRoomCapacity(info.size).hostCount;
+      const hostExpected = deriveRoomCapacity(info.type).hostCount;
       roomDiagnostics.set(roomId, { hostCount, hostExpected });
       if (hostCount !== hostExpected) {
         deviations.push(`${info.name} está com ${hostCount} host(s) — o recomendado é ${hostExpected}.`);
@@ -305,7 +306,7 @@ export function SimulateOrganizeModal() {
     }
 
     const hostDeficit = calculateHostDeficit(
-      Array.from(roomInfo.values()).map((r) => r.size),
+      Array.from(roomInfo.values()).map((r) => r.type),
       evaluatorCounts.hostCount,
     );
 

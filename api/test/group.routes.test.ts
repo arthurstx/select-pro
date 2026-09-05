@@ -1,5 +1,6 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import type { RoomType } from "shared";
 
 import app from "../src/index";
 import { signAccessToken } from "../src/lib/access-token";
@@ -151,10 +152,10 @@ async function insertCheckedMember(actorId: string) {
     return id;
 }
 
-async function insertRoom(size = 50) {
+async function insertRoom(type: RoomType = "comum") {
     counter += 1;
     const id = crypto.randomUUID();
-    await env.DB.prepare(`INSERT INTO rooms (id, name, size) VALUES (?, ?, ?)`).bind(id, `Sala Grupo Rota ${counter}`, size).run();
+    await env.DB.prepare(`INSERT INTO rooms (id, name, type) VALUES (?, ?, ?)`).bind(id, `Sala Grupo Rota ${counter}`, type).run();
     return id;
 }
 

@@ -8,6 +8,8 @@
 
 **Input**: Backlog organizado em 2026-08-24 (features 008–016). Decisão D5: faixas de hosts/grupos por capacidade de sala, já validadas com o usuário.
 
+> ⚠️ **Superseded em parte pela FEAT-0023** (`specs/023-classificacao-de-salas/`): host e limite de grupos não vêm mais da capacidade em pessoas, e sim da classificação da sala (comum → 1 host / 2 grupos; anfiteatro → 2 hosts / 4 grupos). O campo de capacidade saiu do cadastro e do banco. Tudo o mais desta spec (CRUD, unicidade de nome, FR-009) continua valendo.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Admin cadastra as salas do dia (Priority: P1)

@@ -132,11 +132,14 @@ staging/produção (ver "Pendências operacionais").
 
 ## Pendências operacionais (não são código)
 
-- [ ] Aplicar migrations `0008` a `0015` em staging, depois produção (staging sempre primeiro
+- [ ] Aplicar migrations `0008` a `0016` em staging, depois produção (staging sempre primeiro
       — Princípio III da constitution). Migration `0014` reconstrói `groups`/`group_evaluators`/
       `group_candidates`; `0015` dropa `metrics` e reconstrói `evaluations`/`evaluation_scores`
       — confirmar que todas seguem vazias nesses ambientes antes de aplicar (research.md
-      D-tech1 da FEAT-0012 e da FEAT-0013).
+      D-tech1 da FEAT-0012 e da FEAT-0013). Migration `0016` (FEAT-0023) **destrói
+      `rooms.size`** convertendo cada sala em `comum`/`anfiteatro` (`size > 80` → anfiteatro):
+      guardar `SELECT id, name, size FROM rooms` antes de aplicar, e revisar depois as salas
+      que eram da faixa 51–80 (viram `comum`, ou seja 1 host / 2 grupos em vez de 2/3).
 - [ ] Calibrar as iterações do PBKDF2 (FEAT-0003) medindo CPU em produção — `wrangler dev`
       não aplica o teto de 10 ms.
 - [ ] Criar a regra de Rate Limiting do WAF em `/auth/*` (FEAT-0003) — o plano Free só dá

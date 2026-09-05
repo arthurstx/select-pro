@@ -399,7 +399,7 @@ function toPreviewSummary(
         id: group.id,
         name: group.name,
         modality: group.modality,
-        room: room ? { id: room.id, name: room.name, size: room.size } : null,
+        room: room ? { id: room.id, name: room.name, type: room.type } : null,
         candidates: group.candidateIds.flatMap((id) => {
             const candidate = candidateById.get(id);
             return candidate ? [{ id: candidate.id, name: candidate.name, attendance: candidate.attendance, gender: candidate.gender }] : [];
@@ -421,8 +421,8 @@ function toSummary(
         name: group.name,
         modality: group.modality,
         room:
-            group.room_id && group.room_name !== null && group.room_size !== null
-                ? { id: group.room_id, name: group.room_name, size: group.room_size }
+            group.room_id && group.room_name !== null && group.room_type !== null
+                ? { id: group.room_id, name: group.room_name, type: group.room_type }
                 : null,
         candidates: candidateAllocations
             .filter((c) => c.group_id === group.id)

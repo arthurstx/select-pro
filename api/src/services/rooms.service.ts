@@ -22,7 +22,7 @@ export class RoomsService {
 
         let row: RoomRow;
         try {
-            row = await this.repository.create({ id: crypto.randomUUID(), name: input.name, size: input.size });
+            row = await this.repository.create({ id: crypto.randomUUID(), name: input.name, type: input.type });
         } catch (err) {
             // Corrida entre a checagem acima e o INSERT — o índice único fecha a janela.
             if (err instanceof Error && err.message.includes("UNIQUE constraint failed")) {
@@ -58,7 +58,7 @@ export class RoomsService {
 
         let row: RoomRow | null;
         try {
-            row = await this.repository.update({ id, name: input.name, size: input.size });
+            row = await this.repository.update({ id, name: input.name, type: input.type });
         } catch (err) {
             if (err instanceof Error && err.message.includes("UNIQUE constraint failed")) {
                 logger.warn("rooms.update.race_name_conflict", { roomId: id, name: input.name });
@@ -106,5 +106,5 @@ export class RoomsService {
 }
 
 function toSummary(row: RoomRow): RoomSummary {
-    return { id: row.id, name: row.name, size: row.size, ...deriveRoomCapacity(row.size) };
+    return { id: row.id, name: row.name, type: row.type, ...deriveRoomCapacity(row.type) };
 }

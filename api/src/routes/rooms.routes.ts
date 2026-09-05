@@ -75,7 +75,7 @@ const listRoute = createRoute({
     path: "/",
     tags: ["Rooms"],
     summary: "Lista as salas cadastradas",
-    description: "Hosts e limite de grupos vêm calculados a partir da capacidade — nunca colunas próprias.",
+    description: "Hosts e limite de grupos vêm calculados a partir da classificação da sala — nunca colunas próprias.",
     middleware: ADMIN_ONLY,
     security: [{ Bearer: [] }],
     responses: {
@@ -141,7 +141,7 @@ const updateRoute = createRoute({
     method: "put",
     path: "/{id}",
     tags: ["Rooms"],
-    summary: "Atualiza nome e/ou capacidade de uma sala",
+    summary: "Atualiza nome e/ou classificação de uma sala",
     middleware: ADMIN_ONLY,
     security: [{ Bearer: [] }],
     request: {
