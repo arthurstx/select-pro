@@ -1,5 +1,6 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import type { RoomType } from "shared";
 
 import app from "../src/index";
 import { signAccessToken } from "../src/lib/access-token";
@@ -50,15 +51,15 @@ function uniqueName(): string {
     return `Sala Rota ${counter}`;
 }
 
-async function createRoom(admin: string, overrides: { name?: string; size?: number } = {}) {
+async function createRoom(admin: string, overrides: { name?: string; type?: RoomType } = {}) {
     const response = await call(
         new Request("http://local.test/rooms", {
             method: "POST",
             headers: jsonHeaders(admin),
-            body: JSON.stringify({ name: overrides.name ?? uniqueName(), size: overrides.size ?? 40 }),
+            body: JSON.stringify({ name: overrides.name ?? uniqueName(), type: overrides.type ?? "comum" }),
         }),
     );
-    const body = await response.json<{ data: { id: string; name: string; size: number } }>();
+    const body = await response.json<{ data: { id: string; name: string; type: RoomType } }>();
     return body.data;
 }
 
@@ -100,7 +101,7 @@ describe("POST /rooms (HTTP)", () => {
             new Request("http://local.test/rooms", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ name: uniqueName(), size: 40 }),
+                body: JSON.stringify({ name: uniqueName(), type: "comum" }),
             }),
         );
         expect(response.status).toBe(401);
@@ -112,7 +113,7 @@ describe("POST /rooms (HTTP)", () => {
             new Request("http://local.test/rooms", {
                 method: "POST",
                 headers: jsonHeaders(token),
-                body: JSON.stringify({ name: uniqueName(), size: 40 }),
+                body: JSON.stringify({ name: uniqueName(), type: "comum" }),
             }),
         );
         expect(response.status).toBe(403);
@@ -124,7 +125,7 @@ describe("POST /rooms (HTTP)", () => {
             new Request("http://local.test/rooms", {
                 method: "POST",
                 headers: jsonHeaders(admin),
-                body: JSON.stringify({ name: uniqueName(), size: 40 }),
+                body: JSON.stringify({ name: uniqueName(), type: "comum" }),
             }),
         );
         const body = await response.json<{ data: { hostCount: number; maxGroups: number } }>();
@@ -134,13 +135,13 @@ describe("POST /rooms (HTTP)", () => {
         expect(body.data.maxGroups).toBe(2);
     });
 
-    it("FR-004 - capacidade 0 responde 400", async () => {
+    it("FR-004 - classificação inválida responde 400", async () => {
         const admin = await tokenFor("admin");
         const response = await call(
             new Request("http://local.test/rooms", {
                 method: "POST",
                 headers: jsonHeaders(admin),
-                body: JSON.stringify({ name: uniqueName(), size: 0 }),
+                body: JSON.stringify({ name: uniqueName(), type: "auditorio" }),
             }),
         );
 
@@ -156,7 +157,7 @@ describe("POST /rooms (HTTP)", () => {
             new Request("http://local.test/rooms", {
                 method: "POST",
                 headers: jsonHeaders(admin),
-                body: JSON.stringify({ name, size: 65 }),
+                body: JSON.stringify({ name, type: "anfiteatro" }),
             }),
         );
 
@@ -179,7 +180,7 @@ describe("PUT /rooms/:id (HTTP)", () => {
             new Request(`http://local.test/rooms/${room.id}`, {
                 method: "PUT",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ name: room.name, size: 60 }),
+                body: JSON.stringify({ name: room.name, type: "anfiteatro" }),
             }),
         );
         expect(response.status).toBe(401);
@@ -194,21 +195,21 @@ describe("PUT /rooms/:id (HTTP)", () => {
             new Request(`http://local.test/rooms/${room.id}`, {
                 method: "PUT",
                 headers: jsonHeaders(avaliador),
-                body: JSON.stringify({ name: room.name, size: 60 }),
+                body: JSON.stringify({ name: room.name, type: "anfiteatro" }),
             }),
         );
         expect(response.status).toBe(403);
     });
 
-    it("200 com admin, faixa recalculada", async () => {
+    it("200 com admin, classificação recalculada", async () => {
         const admin = await tokenFor("admin");
-        const room = await createRoom(admin, { size: 40 });
+        const room = await createRoom(admin, { type: "comum" });
 
         const response = await call(
             new Request(`http://local.test/rooms/${room.id}`, {
                 method: "PUT",
                 headers: jsonHeaders(admin),
-                body: JSON.stringify({ name: room.name, size: 90 }),
+                body: JSON.stringify({ name: room.name, type: "anfiteatro" }),
             }),
         );
         const body = await response.json<{ data: { hostCount: number; maxGroups: number } }>();
@@ -224,7 +225,7 @@ describe("PUT /rooms/:id (HTTP)", () => {
             new Request(`http://local.test/rooms/${crypto.randomUUID()}`, {
                 method: "PUT",
                 headers: jsonHeaders(admin),
-                body: JSON.stringify({ name: uniqueName(), size: 40 }),
+                body: JSON.stringify({ name: uniqueName(), type: "comum" }),
             }),
         );
         expect(response.status).toBe(404);
@@ -239,7 +240,7 @@ describe("PUT /rooms/:id (HTTP)", () => {
             new Request(`http://local.test/rooms/${roomB.id}`, {
                 method: "PUT",
                 headers: jsonHeaders(admin),
-                body: JSON.stringify({ name: roomA.name, size: 40 }),
+                body: JSON.stringify({ name: roomA.name, type: "comum" }),
             }),
         );
         expect(response.status).toBe(409);

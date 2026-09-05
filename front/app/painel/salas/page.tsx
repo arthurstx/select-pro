@@ -4,12 +4,21 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DoorOpenIcon, PlusIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import { CreateRoomSchema, deriveRoomCapacity, type CreateRoomDTO, type RoomSummary } from "shared";
+import { Controller, useForm } from "react-hook-form";
+import {
+  CreateRoomSchema,
+  ROOM_TYPE_LABEL,
+  RoomTypeSchema,
+  deriveRoomCapacity,
+  type CreateRoomDTO,
+  type RoomSummary,
+} from "shared";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Sheet,
   SheetContent,
@@ -25,9 +34,10 @@ import { createRoom, deleteRoom, listRooms, updateRoom } from "@/lib/rooms/rooms
 
 /**
  * Cadastro de salas (FEAT-0011) — CRUD que a organização automática de
- * grupos (feature futura) vai consumir. Hosts/limite de grupos nunca são
- * digitados: `deriveRoomCapacity` (mesma função que a API usa na response)
- * calcula a prévia ao vivo enquanto o admin digita a capacidade.
+ * grupos consome. Hosts/limite de grupos nunca são digitados:
+ * `deriveRoomCapacity` (mesma função que a API usa na response) deriva os dois
+ * da CLASSIFICAÇÃO escolhida (FEAT-0023 — antes vinha da capacidade em
+ * pessoas), com prévia ao vivo no formulário.
  */
 export default function SalasPage() {
   const queryClient = useQueryClient();
@@ -62,8 +72,8 @@ export default function SalasPage() {
 
       <div className="border-border bg-primary/5 rounded-lg border p-3 text-sm">
         <p className="text-foreground">
-          Hosts e limite de grupos são calculados pela capacidade: até 50 lugares → 1 host, 2
-          grupos; de 51 a 80 → 2 hosts, 3 grupos; acima de 80 → 2 hosts, 4 grupos.
+          Hosts e limite de grupos vêm da classificação da sala: sala comum → 1 host, 2 grupos;
+          anfiteatro → 2 hosts, 4 grupos.
         </p>
       </div>
 
@@ -93,7 +103,7 @@ export default function SalasPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Sala</TableHead>
-                <TableHead>Capacidade</TableHead>
+                <TableHead>Classificação</TableHead>
                 <TableHead>Hosts</TableHead>
                 <TableHead>Grupos (máx.)</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -103,7 +113,7 @@ export default function SalasPage() {
               {query.data.map((room) => (
                 <TableRow key={room.id}>
                   <TableCell className="font-medium">{room.name}</TableCell>
-                  <TableCell>{room.size} pessoas</TableCell>
+                  <TableCell>{ROOM_TYPE_LABEL[room.type]}</TableCell>
                   <TableCell className="text-muted-foreground">{room.hostCount}</TableCell>
                   <TableCell className="text-muted-foreground">{room.maxGroups}</TableCell>
                   <TableCell className="text-right">
@@ -160,13 +170,13 @@ function RoomFormSheet({
 
   const form = useForm<CreateRoomDTO>({
     resolver: zodResolver(CreateRoomSchema),
-    defaultValues: { name: "", size: 40 },
+    defaultValues: { name: "", type: "comum" },
   });
 
   // Reabrir com outra sala (ou "nova sala") precisa repovoar o form —
   // ele não é remontado, já que o Sheet permanece no DOM entre aberturas.
   useEffect(() => {
-    if (open) form.reset({ name: room?.name ?? "", size: room?.size ?? 40 });
+    if (open) form.reset({ name: room?.name ?? "", type: room?.type ?? "comum" });
   }, [open, room, form]);
 
   const mutation = useMutation({
@@ -183,16 +193,13 @@ function RoomFormSheet({
     },
   });
 
-  const watchedSize = useWatch({ control: form.control, name: "size" });
-  const preview = Number.isFinite(watchedSize) && watchedSize > 0 ? deriveRoomCapacity(watchedSize) : null;
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent>
         <SheetHeader>
           <SheetTitle>{isEditing ? "Editar sala" : "Nova sala"}</SheetTitle>
           <SheetDescription>
-            Hosts e limite de grupos são calculados automaticamente pela capacidade.
+            Hosts e limite de grupos são calculados automaticamente pela classificação.
           </SheetDescription>
         </SheetHeader>
 
@@ -214,24 +221,36 @@ function RoomFormSheet({
               <FieldError errors={[form.formState.errors.name]} />
             </Field>
 
-            <Field data-invalid={!!form.formState.errors.size}>
-              <FieldLabel htmlFor="room-size">Capacidade (pessoas)</FieldLabel>
-              <Input
-                id="room-size"
-                type="number"
-                min={1}
-                aria-invalid={!!form.formState.errors.size}
-                {...form.register("size", { valueAsNumber: true })}
+            <Field data-invalid={!!form.formState.errors.type}>
+              <FieldLabel htmlFor="room-type-comum">Classificação</FieldLabel>
+              <Controller
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <RadioGroup value={field.value} onValueChange={field.onChange}>
+                    {RoomTypeSchema.options.map((option) => {
+                      const { hostCount, maxGroups } = deriveRoomCapacity(option);
+                      return (
+                        <Label
+                          key={option}
+                          htmlFor={`room-type-${option}`}
+                          className="border-input has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer items-center gap-3 rounded-lg border p-4 text-sm font-normal"
+                        >
+                          <RadioGroupItem value={option} id={`room-type-${option}`} />
+                          <span>
+                            {ROOM_TYPE_LABEL[option]}
+                            <span className="text-muted-foreground block text-xs">
+                              {hostCount} host{hostCount > 1 ? "s" : ""} · até {maxGroups} grupos
+                            </span>
+                          </span>
+                        </Label>
+                      );
+                    })}
+                  </RadioGroup>
+                )}
               />
-              <FieldError errors={[form.formState.errors.size]} />
+              <FieldError errors={[form.formState.errors.type]} />
             </Field>
-
-            {preview && (
-              <p className="text-muted-foreground text-sm">
-                Esta sala comporta {preview.hostCount} host{preview.hostCount > 1 ? "s" : ""} e até{" "}
-                {preview.maxGroups} grupos.
-              </p>
-            )}
           </FieldGroup>
         </form>
 

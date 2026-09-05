@@ -4,6 +4,7 @@ import { GenderSchema } from "./candidate.schema";
 import { AttendanceSchema } from "./checkin.schema";
 import { EvaluatorRoleSchema } from "./evaluator.schema";
 import { MemberStatusSchema } from "./member.schema";
+import { RoomTypeSchema } from "./room.schema";
 
 // Organização automática de grupos (FEAT-0012). `groups`, `group_evaluators` e
 // `group_candidates` — órfãs desde `0001-schema.sql` — passam a ser usadas
@@ -45,8 +46,8 @@ export const GroupSummarySchema = z.object({
     id: z.string().uuid(),
     name: z.string(),
     modality: GroupModalitySchema,
-    /** `size` (FEAT-0022) — alimenta `deriveRoomCapacity` no front pra diagnóstico de host/desvio do ideal, sem round-trip. */
-    room: z.object({ id: z.string().uuid(), name: z.string(), size: z.number().int() }).nullable(),
+    /** `type` (FEAT-0023, era `size`) — alimenta `deriveRoomCapacity` no front pra diagnóstico de host/desvio do ideal, sem round-trip. */
+    room: z.object({ id: z.string().uuid(), name: z.string(), type: RoomTypeSchema }).nullable(),
     candidates: z.array(GroupCandidateSchema),
     /**
      * Populado para as duas modalidades (FEAT-0018) — a organização automática aloca

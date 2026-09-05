@@ -5,6 +5,11 @@
 // payload de UPDATE (tudo opcional, exceto o id). Datas trafegam como
 // `string` (ISO-8601), como o D1 as devolve.
 
+// `RoomType` é o CHECK de `rooms.type`, mas mora em `room.schema` junto do
+// `z.enum` que o valida — importado aqui só como tipo (sem ciclo: `room.schema`
+// não importa este arquivo).
+import type { RoomType } from "./room.schema";
+
 // ------------------------------------------------------------
 // Enums (CHECK constraints do schema)
 // ------------------------------------------------------------
@@ -67,7 +72,8 @@ export interface RoleRow {
 export interface RoomRow {
     id: string;
     name: string;
-    size: number;
+    /** FEAT-0023 — substituiu `size` (migration 0016): host/grupos derivam da classificação. */
+    type: RoomType;
 }
 
 // ------------------------------------------------------------

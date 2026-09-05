@@ -123,7 +123,7 @@ staging/produção (ver "Pendências operacionais").
       início/fim de inscrições por edição — hoje (2026-09-04) existe uma trava
       temporária hardcoded em `api/src/lib/candidate-registration-deadline.ts`
       (prazo fixo `2026-09-04 23:59` Brasília) bloqueando `POST
-      /candidate/register` com `403 REGISTRATION_CLOSED`; virá spec própria
+    /candidate/register` com `403 REGISTRATION_CLOSED`; virá spec própria
       quando essa tela for priorizada.
 - [x] Contador "X de Y presentes" no cabeçalho do check-in — implementado direto em
       `develop` (tarefa pequena, extensão óbvia do contrato existente, sem ciclo completo
@@ -140,6 +140,7 @@ staging/produção (ver "Pendências operacionais").
 
 ## Pendências operacionais (não são código)
 
+- [ ] Aplicar migrations `0008` a `0016` em staging, depois produção (staging sempre primeiro
 - [ ] Aplicar migrations `0008` a `0016` em staging, depois produção (staging sempre primeiro
       — Princípio III da constitution). Migration `0014` reconstrói `groups`/`group_evaluators`/
       `group_candidates`; `0015` dropa `metrics` e reconstrói `evaluations`/`evaluation_scores`

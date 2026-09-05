@@ -37,18 +37,18 @@ export function organizePresencialGroups(
 
     const sortedRooms = [...rooms].sort((a, b) => a.name.localeCompare(b.name));
 
-    // FEAT-0020, ajustado na FEAT-0022: a capacidade real de uma sala não é mais só `room.size`
-    // (lugares físicos) — é `min(size, maxGroups * 7)`, porque nenhum grupo pode passar de 7
-    // (FR-003). Uma sala de 50 lugares mas só 2 grupos (D5) não comporta 50 pessoas em grupos
-    // válidos, comporta 14. Acumula salas (já em ordem de nome) até cobrir o total de
-    // presentes, ou esgotar (FR-012/013 tratam "sem sala nenhuma"/"capacidade insuficiente"
-    // fora daqui, no service).
+    // FEAT-0023: a capacidade de uma sala é `maxGroups * 7` — quantos grupos a classificação
+    // comporta (`deriveRoomCapacity`) vezes o teto de 7 candidatos por grupo (FR-003). Uma sala
+    // comum comporta 14 candidatos, um anfiteatro 28; lugares físicos deixaram de ser
+    // cadastrados (`rooms.size` saiu na migration 0016). Acumula salas (já em ordem de nome) até
+    // cobrir o total de presentes, ou esgotar (FR-012/013 tratam "sem sala nenhuma"/"capacidade
+    // insuficiente" fora daqui, no service).
     const roomAssignments: { room: RoomRow; count: number; maxGroups: number }[] = [];
     let remaining = candidates.length;
     for (const room of sortedRooms) {
         if (remaining <= 0) break;
-        const { maxGroups } = deriveRoomCapacity(room.size);
-        const roomCapacity = Math.min(room.size, maxGroups * 7);
+        const { maxGroups } = deriveRoomCapacity(room.type);
+        const roomCapacity = maxGroups * 7;
         const count = Math.min(remaining, roomCapacity);
         if (count <= 0) continue;
         roomAssignments.push({ room, count, maxGroups });
@@ -109,7 +109,7 @@ export function organizePresencialGroups(
 }
 
 /**
- * FEAT-0021 — até `deriveRoomCapacity(room.size).hostCount` hosts por sala, em ordem de sala
+ * FEAT-0021 — até `deriveRoomCapacity(room.type).hostCount` hosts por sala, em ordem de sala
  * (mesma ordem de `roomAssignments`), consumindo os hosts presentes sequencialmente até
  * acabarem. Host é recurso da sala inteira, não de um grupo específico — por isso os mesmos
  * ids valem pra todos os grupos daquela sala (aplicado por quem chama, `organizePresencialGroups`).
@@ -122,7 +122,7 @@ function distributeHostsToRooms(
     let cursor = 0;
 
     for (const { room } of roomAssignments) {
-        const target = deriveRoomCapacity(room.size).hostCount;
+        const target = deriveRoomCapacity(room.type).hostCount;
         const assigned: string[] = [];
         while (assigned.length < target && cursor < hosts.length) {
             assigned.push(hosts[cursor]!.user_id);

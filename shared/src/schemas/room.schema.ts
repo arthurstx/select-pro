@@ -1,18 +1,32 @@
 import { z } from "zod";
 
 // Salas do processo seletivo (FEAT-0011). `rooms(id, name, size)` existe
-// desde a 0001, órfã até esta feature.
+// desde a 0001, órfã até a FEAT-0011; `size` foi substituída por `type` na
+// FEAT-0023 (migration 0016).
 
 /**
- * Hosts e limite de grupos NUNCA são colunas — são derivados da capacidade
- * (D5, CONTEXT.md). Função pura, sem I/O: consumida pela API (monta a
- * response) e pelo front (prévia ao vivo no formulário, sem round-trip —
- * mockup Stitch "Gestão de Salas").
+ * FEAT-0023 — classificação da sala. Substitui a capacidade em pessoas como
+ * fonte de host/grupos: quem decide não é quanta gente cabe, é que tipo de
+ * sala é.
  */
-export function deriveRoomCapacity(size: number): { hostCount: number; maxGroups: number } {
-    if (size <= 50) return { hostCount: 1, maxGroups: 2 };
-    if (size <= 80) return { hostCount: 2, maxGroups: 3 };
-    return { hostCount: 2, maxGroups: 4 };
+export const RoomTypeSchema = z.enum(["comum", "anfiteatro"]);
+export type RoomType = z.infer<typeof RoomTypeSchema>;
+
+/** Rótulo de exibição — usado no cadastro e nas telas de grupo/simulação. */
+export const ROOM_TYPE_LABEL: Record<RoomType, string> = {
+    comum: "Sala comum",
+    anfiteatro: "Anfiteatro",
+};
+
+/**
+ * Hosts e limite de grupos NUNCA são colunas — são derivados da CLASSIFICAÇÃO
+ * da sala (FEAT-0023, substitui a faixa por capacidade de D5): anfiteatro
+ * comporta 2 hosts e 4 grupos, sala comum 1 host e 2 grupos. Função pura, sem
+ * I/O: consumida pela API (monta a response) e pelo front (prévia ao vivo no
+ * formulário, sem round-trip — mockup Stitch "Gestão de Salas").
+ */
+export function deriveRoomCapacity(type: RoomType): { hostCount: number; maxGroups: number } {
+    return type === "anfiteatro" ? { hostCount: 2, maxGroups: 4 } : { hostCount: 1, maxGroups: 2 };
 }
 
 /**
@@ -54,17 +68,13 @@ export function deriveEvaluatorTargetForGroupSize(size: number): 1 | 2 {
  */
 export function recommendRoomsForGroups(
     totalGroups: number,
-): { maxGroups: number; hostCount: number; roomsNeeded: number }[] {
+): { type: RoomType; maxGroups: number; hostCount: number; roomsNeeded: number }[] {
     if (totalGroups <= 0) return [];
 
-    // Maior faixa primeiro (D5, `deriveRoomCapacity`): >80 → 4 grupos/2 hosts.
-    const tiers = [
-        { maxGroups: 4, hostCount: 2 },
-        { maxGroups: 3, hostCount: 2 },
-        { maxGroups: 2, hostCount: 1 },
-    ];
+    // Maior classificação primeiro (FEAT-0023, `deriveRoomCapacity`): anfiteatro → 4 grupos/2 hosts.
+    const tiers = (["anfiteatro", "comum"] as const).map((type) => ({ type, ...deriveRoomCapacity(type) }));
 
-    const plan: { maxGroups: number; hostCount: number; roomsNeeded: number }[] = [];
+    const plan: { type: RoomType; maxGroups: number; hostCount: number; roomsNeeded: number }[] = [];
     let remaining = totalGroups;
 
     const biggest = tiers[0]!;
@@ -75,8 +85,8 @@ export function recommendRoomsForGroups(
     }
 
     if (remaining > 0) {
-        // Menor faixa que ainda comporta o restante sozinha; se nenhuma comportar (raro — só
-        // aconteceria com faixas > a maior existente), usa a maior mesmo assim.
+        // Menor classificação que ainda comporta o restante sozinha; se nenhuma comportar (raro —
+        // só aconteceria com sobra > a maior classificação), usa a maior mesmo assim.
         const tier = [...tiers].reverse().find((t) => t.maxGroups >= remaining) ?? biggest;
         plan.push({ ...tier, roomsNeeded: 1 });
     }
@@ -86,15 +96,15 @@ export function recommendRoomsForGroups(
 
 /**
  * FEAT-0022 (US1) — quantos hosts a estrutura de salas REALMENTE usada por uma prévia exige,
- * somando `deriveRoomCapacity(size).hostCount` por sala DISTINTA (não por grupo — uma sala com
+ * somando `deriveRoomCapacity(type).hostCount` por sala DISTINTA (não por grupo — uma sala com
  * 2 grupos conta uma vez só). `deficit` nunca fica negativo: hosts presentes sobrando não geram
  * "crédito", só zeram o aviso.
  */
 export function calculateHostDeficit(
-    roomSizesUsed: number[],
+    roomTypesUsed: RoomType[],
     hostsPresentCount: number,
 ): { required: number; deficit: number } {
-    const required = roomSizesUsed.reduce((sum, size) => sum + deriveRoomCapacity(size).hostCount, 0);
+    const required = roomTypesUsed.reduce((sum, type) => sum + deriveRoomCapacity(type).hostCount, 0);
     return { required, deficit: Math.max(0, required - hostsPresentCount) };
 }
 
@@ -116,18 +126,18 @@ export function classifyPresencialGroup(
 
 export const CreateRoomSchema = z.object({
     name: z.string().trim().min(1, "Informe o nome da sala"),
-    size: z.number().int().min(1, "A capacidade deve ser de pelo menos 1 pessoa"),
+    type: RoomTypeSchema,
 });
 export type CreateRoomDTO = z.infer<typeof CreateRoomSchema>;
 
-/** Mesmo shape do create — `PUT` substitui nome e capacidade juntos (a tela sempre pré-carrega os dois). */
+/** Mesmo shape do create — `PUT` substitui nome e classificação juntos (a tela sempre pré-carrega os dois). */
 export const UpdateRoomSchema = CreateRoomSchema;
 export type UpdateRoomDTO = z.infer<typeof UpdateRoomSchema>;
 
 export const RoomSummarySchema = z.object({
     id: z.string().uuid(),
     name: z.string(),
-    size: z.number().int(),
+    type: RoomTypeSchema,
     hostCount: z.number().int(),
     maxGroups: z.number().int(),
 });

@@ -84,7 +84,13 @@ export class CandidateService {
             // E5: inscrição concorrente gravou o mesmo email/telefone antes desta.
             const field = parseD1ConstraintError(err);
             if (field) {
-                logger.warn("candidate.register.constraint_conflict", { field });
+                // Mesma chave (`email`/`phone`) usada nos conflitos da checagem
+                // prévia, para que uma busca por valor nos logs ache os dois
+                // caminhos — só `field` diria que houve conflito, mas não em qual.
+                logger.warn("candidate.register.constraint_conflict", {
+                    field,
+                    ...(field === "email" ? { email: input.email } : { phone: input.phone }),
+                });
             }
             if (field === "email") return left(new EmailAlreadyRegisteredError());
             if (field === "phone") return left(new PhoneAlreadyRegisteredError());

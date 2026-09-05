@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { deriveRoomCapacity } from "shared";
+import { deriveRoomCapacity, type RoomType } from "shared";
 import { describe, expect, it } from "vitest";
 
 import { GroupRepository } from "../src/repositories/group.repository";
@@ -134,11 +134,11 @@ async function insertEvaluatorUser() {
     return userId;
 }
 
-async function insertRoom(size: number) {
+async function insertRoom(type: RoomType) {
     counter += 1;
     const id = crypto.randomUUID();
-    await env.DB.prepare(`INSERT INTO rooms (id, name, size) VALUES (?, ?, ?)`).bind(id, `Sala Grp ${counter}`, size).run();
-    return { id, size };
+    await env.DB.prepare(`INSERT INTO rooms (id, name, type) VALUES (?, ?, ?)`).bind(id, `Sala Grp ${counter}`, type).run();
+    return { id, type };
 }
 
 /** Consulta ao vivo — nunca confia num total fixo, já que `rooms` acumula entre os testes deste arquivo. */
@@ -151,9 +151,9 @@ async function womenCountInGroup(groupId: string): Promise<number> {
     return row?.n ?? 0;
 }
 
-async function roomSize(roomId: string): Promise<number> {
-    const row = await env.DB.prepare(`SELECT size FROM rooms WHERE id = ?`).bind(roomId).first<{ size: number }>();
-    return row?.size ?? 0;
+async function roomType(roomId: string): Promise<RoomType> {
+    const row = await env.DB.prepare(`SELECT type FROM rooms WHERE id = ?`).bind(roomId).first<{ type: RoomType }>();
+    return row?.type ?? "comum";
 }
 
 describe("GroupService.organizePresencial — sem sala cadastrada (FR-012)", () => {
@@ -181,11 +181,11 @@ describe("GroupService.organizePresencial — fluxo principal", () => {
         if (result.isLeft()) expect(result.value.code).toBe("NO_CANDIDATES_PRESENT");
     });
 
-    it("aloca todos os presenciais respeitando D1/D5; avaliador conta pro grupo, host vira responsável da sala (FEAT-0020/FEAT-0021)", async () => {
+    it("aloca todos os presenciais respeitando D1 e a classificação da sala; avaliador conta pro grupo, host vira responsável da sala (FEAT-0020/FEAT-0021)", async () => {
         const NOW = new Date("2103-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        const room = await insertRoom(50); // deriveRoomCapacity(50).maxGroups === 2
+        const room = await insertRoom("comum"); // deriveRoomCapacity("comum").maxGroups === 2
 
         const candidateIds = [
             await insertCheckedCandidate(process.id, actorId, { gender: "feminino" }),
@@ -226,8 +226,8 @@ describe("GroupService.organizePresencial — fluxo principal", () => {
             groupsByRoom.set(roomId, (groupsByRoom.get(roomId) ?? 0) + 1);
         }
         for (const [roomId, groupCount] of groupsByRoom) {
-            const size = await roomSize(roomId);
-            expect(groupCount).toBeLessThanOrEqual(deriveRoomCapacity(size).maxGroups);
+            const type = await roomType(roomId);
+            expect(groupCount).toBeLessThanOrEqual(deriveRoomCapacity(type).maxGroups);
         }
 
         // D1 — nenhum grupo com exatamente 1 mulher.
@@ -243,7 +243,7 @@ describe("GroupService.organizePresencial — fluxo principal", () => {
         const NOW = new Date("2104-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         await insertCheckedCandidate(process.id, actorId);
 
         const first = await service().organizePresencial(undefined, NOW);
@@ -273,7 +273,7 @@ describe("GroupService.previewPresencial (FEAT-0021)", () => {
         const NOW = new Date("2130-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         await insertCheckedCandidate(process.id, actorId);
         await insertCheckedMember(process.id, actorId);
 
@@ -292,7 +292,7 @@ describe("GroupService.previewPresencial (FEAT-0021)", () => {
         const NOW = new Date("2131-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         await insertCheckedCandidate(process.id, actorId);
         const evaluatorId = await insertCheckedMember(process.id, actorId);
         const otherEvaluatorId = await insertCheckedMember(process.id, actorId);
@@ -315,7 +315,7 @@ describe("GroupService.previewPresencial (FEAT-0021)", () => {
         const NOW = new Date("2132-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         await insertCheckedCandidate(process.id, actorId);
         const evaluatorId = await insertCheckedMember(process.id, actorId);
         const hostId = await insertCheckedMember(process.id, actorId, true);
@@ -334,7 +334,7 @@ describe("GroupService.clearPresencialOrganization (FEAT-0021)", () => {
         const NOW = new Date("2133-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         await insertCheckedCandidate(process.id, actorId, { online: false });
         await insertCheckedCandidate(process.id, actorId, { online: true });
 
@@ -367,7 +367,7 @@ describe("GroupService.clearOnlineOrganization (FEAT-0022)", () => {
         const NOW = new Date("2138-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         await insertCheckedCandidate(process.id, actorId, { online: false });
         await insertCheckedCandidate(process.id, actorId, { online: true });
 
@@ -430,7 +430,7 @@ describe("GroupService.organizeOnline — fluxo principal (FEAT-0018)", () => {
         const NOW = new Date("2115-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         const presencialId = await insertCheckedCandidate(process.id, actorId, { online: false });
         const onlineId = await insertCheckedCandidate(process.id, actorId, { online: true });
 
@@ -572,7 +572,7 @@ describe("GroupService.assignEvaluatorToOnlineGroup / leaveOnlineGroup (US2/US3,
         const NOW = new Date("2118-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         await insertCheckedCandidate(process.id, actorId, { online: false });
         const presencialResult = await service().organizePresencial(undefined, NOW);
         if (!presencialResult.isRight()) throw new Error("setup falhou");
@@ -643,7 +643,7 @@ describe("GroupService.moveCandidate / moveEvaluator (US2, FR-009/FR-010 — FEA
     async function setupTwoPresencialGroups(now: Date) {
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(now);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
 
         const women = [
             await insertCheckedCandidate(process.id, actorId, { gender: "feminino" }),
@@ -692,7 +692,7 @@ describe("GroupService.moveCandidate / moveEvaluator (US2, FR-009/FR-010 — FEA
         const NOW = new Date("2125-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         const presencialId = await insertCheckedCandidate(process.id, actorId, { online: false });
         await insertCheckedCandidate(process.id, actorId, { online: true });
 
@@ -731,7 +731,7 @@ describe("GroupService.moveCandidate / moveEvaluator (US2, FR-009/FR-010 — FEA
         const NOW = new Date("2128-08-10T12:00:00.000Z");
         const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
         const actorId = await insertActor();
-        await insertRoom(50);
+        await insertRoom("comum");
         // 10 candidatos — FEAT-0022 (faixa 5-7): precisa de mais de 7 pra formar 2 grupos de
         // verdade, senão "mover pro outro grupo" não faz sentido (grupo único).
         for (let i = 0; i < 10; i++) await insertCheckedCandidate(process.id, actorId);
