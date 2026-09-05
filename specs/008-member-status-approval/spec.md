@@ -8,6 +8,18 @@
 
 **Input**: Backlog organizado em 2026-08-24 (features 008–016). Decisão D3: o status de membro passa a ter três valores, onde `inactive` significa pós-júnior.
 
+> [!NOTE]
+> **Emenda de 2026-09-04**: a Supabase da tec passa a conter só membros
+> efetivados/ativos — pós-júnior e trainee deixam de existir nesse diretório.
+> A User Story 1 abaixo (e as FRs derivadas dela) descreviam um cadastro que
+> *descobria* a situação da pessoa consultando a Supabase; a partir desta
+> emenda, pós-júnior e trainee **se declaram** no próprio formulário, sem
+> nenhuma consulta externa, e o mecanismo de solicitação pendente (US2/US3)
+> passa a ser alimentado por esses dados auto-declarados em vez do snapshot
+> vindo do diretório. Detalhe em "US1 — emenda" logo abaixo e em FR-001-A a
+> FR-001-D. Também renomeia `inactive` → `post_junior` (o nome antigo lia como
+> "desligado", o oposto do que significava) — ver `research.md`, R6/R7.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Pós-júnior e trainee conseguem solicitar cadastro (Priority: P1)
@@ -25,6 +37,13 @@ Hoje só o membro efetivado consegue criar conta na plataforma. Pós-juniores e 
 3. **Given** um trainee, **When** ele completa o cadastro, **Then** o comportamento é o mesmo do pós-júnior.
 4. **Given** alguém que não consta como membro da empresa, **When** ele tenta se cadastrar, **Then** continua sendo recusado como hoje — esta feature não afasta a verificação de que a pessoa é membro.
 5. **Given** um membro cuja situação na empresa é desconhecida pela plataforma, **When** ele tenta se cadastrar, **Then** o sistema o trata como não elegível e recusa, sem erro técnico visível.
+
+**US1 — emenda de 2026-09-04 (substitui o mecanismo de descoberta)**: a tela de cadastro passa a ter 3 opções explícitas — **Efetivo**, **Trainee**, **Pós-júnior** — em vez de a aplicação inferir a situação consultando a Supabase para todo mundo.
+
+- **Efetivo** mantém o comportamento acima: consulta a Supabase por e-mail, exige `status === "active"`, cria conta e sessão imediatamente. Se o e-mail não for encontrado, ou for encontrado com qualquer status diferente de `active`, o cadastro é recusado (403) — **não** vira solicitação pendente (isso é uma mudança de comportamento em relação ao cenário 2/3 originais, que caiam na fila quando a Supabase ainda retornava `inactive`/`trainee`; ver FR-001-B).
+- **Trainee** e **Pós-júnior** não consultam a Supabase. A pessoa preenche, no próprio formulário: nome completo, telefone, curso, semestre, gênero e etnia (não pede data de nascimento). Esses dados alimentam a `signup_request` (US2/US3) exatamente como o snapshot da Supabase alimentava antes — o mecanismo de aprovação não muda, só a origem do dado.
+- Qualquer e-mail pode escolher Trainee/Pós-júnior — não há verificação prévia de vínculo com a empresa nessa trilha; o admin continua sendo quem decide (US2/US3), e agora é o único portão de verificação para esses dois casos.
+- O payload dessa trilha nunca aceita "Efetivo" como valor de situação — só os dois auto-declaráveis.
 
 ---
 
@@ -73,12 +92,21 @@ O admin tem, dentro do painel, uma lista das solicitações pendentes, onde pode
 - **Falha no envio do e-mail**: a solicitação é registrada mesmo assim e aparece na fila do painel. O cadastro não falha por causa do e-mail.
 - **Situação na empresa muda entre o pedido e a decisão**: vale a situação no momento da decisão.
 - **Membro aprovado que depois deixa a empresa**: fora do escopo; a desativação de conta já existe e continua sendo o mecanismo.
+- **(Emenda 2026-09-04) Alguém tenta se declarar "Efetivo" na trilha auto-declarada**: rejeitado antes de qualquer gravação — o payload dessa trilha não aceita esse valor (FR-001-C).
+- **(Emenda 2026-09-04) Registro residual `inactive`/`trainee` ainda aparece na Supabase**: tratado como qualquer status ≠ `active` na trilha Efetivo — recusa com 403, não vira pendência (FR-001-B).
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 - **FR-001**: O sistema MUST reconhecer exatamente três situações de membro: efetivado, pós-júnior e trainee.
+
+**Emenda de 2026-09-04** — FR-001-A a FR-001-D substituem o mecanismo de descoberta por status (a Supabase só devolve `active` agora):
+
+- **FR-001-A**: A tela de cadastro MUST apresentar 3 opções mutuamente exclusivas: Efetivo, Trainee, Pós-júnior.
+- **FR-001-B**: A trilha Efetivo MUST continuar consultando a Supabase e exigir `status === "active"`; qualquer outro resultado (não encontrado, ou status diferente) MUST ser recusado com 403 — não MUST virar solicitação pendente.
+- **FR-001-C**: As trilhas Trainee e Pós-júnior MUST NOT consultar a Supabase, e o payload delas MUST NOT aceitar "Efetivo" como situação. Todo dado de perfil (nome, telefone, curso, semestre, gênero, etnia) vem do formulário; data de nascimento não é pedida.
+- **FR-001-D**: Qualquer e-mail MAY abrir uma solicitação auto-declarada (Trainee/Pós-júnior) — sem verificação prévia de vínculo; o admin (US2/US3) é o único portão para esses dois casos.
 - **FR-002**: O sistema MUST tratar qualquer situação fora dessas três como não elegível, sem falhar — a origem desse dado é um sistema externo que não garante os valores.
 - **FR-003**: O sistema MUST permitir que membro efetivado crie conta sem aprovação, preservando o comportamento atual.
 - **FR-004**: O sistema MUST registrar uma solicitação pendente, em vez de recusar, quando o cadastro for de pós-júnior ou trainee.
@@ -99,11 +127,13 @@ O admin tem, dentro do painel, uma lista das solicitações pendentes, onde pode
 - **FR-019**: Ao decidir, o admin MUST conseguir ver se aquela pessoa já teve solicitações recusadas antes, para decidir com contexto.
 - **FR-020**: A notificação de nova solicitação MUST ser enviada a um endereço institucional único e configurável — atualmente a caixa de Gente & Gestão — e não a uma lista de destinatários individuais.
 - **FR-021**: A fila do painel (US3) MUST ser suficiente por si só para descobrir e decidir solicitações. Como a notificação vai para uma caixa compartilhada que pode não ser monitorada continuamente, nenhuma solicitação pode depender de alguém ter aberto o e-mail para ser resolvida.
+- **FR-022** *(emenda 2026-09-04)*: A fila do admin (painel e tela do link de e-mail) MUST indicar quando uma solicitação foi auto-declarada (Trainee/Pós-júnior sob a emenda), já que esses dados não passaram por nenhuma conferência externa.
+- **FR-023** *(emenda 2026-09-04)*: O valor de status antes gravado como `inactive` passa a ser gravado e lido como `post_junior` em toda a aplicação — mesmo significado (pós-júnior), nome corrigido.
 
 ### Key Entities
 
-- **Situação do membro**: como a empresa classifica a pessoa — efetivado, pós-júnior ou trainee. Vem de um sistema externo, é lida no cadastro e novamente na decisão.
-- **Solicitação de cadastro**: o pedido de acesso de um pós-júnior ou trainee. Tem quem pediu, quando pediu, estado (pendente, aprovada, recusada) e — depois de decidida — quem decidiu e quando. "Expirada" descreve o *link* de leitura (FR-009), não um estado da solicitação em si — uma solicitação sem link válido continua `pendente` e decidível pelo painel. Uma mesma pessoa pode ter várias solicitações ao longo do tempo, já que a recusa não é definitiva (FR-018); o histórico delas é o que alimenta FR-019.
+- **Situação do membro**: como a empresa classifica a pessoa — efetivado, pós-júnior ou trainee. *(Emenda 2026-09-04)* Efetivado continua vindo da Supabase; pós-júnior e trainee passam a ser **auto-declarados** no cadastro, não mais lidos de um sistema externo. O valor interno de pós-júnior é `post_junior` (antes `inactive`).
+- **Solicitação de cadastro**: o pedido de acesso de um pós-júnior ou trainee. Tem quem pediu, quando pediu, estado (pendente, aprovada, recusada) e — depois de decidida — quem decidiu e quando. "Expirada" descreve o *link* de leitura (FR-009), não um estado da solicitação em si — uma solicitação sem link válido continua `pendente` e decidível pelo painel. Uma mesma pessoa pode ter várias solicitações ao longo do tempo, já que a recusa não é definitiva (FR-018); o histórico delas é o que alimenta FR-019. *(Emenda 2026-09-04)* Ganha o atributo derivado "auto-declarada" (FR-022), calculado a partir da origem do identificador do membro, não uma coluna nova.
 - **Link de decisão**: credencial de uso único e prazo limitado que dá ao admin acesso à tela de decisão de uma solicitação específica.
 
 ## Success Criteria *(mandatory)*
@@ -116,11 +146,13 @@ O admin tem, dentro do painel, uma lista das solicitações pendentes, onde pode
 - **SC-004**: Nenhuma solicitação termina com duas decisões conflitantes, mesmo com dois admins agindo simultaneamente.
 - **SC-005**: 100% das solicitações decididas têm registro de autor e horário.
 - **SC-006**: Uma falha no envio de e-mail não impede o cadastro nem a decisão — 100% das solicitações continuam decidíveis pelo painel.
+- **SC-007** *(emenda 2026-09-04)*: Uma pessoa sem nenhum registro na Supabase completa o cadastro como Trainee ou Pós-júnior e aparece na fila do admin, sem qualquer chamada ao diretório da tec.
+- **SC-008** *(emenda 2026-09-04)*: Uma tentativa de declarar "Efetivo" no payload da trilha auto-declarada é rejeitada antes de qualquer escrita no banco.
 
 ## Assumptions
 
 - **Membro efetivado não muda**: o fluxo atual permanece exatamente como está. Esta feature só acrescenta o caminho da aprovação.
-- **A verificação de que a pessoa é membro já existe** e continua valendo — a aprovação é camada adicional, não substituição.
+- **A verificação de que a pessoa é membro já existe** e continua valendo — a aprovação é camada adicional, não substituição. *(Emenda 2026-09-04: isso deixou de valer para pós-júnior/trainee — para esses dois, não há mais verificação externa de vínculo; o admin é o único portão, ver FR-001-D.)*
 - **Prazo do link**: 7 dias, prazo usual para links de ação em e-mail. Depois disso, o painel é o caminho.
 - **O envio de e-mail já existe na plataforma** (usado hoje na recuperação de senha) e será reutilizado, não recriado.
 - **A situação vale no momento da decisão**, não no do pedido.

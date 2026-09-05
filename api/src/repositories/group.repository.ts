@@ -1,4 +1,22 @@
-import type { Attendance, EvaluatorRole, Gender, GroupModality, MemberStatus, RoomRow } from "shared";
+import { type Attendance, type EvaluatorRole, type Gender, type GroupModality, type MemberStatus, type RoomRow, normalizeStoredMemberStatus } from "shared";
+
+import { logger } from "../lib/logger";
+
+/**
+ * `p.status` vem cru do D1 (`TEXT`, mesmo motivo de `member_profiles.status`
+ * não ter CHECK). `normalizeStoredMemberStatus` traduz o legado `inactive`
+ * pré-migration-0016 e detecta dado corrompido — em vez de deixá-lo vazar
+ * como `ZodError` no `GroupEvaluatorSchema`/`AvailableEvaluatorSchema` do
+ * front, longe da causa (FEAT-0008, R7).
+ */
+function normalizeMemberStatusRow<T extends { memberStatus: string; user_id: string }>(row: T): T & { memberStatus: MemberStatus } {
+    const memberStatus = normalizeStoredMemberStatus(row.memberStatus);
+    if (!memberStatus) {
+        logger.error("group_repository.unknown_member_status", { userId: row.user_id, raw: row.memberStatus });
+        throw new Error(`memberStatus desconhecido para o usuário ${row.user_id}: ${row.memberStatus}`);
+    }
+    return { ...row, memberStatus };
+}
 
 /** Candidato presente (check-in feito), com os dois dados que o algoritmo precisa (D1/D7). */
 export interface PresentCandidateRow {
@@ -110,7 +128,7 @@ export class GroupRepository {
             .bind(processId)
             .all<PresentMemberRow>();
 
-        return results ?? [];
+        return (results ?? []).map(normalizeMemberStatusRow);
     }
 
     /** `name ASC` — `rooms` não tem `created_at` (mesma ordem de `RoomsRepository.list()`). */
@@ -216,7 +234,7 @@ export class GroupRepository {
             .bind(processId)
             .all<GroupEvaluatorAllocationRow>();
 
-        return results ?? [];
+        return (results ?? []).map(normalizeMemberStatusRow);
     }
 
     // ------------------------------------------------------------
@@ -269,7 +287,7 @@ export class GroupRepository {
             .bind(groupId)
             .all<GroupEvaluatorAllocationRow>();
 
-        return results ?? [];
+        return (results ?? []).map(normalizeMemberStatusRow);
     }
 
     async findGroupById(groupId: string, processId: string): Promise<GroupRow | null> {

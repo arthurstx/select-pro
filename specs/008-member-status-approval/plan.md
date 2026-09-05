@@ -47,6 +47,22 @@ chamada de criptografia cara
 prototipadas no Stitch, ver nota em `research.md` R2 sobre revisão pendente
 do mockup de confirmação)
 
+## Emenda de 2026-09-04
+
+A Supabase da tec passa a devolver só efetivados. `register()` deixa de
+bifurcar por status: exige `active`, recusa (403) qualquer outro valor.
+Pós-júnior/trainee ganham rota própria e pública, `POST
+/auth/signup-requests` (`SelfDeclaredSignupSchema`, ver `data-model.md` e
+`contracts/signup-requests.md`), sem tocar a Supabase. Junto, rename de dado
+`inactive` → `post_junior` (migration `0016`, aditiva — ver `research.md` R7
+para o risco de janela migration↔deploy e a mitigação via
+`normalizeStoredMemberStatus`).
+
+Impacto no Constitution Check original: Princípio III precisa reavaliar a
+`0016` (aditiva em efeito, dois `UPDATE`, sem DDL — dispensa
+`MAINTENANCE_MODE`, mesma classificação da `0008`); Princípio V ganha os
+testes de `createSelfDeclared` e do endpoint novo. Sem violação nova.
+
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
@@ -84,23 +100,31 @@ sem DI framework. Convenção de nome `[nome].[tipo].ts`.
 
 ```text
 shared/src/schemas/
-├── database.schema.ts        # MemberStatus: 4 → 3 valores
+├── database.schema.ts        # MemberStatus: 4 → 3 valores (post_junior no lugar de inactive, emenda)
 ├── member.schema.ts          # MemberStatusSchema, RECOGNIZED_MEMBER_STATUSES,
-│                              # isRecognizedMemberStatus, requiresApproval,
-│                              # isEligibleToAnchorTrainee (novo)
+│                              # isRecognizedMemberStatus, isEligibleToAnchorTrainee;
+│                              # (emenda) SelfDeclaredMemberStatusSchema, MEMBER_STATUS_LABELS,
+│                              # newSelfDeclaredMemberId/isSelfDeclaredMemberId,
+│                              # normalizeStoredMemberStatus; requiresApproval REMOVIDA
+├── phone.schema.ts            # (emenda) PhoneSchema extraído de candidate.schema.ts, exportado
 └── auth.schema.ts             # SignupRequest*, RegisterPendingResponseSchema,
-                                # SignupDecisionSchema, 3 códigos de erro novos
+                                # SignupDecisionSchema, 3 códigos de erro novos;
+                                # (emenda) SelfDeclaredSignupSchema, selfDeclared em SignupRequestSummarySchema
 
 api/migrations/
-└── 0008-signup-requests.sql   # aditiva — ver data-model.md
+├── 0008-signup-requests.sql   # aditiva — ver data-model.md
+└── 0016-post-junior-status-rename.sql  # (emenda) aditiva em efeito — 2 UPDATE, ver research.md R7
 
 api/src/
 ├── routes/
-│   ├── auth.routes.ts               # register(): bifurcação por status (não novo endpoint)
-│   └── signup-requests.routes.ts    # NOVO — GET lista, GET by-token, POST decision
+│   ├── auth.routes.ts               # (emenda) register() volta a ser só a trilha efetivo — 403 em vez de 202
+│   └── signup-requests.routes.ts    # GET lista, GET by-token, POST decision;
+│                                     # (emenda) + POST / pública para auto-declarado
 ├── services/
-│   ├── auth.service.ts              # register() delega a SignupRequestsService quando requiresApproval()
-│   └── signup-requests.service.ts   # NOVO — create/list/decide, e-mails via defer()
+│   ├── auth.service.ts              # (emenda) register() não conhece mais SignupRequestsService
+│   └── signup-requests.service.ts   # create/list/decide, e-mails via defer();
+│                                     # (emenda) create(TecMember,...) → createSelfDeclared(dto),
+│                                     # toSummary valida em vez de castar
 ├── repositories/
 │   ├── auth.repository.ts            # + createApprovedMemberAccount (sem sessão, ver data-model.md)
 │   └── signup-requests.repository.ts # NOVO
@@ -113,15 +137,17 @@ api/src/
                                           # sendSignupDecisionResult() — SEM criar mailer novo
 
 api/test/
-├── auth.service.test.ts / auth.routes.test.ts        # atualizados
-└── signup-requests.service.test.ts / signup-requests.routes.test.ts  # novos
+├── auth.service.test.ts / auth.routes.test.ts        # atualizados (emenda: inactive/trainee → 403)
+└── signup-requests.service.test.ts / signup-requests.routes.test.ts  # (emenda) + createSelfDeclared, POST /
 
 front/app/(auth)/
-├── cadastro-em-analise/          # NOVO — US1, "aguardando análise"
-└── solicitacoes/[token]/          # NOVO — US2, tela de decisão (GET público + gate de login)
+├── cadastro/register-form.tsx    # (emenda) 3 opções (radio cards) + campos condicionais
+├── cadastro-em-analise/          # US1, "aguardando análise"
+└── solicitacoes/[token]/          # US2, tela de decisão (GET público + gate de login);
+                                    # (emenda) badge de auto-declarado
 
 front/app/painel/
-└── solicitacoes/                  # NOVO — US3, fila do admin
+└── solicitacoes/                  # US3, fila do admin; (emenda) badge de auto-declarado
 ```
 
 **Structure Decision**: `signup-requests` ganha router/service/repository

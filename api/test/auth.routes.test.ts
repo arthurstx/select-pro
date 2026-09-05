@@ -248,10 +248,14 @@ describe("POST /auth/register (HTTP)", () => {
     });
 });
 
-// FEAT-0008 — pós-júnior e trainee viram solicitação pendente, não conta direto.
-describe("POST /auth/register — solicitação pendente (HTTP)", () => {
-    it.each(["inactive", "trainee"])(
-        "status %s responde 202 com pending_approval, sem cookie de sessão",
+// Emenda de 2026-09-04 (FEAT-0008, research.md R8): a Supabase só devolve
+// `active`. Um status residual não vira mais solicitação pendente — é 403,
+// igual a qualquer outro status não reconhecido. Trainee/pós-júnior se
+// cadastram por `POST /auth/signup-requests` (testado em
+// `signup-requests.routes.test.ts`), não por aqui.
+describe("POST /auth/register — status não-active na Supabase (HTTP)", () => {
+    it.each(["inactive", "post_junior", "trainee"])(
+        "status %s responde 403 MEMBER_NOT_ACTIVE, sem cookie de sessão",
         async (status) => {
             const member = tecMember({ status });
             stubDirectory({ member });
@@ -259,22 +263,21 @@ describe("POST /auth/register — solicitação pendente (HTTP)", () => {
             const response = await call(
                 postJson("/auth/register", { email: member.email, password: "senha-de-teste" }),
             );
-            const body = await response.json<{ data: { status: string; message: string } }>();
+            const body = await response.json<{ error: { code: string } }>();
 
-            expect(response.status).toBe(202);
-            expect(body.data.status).toBe("pending_approval");
-            expect(body.data.message).toBeTruthy();
+            expect(response.status).toBe(403);
+            expect(body.error.code).toBe("MEMBER_NOT_ACTIVE");
             expect(response.headers.get("Set-Cookie")).toBeNull();
         },
     );
 
-    it("não cria usuário nem sessão para o email pendente", async () => {
-        const member = tecMember({ status: "inactive" });
+    it("não cria usuário nem sessão para o status recusado", async () => {
+        const member = tecMember({ status: "trainee" });
         stubDirectory({ member });
 
         await call(postJson("/auth/register", { email: member.email, password: "senha-de-teste" }));
 
-        // Login com a mesma senha tem que falhar — nenhuma conta existe ainda.
+        // Login com a mesma senha tem que falhar — nenhuma conta existe.
         const loginAttempt = await call(
             postJson("/auth/login", { email: member.email, password: "senha-de-teste" }),
         );

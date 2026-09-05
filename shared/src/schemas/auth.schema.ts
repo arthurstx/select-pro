@@ -1,7 +1,9 @@
 import { z } from "zod";
 
+import { CourseSchema, EthnicitySchema, GenderSchema, SemesterSchema } from "./candidate.schema";
 import type { SignupRequestStatus } from "./database.schema";
-import { MemberStatusSchema } from "./member.schema";
+import { MemberStatusSchema, SelfDeclaredMemberStatusSchema } from "./member.schema";
+import { PhoneSchema } from "./phone.schema";
 
 // Cadastro, login e sessão de membro (FEAT-0003).
 // Ver também `member.schema.ts` (elegibilidade) e `database.schema.ts`.
@@ -23,12 +25,41 @@ export const PasswordSchema = z
 // Requests
 // ------------------------------------------------------------
 
-/** `POST /auth/register`. Dados de perfil vêm da Supabase, não deste payload. */
+/**
+ * `POST /auth/register` — trilha do membro Efetivo. Dados de perfil vêm da
+ * Supabase, não deste payload. Desde a emenda de 2026-09-04 da FEAT-0008,
+ * esta é a ÚNICA trilha que consulta a Supabase; ela exige `status ===
+ * "active"` e recusa (403) qualquer outro valor — não bifurca mais para
+ * pendência. Trainee/pós-júnior usam `SelfDeclaredSignupSchema` abaixo.
+ */
 export const RegisterMemberSchema = z.object({
     email: EmailSchema,
     password: PasswordSchema,
 });
 export type RegisterMemberDTO = z.infer<typeof RegisterMemberSchema>;
+
+/**
+ * `POST /auth/signup-requests` — trilha auto-declarada de trainee/pós-júnior
+ * (FEAT-0008, emenda 2026-09-04). NÃO consulta a Supabase: todo dado de
+ * perfil vem deste payload, e a aprovação de um admin é o único portão
+ * (FR-001-D). `memberStatus` usa `SelfDeclaredMemberStatusSchema`, não
+ * `MemberStatusSchema` — "active" não é um valor aceitável aqui, de
+ * propósito, para que o escalonamento de privilégio seja impossível por
+ * construção (ver `research.md` R6). `birth_date` não é pedido (fica
+ * `null` — a coluna já era nullable).
+ */
+export const SelfDeclaredSignupSchema = z.object({
+    email: EmailSchema,
+    password: PasswordSchema,
+    memberStatus: SelfDeclaredMemberStatusSchema,
+    fullName: z.string().trim().min(3, "Informe seu nome completo").max(120),
+    phone: PhoneSchema,
+    course: CourseSchema,
+    semester: SemesterSchema,
+    gender: GenderSchema,
+    ethnicity: EthnicitySchema,
+});
+export type SelfDeclaredSignupDTO = z.infer<typeof SelfDeclaredSignupSchema>;
 
 /** `POST /auth/login`. Senha só valida não-vazia — fora da política é 401, não erro de formulário. */
 export const LoginSchema = z.object({
@@ -144,6 +175,12 @@ export const SignupRequestSummarySchema = z.object({
     createdAt: z.string(),
     /** FR-019 — quantas vezes essa pessoa já foi recusada antes. */
     priorRejectionCount: z.number().int().min(0),
+    /**
+     * FR-022 (emenda 2026-09-04) — `true` quando os dados vieram do
+     * formulário de auto-declaração, sem nenhuma conferência externa. O
+     * admin é o único portão nesse caso; a fila sinaliza isso.
+     */
+    selfDeclared: z.boolean(),
 });
 export type SignupRequestSummary = z.infer<typeof SignupRequestSummarySchema>;
 

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InboxIcon } from "lucide-react";
 import { useState } from "react";
-import { ROLES, type MemberStatus, type SignupRequestStatus, type SignupRequestSummary } from "shared";
+import { MEMBER_STATUS_LABELS, ROLES, type SignupRequestStatus, type SignupRequestSummary } from "shared";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,12 +12,6 @@ import { ApiError } from "@/lib/api/api-error";
 import { decideSignupRequest, listSignupRequests } from "@/lib/auth/auth-api";
 import { useAuth } from "@/lib/auth/auth-context";
 import { cn } from "@/lib/utils";
-
-const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = {
-  active: "Efetivado",
-  inactive: "Pós-júnior",
-  trainee: "Trainee",
-};
 
 const STATUS_TABS: { value: SignupRequestStatus; label: string }[] = [
   { value: "pending", label: "Pendentes" },
@@ -159,7 +153,12 @@ function RequestRow({
         <p className="font-heading text-foreground font-semibold">{request.fullName}</p>
         <p className="text-muted-foreground text-sm">{request.email}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{MEMBER_STATUS_LABEL[request.memberStatus]}</Badge>
+          <Badge variant="secondary">{MEMBER_STATUS_LABELS[request.memberStatus]}</Badge>
+          {request.selfDeclared && (
+            <Badge variant="outline" className="text-muted-foreground">
+              Dados auto-declarados
+            </Badge>
+          )}
           <span className="text-muted-foreground text-xs">
             {formatRelativeWait(request.createdAt)}
           </span>

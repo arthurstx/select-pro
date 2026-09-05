@@ -16,18 +16,20 @@ import {
 /** Estado do boot: enquanto `/auth/refresh` não responde, nenhuma rota protegida decide nada. */
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
-/** `pending: true` quando o cadastro (FEAT-0008) virou solicitação — nenhuma sessão foi aberta. */
-export interface SignUpResult {
-  pending: boolean;
-}
-
 interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
   /** Só existe depois de um `GET /auth/me` — login/cadastro não devolvem perfil. */
   profile: MemberProfileSummary | null;
   signIn: (payload: LoginDTO) => Promise<void>;
-  signUp: (payload: RegisterMemberDTO) => Promise<SignUpResult>;
+  /**
+   * Trilha do membro Efetivo (FEAT-0008, emenda 2026-09-04) — sempre abre
+   * sessão; um status diferente de `active` é recusado (403), nunca vira
+   * pendência aqui. Trainee/pós-júnior usam `createSignupRequest`
+   * (`auth-api.ts`) direto da tela, sem passar pelo contexto: essa trilha
+   * não abre sessão nem toca o estado de autenticação.
+   */
+  signUp: (payload: RegisterMemberDTO) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -93,19 +95,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus("authenticated");
   }, []);
 
-  const signUp = useCallback(async (payload: RegisterMemberDTO): Promise<SignUpResult> => {
-    const result = await registerMember(payload);
+  const signUp = useCallback(async (payload: RegisterMemberDTO): Promise<void> => {
+    const session = await registerMember(payload);
 
-    if (result.kind === "pending_approval") {
-      // Nenhuma conta existe ainda (FEAT-0008) — não há sessão para abrir.
-      return { pending: true };
-    }
-
-    setAccessToken(result.session.accessToken);
-    setUser(result.session.user);
+    setAccessToken(session.accessToken);
+    setUser(session.user);
     setProfile(null);
     setStatus("authenticated");
-    return { pending: false };
   }, []);
 
   const signOut = useCallback(async () => {

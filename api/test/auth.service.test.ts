@@ -8,9 +8,7 @@ import type { MemberDirectory } from "../src/lib/member-directory";
 import { hashOpaqueToken } from "../src/lib/opaque-token";
 import { hashPassword, PBKDF2_ITERATIONS } from "../src/lib/password";
 import { AuthRepository } from "../src/repositories/auth.repository";
-import { SignupRequestsRepository } from "../src/repositories/signup-requests.repository";
 import { AuthService, FORGOT_PASSWORD_MESSAGE, type IssuedSession } from "../src/services/auth.service";
-import { SignupRequestsService } from "../src/services/signup-requests.service";
 
 // Testes do service contra o D1 real do miniflare, com o banco da tec e o
 // provedor de email substituídos por dublês.
@@ -84,7 +82,6 @@ describe("AuthService", () => {
     let repository: AuthRepository;
     let directory: FakeMemberDirectory;
     let mailer: FakeMailer;
-    let signupRequests: SignupRequestsService;
     let service: AuthService;
     let deferred: Promise<unknown>[];
 
@@ -94,24 +91,12 @@ describe("AuthService", () => {
         mailer = new FakeMailer();
         deferred = [];
 
-        signupRequests = new SignupRequestsService({
-            repository: new SignupRequestsRepository(env.DB),
-            authRepository: repository,
-            mailer,
-            frontOrigin: FRONT_ORIGIN,
-            signupApprovalEmail: "gentegestao@cimatecjr.com.br",
-            defer: (promise) => {
-                deferred.push(promise);
-            },
-        });
-
         service = new AuthService({
             repository,
             directory,
             mailer,
             jwtSecret: JWT_SECRET,
             frontOrigin: FRONT_ORIGIN,
-            signupRequests,
             defer: (promise) => {
                 deferred.push(promise);
             },
@@ -122,7 +107,12 @@ describe("AuthService", () => {
         await Promise.all(deferred);
     }
 
-    /** Só para membro `active` — `inactive`/`trainee` têm testes próprios (fluxo de aprovação). */
+    /**
+     * Só para membro `active` — desde a emenda de 2026-09-04 (FEAT-0008),
+     * `register()` só atende a trilha Efetivo. `trainee`/`post_junior` têm
+     * testes próprios em `signup-requests.service.test.ts`
+     * (`createSelfDeclared`).
+     */
     async function registerMember(
         overrides: Partial<TecMember> = {},
         password = "senha-de-teste",
@@ -139,13 +129,7 @@ describe("AuthService", () => {
             throw new Error(`Cadastro falhou inesperadamente: ${result.value.code}`);
         }
 
-        if (result.value.kind !== "session") {
-            throw new Error(
-                `registerMember() esperava sessão imediata, mas caiu em pending_approval — use status "active" ou chame service.register diretamente para testar aprovação.`,
-            );
-        }
-
-        return { member, password, session: result.value.session };
+        return { member, password, session: result.value };
     }
 
     async function countUsers(email: string): Promise<number> {
@@ -283,12 +267,16 @@ describe("AuthService", () => {
         );
 
         // ------------------------------------------------------------
-        // FEAT-0008 — pós-júnior e trainee viram solicitação pendente,
-        // não são recusados como "não elegível" (D3, FR-004).
+        // Emenda de 2026-09-04 (FEAT-0008, research.md R8): a Supabase só
+        // devolve `active`. Um `inactive`/`post_junior`/`trainee` residual
+        // que ainda apareça lá é recusado (403), NÃO vira mais solicitação
+        // pendente — quem quer se cadastrar como trainee/pós-júnior usa
+        // `POST /auth/signup-requests` (`SignupRequestsService.createSelfDeclared`,
+        // testado em `signup-requests.service.test.ts`).
         // ------------------------------------------------------------
 
-        it.each<TecMember["status"]>(["inactive", "trainee"])(
-            "status %s NÃO cria conta — vira solicitação pendente (202, sem sessão)",
+        it.each<TecMember["status"]>(["inactive", "post_junior", "trainee"])(
+            "status %s na Supabase é recusado (403) — não vira mais solicitação pendente",
             async (status) => {
                 const member = tecMember({ status });
                 directory.member = member;
@@ -301,62 +289,27 @@ describe("AuthService", () => {
                     { email: member.email, password: "senha-de-teste" },
                     { userAgent: null },
                 );
-                await settleDeferred();
 
-                expect(result.isRight()).toBe(true);
-                if (result.isRight()) expect(result.value).toEqual({ kind: "pending_approval" });
+                expect(result.isLeft()).toBe(true);
+                if (result.isLeft()) expect(result.value.code).toBe("MEMBER_NOT_ACTIVE");
 
                 expect(await countUsers(member.email)).toBe(0);
 
-                // Nenhuma sessão nova — não só "zero no total" (outros testes já
-                // criaram sessões próprias antes deste rodar).
                 const sessionsAfter = await env.DB.prepare(
                     "SELECT COUNT(*) AS total FROM sessions",
                 ).first<{ total: number }>();
                 expect(sessionsAfter?.total).toBe(sessionsBefore?.total);
 
                 const request = await env.DB.prepare(
-                    "SELECT * FROM signup_requests WHERE email = ?",
+                    "SELECT COUNT(*) AS total FROM signup_requests WHERE email = ?",
                 )
                     .bind(member.email)
-                    .first<Record<string, unknown>>();
+                    .first<{ total: number }>();
+                expect(request?.total).toBe(0);
 
-                expect(request).toBeTruthy();
-                expect(request?.status).toBe("pending");
-                expect(request?.member_status).toBe(status);
-                expect(request?.password_hash).not.toBe("senha-de-teste");
-
-                expect(mailer.signupApprovalRequestsSent).toHaveLength(1);
-                expect(mailer.signupApprovalRequestsSent[0].to).toBe("gentegestao@cimatecjr.com.br");
-                expect(mailer.signupApprovalRequestsSent[0].reviewUrl).toMatch(
-                    new RegExp(`^${FRONT_ORIGIN}/solicitacoes/`),
-                );
+                expect(mailer.signupApprovalRequestsSent).toHaveLength(0);
             },
         );
-
-        it("chamada repetida com solicitação pendente não duplica nem reenvia o email (FR-016)", async () => {
-            const member = tecMember({ status: "inactive" });
-            directory.member = member;
-
-            await service.register({ email: member.email, password: "senha-1" }, { userAgent: null });
-            await settleDeferred();
-            const second = await service.register(
-                { email: member.email, password: "senha-2" },
-                { userAgent: null },
-            );
-            await settleDeferred();
-
-            expect(second.isRight()).toBe(true);
-            if (second.isRight()) expect(second.value).toEqual({ kind: "pending_approval" });
-
-            const count = await env.DB.prepare(
-                "SELECT COUNT(*) AS total FROM signup_requests WHERE email = ?",
-            )
-                .bind(member.email)
-                .first<{ total: number }>();
-            expect(count?.total).toBe(1);
-            expect(mailer.signupApprovalRequestsSent).toHaveLength(1);
-        });
 
         it("E5 - diretório indisponível bloqueia o cadastro sem escrever NADA no D1", async () => {
             const member = tecMember();

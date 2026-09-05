@@ -1,0 +1,37 @@
+-- ============================================================
+-- Migration 0016 — `inactive` vira `post_junior` (FEAT-0008, emenda 2026-09-04)
+--
+-- Na FEAT-0008 (decisão D3) o status de pós-júnior foi gravado como
+-- `inactive`, valor herdado do vocabulário da tec. O nome engana: em
+-- português/inglês ele se lê "desligado", o oposto de quem está ativo na
+-- empresa — a ponto de a regra do avaliador-âncora ter precisado de uma
+-- função com nome próprio (`isEligibleToAnchorTrainee`) só para não ser lida
+-- ao contrário. Com a mesma emenda, a Supabase passa a devolver só
+-- `active` e pós-júnior/trainee passam a se auto-declarar no cadastro —
+-- o valor deixa de ser um espelho fiel de um sistema externo e passa a ter
+-- o nome certo.
+--
+-- IMPACTO NOS DADOS (Princípio III da constitution): toda linha de
+-- `member_profiles` e de `signup_requests` cujo status era exatamente
+-- 'inactive' passa a ler 'post_junior'. Nenhuma outra linha é lida ou
+-- escrita; nenhuma linha é removida; nenhuma coluna, CHECK, índice ou FK
+-- muda.
+--
+-- Puramente aditiva em efeito (dois UPDATE idempotentes, sem DDL, sem
+-- cascade): dispensa MAINTENANCE_MODE, mesma classificação da 0005/0008.
+-- Mas é ACOPLADA AO DEPLOY do Worker — ver research.md da 008, R7: entre a
+-- migration e o deploy, os dois lados discordam nos dois sentidos.
+-- Mitigado por `normalizeStoredMemberStatus` (shared/src/schemas/member.schema.ts),
+-- que traduz o legado `inactive` na leitura das nossas próprias tabelas,
+-- tornando a ordem migration↔deploy irrelevante.
+--
+-- SEM CHECK novo em `status`/`member_status`, de propósito: as colunas
+-- nasceram sem CHECK (0005/0008) porque o valor vem de um sistema externo, e
+-- adicionar um agora exigiria reconstruir as tabelas — o oposto de uma
+-- migration aditiva.
+--
+-- Sem BEGIN/COMMIT: o D1 rejeita transação explícita em migration.
+-- ============================================================
+
+UPDATE member_profiles SET status        = 'post_junior' WHERE status        = 'inactive';
+UPDATE signup_requests SET member_status = 'post_junior' WHERE member_status = 'inactive';

@@ -37,17 +37,23 @@ export type ReferralSource = "instagram" | "linkedin" | "campus" | "indicacao" |
 // Membro da CIMATEC jr — FEAT-0003 (seção 8.1)
 
 /**
- * Status na tec. TEXT livre na origem, sem CHECK — `isRecognizedMemberStatus`
- * decide o que a aplicação reconhece.
- *
- * `"inactive"` significa **pós-júnior**, não "desligado" (FEAT-0008, decisão
- * D3) — nome herdado da origem, mantido para não introduzir tradução própria
- * do dado externo. `"alumni"` e `"on_leave"` saíram do domínio: nunca foram
+ * Status de membro. `"alumni"` e `"on_leave"` saíram do domínio: nunca foram
  * elegíveis (`ELIGIBLE_MEMBER_STATUSES` só continha `"active"`), e um status
  * fora dos três reconhecidos cai no mesmo tratamento de sempre — recusado,
  * sem exceção lançada (`isRecognizedMemberStatus`).
+ *
+ * `"post_junior"` é pós-júnior (FEAT-0008, decisão D3) — chamado
+ * `"inactive"` até a emenda de 2026-09-04, nome herdado da Supabase que lia
+ * como "desligado", o oposto do que significava. Migration `0016` renomeia o
+ * dado já gravado; `normalizeStoredMemberStatus` (`member.schema.ts`) traduz
+ * o legado na leitura, para a ordem migration↔deploy não importar.
+ *
+ * Só `"active"` continua vindo da Supabase (TEXT livre na origem, sem
+ * CHECK). Desde a mesma emenda, `"post_junior"` e `"trainee"` são
+ * auto-declarados no cadastro (`SelfDeclaredSignupSchema`), nunca lidos de
+ * lá — `register()` da trilha Efetivo recusa qualquer status ≠ `"active"`.
  */
-export type MemberStatus = "active" | "inactive" | "trainee";
+export type MemberStatus = "active" | "post_junior" | "trainee";
 
 // ------------------------------------------------------------
 // Tabelas de referência
@@ -150,7 +156,7 @@ export interface SignupRequestRow {
     semester: number;
     gender: string;
     ethnicity: string;
-    /** Cru, `"inactive"` ou `"trainee"` na prática — não é `MemberStatus` tipado, mesmo motivo de `MemberProfileRow.status`. */
+    /** Cru, `"post_junior"` ou `"trainee"` na prática (ou o legado `"inactive"` pré-0016) — não é `MemberStatus` tipado, mesmo motivo de `MemberProfileRow.status`. */
     member_status: string;
     manager: boolean;
 
