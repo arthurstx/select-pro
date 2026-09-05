@@ -1,13 +1,14 @@
 "use client";
 
-import { CircleAlertIcon, UsersRoundIcon } from "lucide-react";
-import { CheckinErrorCode, EvaluationErrorCode } from "shared";
+import { CircleAlertIcon, ShieldAlertIcon, UsersRoundIcon } from "lucide-react";
+import { EvaluationErrorCode } from "shared";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api/api-error";
 import { useMyGroupQuery } from "@/lib/evaluation/queries";
 
 import { StateMessage } from "../_components/state-message";
+import { terminalErrorFor } from "../_lib/error-view";
 import { CandidateEvaluationCard } from "./_components/candidate-evaluation-card";
 
 /** FEAT-0013, US1 — avaliador/host avalia os candidatos do próprio grupo presencial. */
@@ -20,7 +21,7 @@ export default function MinhasAvaliacoesPage() {
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight md:text-3xl">Minhas Avaliações</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Avalie os candidatos do seu grupo{data ? ` (${data.groupName})` : ""}.
+          {data ? `Avalie os candidatos do grupo ${data.groupName}.` : "Avalie os candidatos do seu grupo."}
         </p>
       </div>
 
@@ -28,13 +29,22 @@ export default function MinhasAvaliacoesPage() {
         <SkeletonList />
       ) : isError ? (
         <ErrorState error={error} onRetry={() => refetch()} />
-      ) : data ? (
+      ) : data.candidates.length === 0 ? (
+        // Alocado a um grupo, mas ainda sem candidatos: antes daqui não sair
+        // nada, a tela ficava em branco e parecia defeito.
+        <StateMessage
+          icon={<UsersRoundIcon className="text-muted-foreground size-8" aria-hidden />}
+          title="Nenhum candidato no seu grupo ainda."
+          description="Os candidatos aparecem aqui depois do check-in e da montagem dos grupos."
+          action={{ label: "Atualizar", onClick: () => void refetch() }}
+        />
+      ) : (
         <div className="flex flex-col gap-3">
           {data.candidates.map((candidate) => (
             <CandidateEvaluationCard key={candidate.id} candidate={candidate} />
           ))}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -49,13 +59,22 @@ function SkeletonList() {
   );
 }
 
+/**
+ * A regra aqui é nunca dizer "erro genérico" quando a API disse o motivo: cada
+ * código conhecido vira uma frase própria, e o que sobra mostra a mensagem que
+ * o backend mandou em vez de chutar problema de conexão.
+ */
 function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
-  if (error instanceof ApiError && error.code === CheckinErrorCode.NO_ACTIVE_SELECTION_PROCESS) {
+  // Cobre NO_ACTIVE_SELECTION_PROCESS, MAINTENANCE_MODE e INSUFFICIENT_ROLE —
+  // este último só alcançável se o papel em memória ficar velho (admin abrindo
+  // a URL já é barrado pelo `RouteRoleGuard`).
+  const terminal = terminalErrorFor(error);
+  if (terminal) {
     return (
       <StateMessage
-        icon={<CircleAlertIcon className="text-muted-foreground size-8" aria-hidden />}
-        title="Não foi possível determinar o processo seletivo corrente."
-        description="Avise quem administra o sistema."
+        icon={<ShieldAlertIcon className="text-muted-foreground size-8" aria-hidden />}
+        title={terminal.title}
+        description={terminal.description}
       />
     );
   }
@@ -64,8 +83,11 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
     return (
       <StateMessage
         icon={<UsersRoundIcon className="text-muted-foreground size-8" aria-hidden />}
-        title="Você não está alocado a nenhum grupo nesta edição."
-        description="Avise o admin — os grupos são organizados na tela de Grupos."
+        title="Você ainda não foi alocado a um grupo."
+        // Com ação: sem ela o avaliador ficava preso na tela mesmo depois de o
+        // admin organizar os grupos.
+        description="Nesta edição do processo seletivo nenhum grupo foi atribuído a você. Fale com quem organiza os grupos — assim que a alocação sair, os candidatos aparecem aqui."
+        action={{ label: "Atualizar", onClick: onRetry }}
       />
     );
   }
@@ -74,7 +96,7 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
     <StateMessage
       icon={<CircleAlertIcon className="text-destructive size-8" aria-hidden />}
       title="Não foi possível carregar seu grupo."
-      description="Verifique sua conexão e tente novamente."
+      description={error instanceof ApiError ? error.message : "Verifique sua conexão e tente novamente."}
       action={{ label: "Tentar novamente", onClick: onRetry }}
     />
   );

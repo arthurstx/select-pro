@@ -3,14 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { InboxIcon } from "lucide-react";
 import { useState } from "react";
-import { MEMBER_STATUS_LABELS, ROLES, type SignupRequestStatus, type SignupRequestSummary } from "shared";
+import { MEMBER_STATUS_LABELS, type SignupRequestStatus, type SignupRequestSummary } from "shared";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { ApiError } from "@/lib/api/api-error";
 import { decideSignupRequest, listSignupRequests } from "@/lib/auth/auth-api";
-import { useAuth } from "@/lib/auth/auth-context";
 import { cn } from "@/lib/utils";
 
 const STATUS_TABS: { value: SignupRequestStatus; label: string }[] = [
@@ -25,14 +24,15 @@ const STATUS_TABS: { value: SignupRequestStatus; label: string }[] = [
  * institucional (gentegestao@) não é monitorada a tempo.
  */
 export default function SolicitacoesPage() {
-  const { user } = useAuth();
   const [status, setStatus] = useState<SignupRequestStatus>("pending");
   const queryClient = useQueryClient();
 
+  // O recorte por papel (admin) é do `RouteRoleGuard`, no layout do painel:
+  // quem não pode não chega a montar esta página, então nem query nem
+  // mensagem de "restrito a administradores" precisam existir aqui.
   const query = useQuery({
     queryKey: ["signup-requests", status],
     queryFn: () => listSignupRequests(status),
-    enabled: user?.role === ROLES.ADMIN,
   });
 
   const decide = useMutation({
@@ -40,18 +40,6 @@ export default function SolicitacoesPage() {
       decideSignupRequest(id, decision),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["signup-requests"] }),
   });
-
-  // Barreira de UX, não de segurança — a real é a API respondendo 403
-  // (mesmo espírito do `AuthGuard`, que já documenta essa distinção).
-  if (user && user.role !== ROLES.ADMIN) {
-    return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8 md:py-10">
-        <p className="text-muted-foreground text-sm">
-          Esta página é restrita a administradores.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8 md:py-10">

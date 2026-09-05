@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   ALL_EDITIONS,
   CheckinErrorCode,
+  ROLES,
   type Course,
   type DashboardCandidateItem,
   type DashboardCandidatesSort,
@@ -15,6 +16,8 @@ import {
 import { CourseFilter } from "@/components/painel/course-filter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/lib/auth/auth-context";
+import { asRole } from "@/lib/auth/route-roles";
 import { exportCandidatesCsv } from "@/lib/dashboard/export-candidates";
 import {
   useCandidateDetailQuery,
@@ -57,6 +60,10 @@ const INITIAL_FILTERS: Filters = {
 };
 
 export function DashboardScreen() {
+  // O painel é das duas funções, mas `GET /exports` é admin-only: sem isto o
+  // avaliador vê o botão e leva um 403 (mesmo problema da sidebar).
+  const { user } = useAuth();
+  const canExport = asRole(user?.role) === ROLES.ADMIN;
   const [searchInput, setSearchInput] = useState("");
   const [mode, setMode] = useState<DashboardMetricsMode>("sum");
   const [selected, setSelected] = useState<DashboardCandidateItem | null>(null);
@@ -257,10 +264,12 @@ export function DashboardScreen() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                   <DateRangeFilter value={{ from: filters.from, to: filters.to }} onApply={handleDateRangeApply} />
                   <CourseFilter value={filters.course} onValueChange={handleCourseChange} />
-                  <Button variant="outline" size="sm" disabled={isExporting} onClick={handleExport}>
-                    <DownloadIcon aria-hidden />
-                    {isExporting ? "Exportando…" : "Exportar CSV"}
-                  </Button>
+                  {canExport && (
+                    <Button variant="outline" size="sm" disabled={isExporting} onClick={handleExport}>
+                      <DownloadIcon aria-hidden />
+                      {isExporting ? "Exportando…" : "Exportar CSV"}
+                    </Button>
+                  )}
                 </div>
               </div>
 

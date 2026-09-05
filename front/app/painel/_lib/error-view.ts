@@ -8,6 +8,16 @@ export interface TerminalError {
 }
 
 /**
+ * Copy única de "sem permissão", compartilhada pelo 403 vindo da API
+ * (`INSUFFICIENT_ROLE`, abaixo) e pelo `RouteRoleGuard`, que barra a tela antes
+ * da requisição sair. São o mesmo fato para o usuário — não podem divergir.
+ */
+export const ACCESS_DENIED: TerminalError = {
+  title: "Você não tem acesso a esta tela.",
+  description: "Se acredita que deveria ter, fale com quem administra o sistema.",
+};
+
+/**
  * Erros que derrubam a tela inteira e para os quais "tentar novamente" não é
  * uma ação honesta. Tudo que não estiver aqui — rede, 5xx — cai no estado de
  * erro com botão de repetir, e **nunca** desloga (FEAT-0007-UI, seção 7).
@@ -31,10 +41,7 @@ export function terminalErrorFor(error: unknown): TerminalError | null {
       };
 
     case AuthErrorCode.INSUFFICIENT_ROLE:
-      return {
-        title: "Você não tem acesso a esta tela.",
-        description: "Se acredita que deveria ter, fale com quem administra o sistema.",
-      };
+      return ACCESS_DENIED;
 
     case "MAINTENANCE_MODE":
       // A mensagem do backend passa como está: é ela que sabe o motivo e a
