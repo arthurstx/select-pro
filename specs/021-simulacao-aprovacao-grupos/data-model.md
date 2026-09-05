@@ -1,8 +1,16 @@
 # Data Model: Simulação com aprovação, limpar organização e badges
 
-Nenhuma tabela nova, nenhuma coluna nova, nenhuma migration. `group_evaluators` passa a
-receber também hosts (por sala, research.md Decisão 1/2) — dado que a tabela já suporta desde
-a migration `0014`.
+Nenhuma tabela nova, nenhuma coluna nova. `group_evaluators` passa a receber também hosts (por
+sala, research.md Decisão 1/2).
+
+> **Emenda (2026-09-05):** esta seção afirmava originalmente "nenhuma migration" — errado. O
+> `UNIQUE(user_id)` de `group_evaluators` (migration `0014`, pensado só para o self-service do
+> avaliador ONLINE) bloqueava exatamente o padrão desta feature: o mesmo host em várias linhas
+> (uma por grupo da sala). Toda sala com 2+ grupos e host quebrava `POST /groups/organize/
+> presencial` com `SQLITE_CONSTRAINT_UNIQUE` → 500. Corrigido pela migration `0017-group-
+> evaluators-drop-unique-user.sql`, que remove a constraint do schema; a invariante "uma
+> pessoa, um grupo online por vez" passou a ser garantida pela aplicação
+> (`GroupRepository.assignEvaluator`, `DELETE` + `INSERT` em vez de `ON CONFLICT`).
 
 ## Contratos alterados (`shared/src/schemas/group.schema.ts`)
 

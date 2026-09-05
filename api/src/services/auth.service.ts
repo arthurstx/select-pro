@@ -6,7 +6,6 @@ import {
     type NewSession,
     type RegisterMemberDTO,
     type ResetPasswordDTO,
-    isRecognizedMemberStatus,
     ROLES,
 } from "shared";
 
@@ -19,7 +18,6 @@ import {
     InvalidRefreshTokenError,
     InvalidResetTokenError,
     MemberDirectoryUnavailableError,
-    MemberNotActiveError,
     MissingRefreshTokenError,
     NotAMemberError,
 } from "../core/errors/auth-errors";
@@ -59,7 +57,6 @@ export type RenewedSession = Omit<IssuedSession, "user">;
 export type RegisterError =
     | EmailAlreadyRegisteredError
     | NotAMemberError
-    | MemberNotActiveError
     | MemberDirectoryUnavailableError;
 
 export type LoginError = InvalidCredentialsError | AccountDeactivatedError;
@@ -87,12 +84,12 @@ export class AuthService {
     // ============================================================
 
     /**
-     * Trilha do membro Efetivo (FEAT-0008, emenda 2026-09-04). Desde a
-     * emenda, a Supabase só devolve `active` — este método não bifurca mais
-     * para pendência: qualquer status diferente de `active` é recusado
-     * (403), inclusive um `inactive`/`trainee` residual que ainda apareça
-     * por lá (research.md da 008, R8). Trainee/pós-júnior se cadastram por
-     * `SignupRequestsService.createSelfDeclared`, sem passar por aqui.
+     * Trilha do membro Efetivo (FEAT-0008, emenda 2026-09-04; FEAT-0003,
+     * emenda 2026-09-05). O ERP novo (`members`, ver `TecMemberSchema`) não
+     * tem mais coluna de status — todo membro encontrado por email é tratado
+     * como `active` (o ERP só cadastra efetivos). Trainee/pós-júnior
+     * continuam se cadastrando por `SignupRequestsService.createSelfDeclared`,
+     * sem passar por aqui.
      */
     async register(
         input: RegisterMemberDTO,
@@ -121,26 +118,6 @@ export class AuthService {
             return left(new NotAMemberError());
         }
 
-        if (!isRecognizedMemberStatus(member.status)) {
-            logger.warn("auth.register.member_not_eligible", {
-                email: input.email,
-                status: member.status,
-            });
-            return left(new MemberNotActiveError());
-        }
-
-        if (member.status !== "active") {
-            logger.warn("auth.register.member_not_active", {
-                email: input.email,
-                status: member.status,
-            });
-            return left(
-                new MemberNotActiveError(
-                    "Seu cadastro na tec não consta como efetivo. Se você é trainee ou pós-júnior, escolha a opção correspondente no cadastro.",
-                ),
-            );
-        }
-
         const passwordHash = await hashPassword(input.password);
 
         const userId = crypto.randomUUID();
@@ -167,8 +144,11 @@ export class AuthService {
                     semester: member.semester,
                     gender: member.gender,
                     ethnicity: member.ethnicity,
-                    status: member.status,
-                    manager: member.manager,
+                    // O ERP não manda mais `status`/`manager` (emenda 2026-09-05) — todo
+                    // membro encontrado em `members` é `active`; `manager` nunca nasce
+                    // daqui, mesmo padrão do cadastro auto-declarado (`signup-requests.service.ts`).
+                    status: "active",
+                    manager: false,
                     synced_at: syncedAt,
                 },
                 session.row,

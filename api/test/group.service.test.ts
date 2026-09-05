@@ -266,6 +266,28 @@ describe("GroupService.organizePresencial — fluxo principal", () => {
             .all();
         expect(results ?? []).toHaveLength(0);
     });
+
+    it("host aparece em TODOS os grupos da mesma sala sem violar unicidade (regressão — migration 0017)", async () => {
+        const NOW = new Date("2105-08-10T12:00:00.000Z");
+        const process = await new SelectionProcessRepository(env.DB).resolveCurrent(NOW);
+        const actorId = await insertActor();
+        await insertRoom("comum"); // deriveRoomCapacity("comum").maxGroups === 2
+        // 10 candidatos numa sala "comum" (14 de capacidade, faixa 5-7/grupo) formam 2 grupos —
+        // o host precisa entrar nos dois. Antes da 0017, a segunda linha de `group_evaluators`
+        // pro mesmo host quebrava com SQLITE_CONSTRAINT_UNIQUE (`UNIQUE(user_id)` da 0014).
+        for (let i = 0; i < 10; i++) await insertCheckedCandidate(process.id, actorId);
+        const hostId = await insertCheckedMember(process.id, actorId, true);
+
+        const result = await service().organizePresencial(undefined, NOW);
+
+        expect(result.isRight()).toBe(true);
+        if (!result.isRight()) return;
+        expect(result.value.groups.length).toBeGreaterThanOrEqual(2);
+        for (const group of result.value.groups) {
+            const hostEntry = group.evaluators.find((e) => e.userId === hostId);
+            expect(hostEntry?.role).toBe("host");
+        }
+    });
 });
 
 describe("GroupService.previewPresencial (FEAT-0021)", () => {

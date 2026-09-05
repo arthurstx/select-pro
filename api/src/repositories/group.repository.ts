@@ -398,19 +398,21 @@ export class GroupRepository {
 
   /**
    * FEAT-0018 — alocação de avaliador a um grupo online, por ação humana (self-service ou
-   * atribuição manual do admin), nunca por algoritmo. `ON CONFLICT(user_id)` usa o
-   * `UNIQUE(user_id)` já existente (migration `0014`, "uma pessoa, um grupo por vez") para
-   * cobrir tanto a primeira entrada quanto mover de outro grupo (presencial ou online) numa
-   * instrução só, sem checar `fromGroup` antes (research.md, Decisão 3).
+   * atribuição manual do admin), nunca por algoritmo. Cobre tanto a primeira entrada quanto
+   * mover de outro grupo (presencial ou online) num `batch` só, sem checar `fromGroup` antes
+   * (research.md, Decisão 3). Até a migration `0017` isso era um `INSERT ... ON
+   * CONFLICT(user_id)`, apoiado no `UNIQUE(user_id)` de `group_evaluators` — removido porque
+   * bloqueava o host aparecer em vários grupos da mesma sala (FEAT-0021). "Uma pessoa, um
+   * grupo por vez" no online passa a ser garantido aqui (`DELETE` prévio), não mais pelo
+   * schema.
    */
   async assignEvaluator(userId: string, groupId: string): Promise<void> {
-    await this.db
-      .prepare(
-        `INSERT INTO group_evaluators (group_id, user_id) VALUES (?, ?)
-                 ON CONFLICT(user_id) DO UPDATE SET group_id = excluded.group_id`,
-      )
-      .bind(groupId, userId)
-      .run();
+    await this.db.batch([
+      this.db.prepare("DELETE FROM group_evaluators WHERE user_id = ?").bind(userId),
+      this.db
+        .prepare("INSERT INTO group_evaluators (group_id, user_id) VALUES (?, ?)")
+        .bind(groupId, userId),
+    ]);
   }
 
   /** FEAT-0018 — avaliador sai do grupo online em que estiver. Devolve se havia vínculo pra remover. */

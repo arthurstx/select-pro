@@ -105,7 +105,6 @@ function buildService(c: Context<AuthEnv>): AuthService {
 const STATUS_BY_ERROR_CODE: Record<string, ContentfulStatusCode> = {
     [AuthErrorCode.EMAIL_ALREADY_REGISTERED]: 409,
     [AuthErrorCode.NOT_A_MEMBER]: 403,
-    [AuthErrorCode.MEMBER_NOT_ACTIVE]: 403,
     [AuthErrorCode.MEMBER_DIRECTORY_UNAVAILABLE]: 503,
     [AuthErrorCode.INVALID_CREDENTIALS]: 401,
     [AuthErrorCode.MISSING_REFRESH_TOKEN]: 401,
@@ -146,7 +145,7 @@ const registerRoute = createRoute({
     tags: ["Auth"],
     summary: "Cria a conta de um membro efetivado da CIMATEC jr",
     description:
-        "Trilha do membro Efetivo (FEAT-0008, emenda 2026-09-04). Verifica se o email consta no banco da tec (Supabase) com `status === \"active\"` — conta, perfil e sessão são criados no mesmo batch, o cadastro já autentica. Qualquer outro status (não encontrado, ou reconhecido mas diferente de `active`) é recusado com 403: desde a emenda, a Supabase só devolve efetivados, e trainee/pós-júnior se cadastram por `POST /auth/signup-requests`, não por aqui.",
+        "Trilha do membro Efetivo (FEAT-0008, emenda 2026-09-04; FEAT-0003, emenda 2026-09-05). Verifica se o email consta no banco da tec (Supabase) — conta, perfil e sessão são criados no mesmo batch, o cadastro já autentica. Email não encontrado é recusado com 403 (E2): o ERP só cadastra efetivados, e trainee/pós-júnior se cadastram por `POST /auth/signup-requests`, não por aqui.",
     request: {
         body: {
             required: true,
@@ -163,7 +162,7 @@ const registerRoute = createRoute({
             content: { "application/json": { schema: ErrorResponseSchema } },
         },
         403: {
-            description: "Email não é de membro (E2) ou não está ativo na tec (E3)",
+            description: "Email não é de membro (E2)",
             content: { "application/json": { schema: ErrorResponseSchema } },
         },
         409: {

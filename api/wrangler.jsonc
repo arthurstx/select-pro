@@ -68,7 +68,7 @@
     // Banco da tec (Supabase), consultado só em POST /auth/register. A
     // service_role key é secret (`wrangler secret put SUPABASE_SERVICE_ROLE_KEY`)
     // e nunca pode aparecer aqui: ela ignora RLS e dá acesso total ao banco.
-    "SUPABASE_URL": "https://zzqioofrjubccblvyilx.supabase.co",
+    "SUPABASE_URL": "https://ajxxhgmdyqwcpmpyzrhz.supabase.co",
     // Allowlist de CORS de /auth/*. Aceita lista separada por vírgula.
     // Diferente de /candidate/*, aqui a origin NÃO pode ser refletida: com
     // `credentials: true` isso entregaria o cookie de sessão a qualquer site.

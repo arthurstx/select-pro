@@ -43,9 +43,10 @@ export type ReferralSource = "instagram" | "linkedin" | "campus" | "indicacao" |
 
 /**
  * Status de membro. `"alumni"` e `"on_leave"` saíram do domínio: nunca foram
- * elegíveis (`ELIGIBLE_MEMBER_STATUSES` só continha `"active"`), e um status
- * fora dos três reconhecidos cai no mesmo tratamento de sempre — recusado,
- * sem exceção lançada (`isRecognizedMemberStatus`).
+ * elegíveis, e um status fora dos três reconhecidos cai no mesmo tratamento
+ * de sempre — recusado, sem exceção lançada. Desde a emenda 2026-09-05, a
+ * Supabase nem manda mais `status` (ver `member.schema.ts`,
+ * `TecMemberSchema`) — todo membro encontrado lá é `"active"`.
  *
  * `"post_junior"` é pós-júnior (FEAT-0008, decisão D3) — chamado
  * `"inactive"` até a emenda de 2026-09-04, nome herdado da Supabase que lia

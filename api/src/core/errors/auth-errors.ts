@@ -26,19 +26,6 @@ export class NotAMemberError extends Error {
     }
 }
 
-/** E3 — o membro existe, mas o status não está em `RECOGNIZED_MEMBER_STATUSES`. */
-export class MemberNotActiveError extends Error {
-    readonly code = AuthErrorCode.MEMBER_NOT_ACTIVE;
-    readonly field = "email";
-
-    constructor(
-        message = "Seu cadastro de membro não está ativo. Procure a diretoria para regularizar o acesso.",
-    ) {
-        super(message);
-        this.name = "MemberNotActiveError";
-    }
-}
-
 /** E5 — Supabase não respondeu. Transitório: nenhuma linha é gravada no D1 quando ocorre. */
 export class MemberDirectoryUnavailableError extends Error {
     readonly code = AuthErrorCode.MEMBER_DIRECTORY_UNAVAILABLE;

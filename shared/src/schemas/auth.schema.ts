@@ -28,9 +28,9 @@ export const PasswordSchema = z
 /**
  * `POST /auth/register` — trilha do membro Efetivo. Dados de perfil vêm da
  * Supabase, não deste payload. Desde a emenda de 2026-09-04 da FEAT-0008,
- * esta é a ÚNICA trilha que consulta a Supabase; ela exige `status ===
- * "active"` e recusa (403) qualquer outro valor — não bifurca mais para
- * pendência. Trainee/pós-júnior usam `SelfDeclaredSignupSchema` abaixo.
+ * esta é a ÚNICA trilha que consulta a Supabase; qualquer membro encontrado
+ * lá é aceito (o ERP não tem mais coluna de status — emenda 2026-09-05).
+ * Trainee/pós-júnior usam `SelfDeclaredSignupSchema` abaixo.
  */
 export const RegisterMemberSchema = z.object({
     email: EmailSchema,
@@ -206,7 +206,6 @@ export type SignupRequestDetailResponse = z.infer<typeof SignupRequestDetailResp
 export const AuthErrorCode = {
     EMAIL_ALREADY_REGISTERED: "EMAIL_ALREADY_REGISTERED", // E1, E6
     NOT_A_MEMBER: "NOT_A_MEMBER", // E2
-    MEMBER_NOT_ACTIVE: "MEMBER_NOT_ACTIVE", // E3
     MEMBER_DIRECTORY_UNAVAILABLE: "MEMBER_DIRECTORY_UNAVAILABLE", // E5, transitório
     INVALID_CREDENTIALS: "INVALID_CREDENTIALS", // E7
     MISSING_REFRESH_TOKEN: "MISSING_REFRESH_TOKEN", // E8

@@ -60,12 +60,6 @@ export function describeRegisterError(error: unknown): AuthErrorView {
           "Este email não consta no cadastro de membros da CIMATEC jr. Procure quem administra o cadastro da tec para incluir ou corrigir seu email.",
       };
 
-    case AuthErrorCode.MEMBER_NOT_ACTIVE:
-      return {
-        message:
-          "Seu cadastro na tec não consta como efetivo. Se você é trainee ou pós-júnior, escolha a opção correspondente acima.",
-      };
-
     case AuthErrorCode.MEMBER_DIRECTORY_UNAVAILABLE:
       return {
         message: "Não foi possível verificar seu cadastro agora. Tente novamente em alguns minutos.",

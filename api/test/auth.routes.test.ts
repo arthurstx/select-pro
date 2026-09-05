@@ -84,8 +84,6 @@ function tecMember(overrides: Record<string, unknown> = {}) {
         semester: 5,
         gender: "Masculino",
         ethnicity: "Parda",
-        status: "active",
-        manager: false,
         created_at: "2026-01-01T00:00:00.000Z",
         updated_at: "2026-01-01T00:00:00.000Z",
         ...overrides,
@@ -170,33 +168,6 @@ describe("POST /auth/register (HTTP)", () => {
         expect(body.error.code).toBe("NOT_A_MEMBER");
     });
 
-    it("E3 - responde 403 MEMBER_NOT_ACTIVE, distinto de E2", async () => {
-        const member = tecMember({ status: "alumni" });
-        stubDirectory({ member });
-
-        const response = await call(
-            postJson("/auth/register", { email: member.email, password: "senha-de-teste" }),
-        );
-
-        expect(response.status).toBe(403);
-        const body = await response.json<{ error: { code: string } }>();
-        expect(body.error.code).toBe("MEMBER_NOT_ACTIVE");
-    });
-
-    // Passa pelo `TecMemberSchema` de verdade — é onde `status: null` erraria (E5 em vez de E3) se o schema fosse estrito.
-    it("E3 - status null também é 403, e não E5 por falha de parse", async () => {
-        const member = tecMember({ status: null });
-        stubDirectory({ member });
-
-        const response = await call(
-            postJson("/auth/register", { email: member.email, password: "senha-de-teste" }),
-        );
-
-        expect(response.status).toBe(403);
-        const body = await response.json<{ error: { code: string } }>();
-        expect(body.error.code).toBe("MEMBER_NOT_ACTIVE");
-    });
-
     it("membro com updated_at null se cadastra normalmente", async () => {
         const member = tecMember({ updated_at: null });
         stubDirectory({ member });
@@ -245,43 +216,6 @@ describe("POST /auth/register (HTTP)", () => {
         expect(response.status).toBe(409);
         const body = await response.json<{ error: { code: string } }>();
         expect(body.error.code).toBe("EMAIL_ALREADY_REGISTERED");
-    });
-});
-
-// Emenda de 2026-09-04 (FEAT-0008, research.md R8): a Supabase só devolve
-// `active`. Um status residual não vira mais solicitação pendente — é 403,
-// igual a qualquer outro status não reconhecido. Trainee/pós-júnior se
-// cadastram por `POST /auth/signup-requests` (testado em
-// `signup-requests.routes.test.ts`), não por aqui.
-describe("POST /auth/register — status não-active na Supabase (HTTP)", () => {
-    it.each(["inactive", "post_junior", "trainee"])(
-        "status %s responde 403 MEMBER_NOT_ACTIVE, sem cookie de sessão",
-        async (status) => {
-            const member = tecMember({ status });
-            stubDirectory({ member });
-
-            const response = await call(
-                postJson("/auth/register", { email: member.email, password: "senha-de-teste" }),
-            );
-            const body = await response.json<{ error: { code: string } }>();
-
-            expect(response.status).toBe(403);
-            expect(body.error.code).toBe("MEMBER_NOT_ACTIVE");
-            expect(response.headers.get("Set-Cookie")).toBeNull();
-        },
-    );
-
-    it("não cria usuário nem sessão para o status recusado", async () => {
-        const member = tecMember({ status: "trainee" });
-        stubDirectory({ member });
-
-        await call(postJson("/auth/register", { email: member.email, password: "senha-de-teste" }));
-
-        // Login com a mesma senha tem que falhar — nenhuma conta existe.
-        const loginAttempt = await call(
-            postJson("/auth/login", { email: member.email, password: "senha-de-teste" }),
-        );
-        expect(loginAttempt.status).toBe(401);
     });
 });
 

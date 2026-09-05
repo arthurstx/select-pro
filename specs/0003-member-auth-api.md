@@ -2,10 +2,17 @@
 
 ID: FEAT-0003
 Módulo: Acesso à aplicação (membros da CIMATEC jr)
-Versão: 1.2
-Data: 2026-08-06
+Versão: 1.3
+Data: 2026-09-05
 Status: APPROVED
 
+> **Changelog v1.3 — ERP novo ("CIMATEC jr. ERP"), `members` sem `status`/`manager`.** O banco da verdade foi reconstruído em Supabase com um schema novo — ver seção 8.1 (`TecMember`) para o shape atual. Duas mudanças de fundo:
+>
+> - **`status`/`manager` saíram da tabela `members`.** Toda a elegibilidade descrita nas seções 8-9 (E3/`MEMBER_NOT_ACTIVE`, `ELIGIBLE_MEMBER_STATUSES`, enum fechado, fail-closed) descreve um comportamento **removido**: o ERP só cadastra membro efetivo, então basta encontrar a linha por email para aceitar o cadastro — não existe mais E3. `member_profiles.status`/`.manager` continuam existindo no D1 (snapshot nosso), mas passam a ser gravados fixos (`"active"`/`false`) por `AuthService.register`, não lidos de lá. `MemberNotActiveError`/`MEMBER_NOT_ACTIVE` foram removidos do código (`auth-errors.ts`, `AuthErrorCode`).
+> - **Colunas de origem renomeadas.** `email`/`ethnicity` continuam existindo no `TecMember` (nomes usados pelo resto da aplicação), mas agora traduzidos de `institutional_email`/`color` no `?select=` — os nomes antigos da origem (`institutional_email` não existia, o campo se chamava `email`; `color` não existia, o campo se chamava `ethnicity`) mudaram de lado. `full_name`/`birth_date`/`updated_at` deixaram de ser typo na origem (`name`/`birth_data`/`update_at`) e não precisam mais de alias.
+>
+> Ver `shared/src/schemas/member.schema.ts` (`TecMemberSchema`/`TEC_MEMBER_SELECT`) para o contrato de verdade — esta spec não foi reescrita ponto a ponto, só emendada aqui e na seção 8.1.
+>
 > **Changelog v1.2 — recuperação de senha entra no escopo, e o Resend volta ao projeto.** O que era FEAT-0004 passa a fazer parte desta spec: `POST /auth/forgot-password` e `POST /auth/reset-password`, com email enviado via Resend fora do caminho crítico (`waitUntil`) e **sem fila**. Com isso o provedor de email, removido na FEAT-0001 v3.0, volta a ser dependência do projeto — mas de um fluxo cujo dono é um membro identificado, não do fluxo público de inscrição, que segue sem nenhuma dependência externa.
 >
 > **A troca de senha pelo usuário logado continua fora de escopo** (decisão explícita). Consequência a registrar: o **único** caminho para trocar de senha passa a ser o "esqueci minha senha" — inclusive para quem lembra da senha e só quer trocá-la. Ver seção 13.
@@ -249,27 +256,33 @@ type MemberStatus = "active" | "inactive" | "alumni" | "on_leave";
 // liberação por admin — ver seção 10, pergunta 3.
 const ELIGIBLE_MEMBER_STATUSES = ["active"] as const;
 
-// ATENÇÃO: três nomes aqui NÃO são os nomes das colunas na tec. A tradução
-// acontece no `?select=` do PostgREST (`nosso:deles`) — ver seção 9. Os nomes
-// abaixo são os que valem no resto do sistema, inclusive em `member_profiles`.
+// EMENDA 2026-09-05 (ERP novo — "CIMATEC jr. ERP", banco da verdade em
+// Supabase): a tabela `members` foi reconstruída. Muda o que era typo na
+// origem (`name`, `birth_data`, `update_at` viram `full_name`, `birth_date`,
+// `updated_at` de verdade — sem alias) e o que era nome divergente por
+// design (`email`/`ethnicity` continuam vindo de `institutional_email`/
+// `color`, agora traduzidos no `?select=`). `status` e `manager` SAÍRAM da
+// tabela — o ERP só cadastra membro efetivo, então todo `TecMember`
+// encontrado é tratado como `active`; `manager` nunca mais nasce daqui
+// (sempre `false` em `member_profiles`, mesmo padrão do cadastro
+// auto-declarado). A interface abaixo já reflete o schema atual — ver
+// `shared/src/schemas/member.schema.ts` (`TecMemberSchema`/`TEC_MEMBER_SELECT`)
+// pro contrato de verdade.
 //
-//   full_name   <- name
-//   birth_date  <- birth_data   (typo na origem)
-//   updated_at  <- update_at    (typo na origem)
+//   email:institutional_email
+//   ethnicity:color
 interface TecMember {
   id: string;                // uuid — PK da tabela na tec
-  full_name: string;         // alias de `name`
-  email: string;
+  full_name: string;
+  email: string;             // alias de `institutional_email`
   phone: string;
-  birth_date: string | null; // alias de `birth_data`; DATE, ISO-8601
+  birth_date: string | null; // DATE, ISO-8601
   course: string;            // TEXT livre na origem — ver ponto de atenção abaixo
   semester: number;
-  gender: string;            // TEXT livre na origem
-  ethnicity: string;         // TEXT livre na origem
-  status: string | null;     // TEXT livre E nullable — ver ponto de atenção abaixo
-  manager: boolean;
+  gender: string;            // TEXT livre na origem (a origem também tem `sex`, não pedido)
+  ethnicity: string;         // alias de `color`; TEXT livre na origem
   created_at: string;
-  updated_at: string | null; // alias de `update_at`; null enquanto nunca editado
+  updated_at: string | null;
 }
 
 // ------------------------------------------------------------

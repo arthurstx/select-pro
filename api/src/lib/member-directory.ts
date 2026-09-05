@@ -24,10 +24,12 @@ export class SupabaseMemberDirectory implements MemberDirectory {
     ) {}
 
     async findByEmail(email: string): Promise<TecMember | null> {
-        // `ilike` e não `eq`: TEXT em Postgres é case-sensitive.
+        // `ilike` e não `eq`: TEXT em Postgres é case-sensitive. Filtra pela coluna real
+        // (`institutional_email`, emenda 2026-09-05) — `TEC_MEMBER_SELECT` já traduz o
+        // alias pro nosso `email` na resposta, mas o filtro da query usa o nome de origem.
         const url =
             `${this.baseUrl.replace(/\/$/, "")}/rest/v1/members` +
-            `?email=ilike.${encodeURIComponent(email)}` +
+            `?institutional_email=ilike.${encodeURIComponent(email)}` +
             `&select=${encodeURIComponent(TEC_MEMBER_SELECT)}` +
             `&limit=1`;
 

@@ -27,8 +27,6 @@ export class LocalMemberDirectory implements MemberDirectory {
             semester: 5,
             gender: "Não informado",
             ethnicity: "Não informado",
-            status: "active",
-            manager: false,
             created_at: now,
             updated_at: null,
         };

@@ -70,8 +70,6 @@ function tecMember(overrides: Partial<TecMember> = {}): TecMember {
         semester: 5,
         gender: "Masculino",
         ethnicity: "Parda",
-        status: "active",
-        manager: false,
         created_at: "2026-01-01T00:00:00.000Z",
         updated_at: "2026-01-01T00:00:00.000Z",
         ...overrides,
@@ -208,18 +206,22 @@ describe("AuthService", () => {
             expect(await countUsers(member.email)).toBe(1);
         });
 
-        it("entra como avaliador mesmo quando a tec diz que o membro é manager", async () => {
-            const { session } = await registerMember({ manager: true });
+        // Emenda 2026-09-05: o ERP (`members`) não manda mais `status`/`manager` — todo
+        // membro encontrado por email é gravado como `active`/`manager: false` fixos
+        // (mesmo padrão do cadastro auto-declarado, `signup-requests.service.ts`).
+        it("grava status active e manager false, fixos, para todo membro encontrado", async () => {
+            const { session } = await registerMember();
 
             expect(session.user.role).toBe("avaliador");
 
             const profile = await env.DB.prepare(
-                "SELECT manager FROM member_profiles WHERE user_id = ?",
+                "SELECT status, manager FROM member_profiles WHERE user_id = ?",
             )
                 .bind(session.user.id)
-                .first<{ manager: number }>();
+                .first<{ status: string; manager: number }>();
 
-            expect(profile?.manager).toBe(1);
+            expect(profile?.status).toBe("active");
+            expect(profile?.manager).toBe(0);
         });
 
         it("E1 - recusa quando o email já tem conta", async () => {
@@ -248,68 +250,6 @@ describe("AuthService", () => {
             if (result.isLeft()) expect(result.value.code).toBe("NOT_A_MEMBER");
             expect(await countUsers("estranho@exemplo.com")).toBe(0);
         });
-
-        it.each<TecMember["status"]>(["alumni", "on_leave", "suspended", "", "ACTIVE", null])(
-            "E3 - recusa o status %s, inclusive valor fora do enum reconhecido (fail-closed)",
-            async (status) => {
-                const member = tecMember({ status });
-                directory.member = member;
-
-                const result = await service.register(
-                    { email: member.email, password: "senha-de-teste" },
-                    { userAgent: null },
-                );
-
-                expect(result.isLeft()).toBe(true);
-                if (result.isLeft()) expect(result.value.code).toBe("MEMBER_NOT_ACTIVE");
-                expect(await countUsers(member.email)).toBe(0);
-            },
-        );
-
-        // ------------------------------------------------------------
-        // Emenda de 2026-09-04 (FEAT-0008, research.md R8): a Supabase só
-        // devolve `active`. Um `inactive`/`post_junior`/`trainee` residual
-        // que ainda apareça lá é recusado (403), NÃO vira mais solicitação
-        // pendente — quem quer se cadastrar como trainee/pós-júnior usa
-        // `POST /auth/signup-requests` (`SignupRequestsService.createSelfDeclared`,
-        // testado em `signup-requests.service.test.ts`).
-        // ------------------------------------------------------------
-
-        it.each<TecMember["status"]>(["inactive", "post_junior", "trainee"])(
-            "status %s na Supabase é recusado (403) — não vira mais solicitação pendente",
-            async (status) => {
-                const member = tecMember({ status });
-                directory.member = member;
-
-                const sessionsBefore = await env.DB.prepare(
-                    "SELECT COUNT(*) AS total FROM sessions",
-                ).first<{ total: number }>();
-
-                const result = await service.register(
-                    { email: member.email, password: "senha-de-teste" },
-                    { userAgent: null },
-                );
-
-                expect(result.isLeft()).toBe(true);
-                if (result.isLeft()) expect(result.value.code).toBe("MEMBER_NOT_ACTIVE");
-
-                expect(await countUsers(member.email)).toBe(0);
-
-                const sessionsAfter = await env.DB.prepare(
-                    "SELECT COUNT(*) AS total FROM sessions",
-                ).first<{ total: number }>();
-                expect(sessionsAfter?.total).toBe(sessionsBefore?.total);
-
-                const request = await env.DB.prepare(
-                    "SELECT COUNT(*) AS total FROM signup_requests WHERE email = ?",
-                )
-                    .bind(member.email)
-                    .first<{ total: number }>();
-                expect(request?.total).toBe(0);
-
-                expect(mailer.signupApprovalRequestsSent).toHaveLength(0);
-            },
-        );
 
         it("E5 - diretório indisponível bloqueia o cadastro sem escrever NADA no D1", async () => {
             const member = tecMember();
@@ -527,7 +467,7 @@ describe("AuthService", () => {
 
     describe("me", () => {
         it("devolve identidade e snapshot do membro", async () => {
-            const { member, session } = await registerMember({ manager: true, semester: 7 });
+            const { member, session } = await registerMember({ semester: 7 });
 
             const result = await service.me(session.user.id);
 
@@ -545,7 +485,9 @@ describe("AuthService", () => {
                     phone: member.phone,
                     course: member.course,
                     semester: 7,
-                    manager: true,
+                    // O ERP não manda mais `manager` (emenda 2026-09-05) — sempre false
+                    // pra quem se cadastra pela trilha Efetivo, ver `AuthService.register`.
+                    manager: false,
                     syncedAt: expect.any(String),
                 },
             });
