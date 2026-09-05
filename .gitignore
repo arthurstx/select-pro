@@ -13,3 +13,6 @@ node_modules/
 api/package-lock.json
 front/package-lock.json
 shared/package-lock.json
+
+# Backups de D1 (wrangler d1 export) — dump completo do banco, nunca commitado
+backup-*.sql

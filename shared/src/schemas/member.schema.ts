@@ -92,6 +92,22 @@ export function isEligibleToAnchorTrainee(status: MemberStatus): boolean {
     return status !== "trainee";
 }
 
+/**
+ * Traduz um slug de `course` divergente da origem para o nosso (`shared/candidate.schema.ts`,
+ * `CourseSchema`) — mesmo curso, nome diferente. A origem manda o valor dela; nosso lado
+ * (candidatos, `member_profiles`, front) continua usando os slugs que já tinha, sem
+ * renomear nada existente. Passthrough para qualquer valor não listado — `course` continua
+ * TEXT livre na origem (`TecMemberSchema.course` não valida contra `CourseSchema`), então um
+ * valor desconhecido só chega como está, não derruba o parse.
+ */
+const TEC_COURSE_ALIASES: Record<string, string> = {
+    "arq-urbanismo": "arquitetura",
+};
+
+function normalizeTecCourse(course: string): string {
+    return TEC_COURSE_ALIASES[course] ?? course;
+}
+
 /** Shape de uma linha de `members` na resposta do PostgREST — entrada não confiável. */
 export const TecMemberSchema = z.object({
     /** uuid na origem — o que `member_profiles.member_id` guarda. */
@@ -104,8 +120,11 @@ export const TecMemberSchema = z.object({
     phone: z.string(),
     birth_date: z.string().nullable(),
 
-    /** TEXT livre na origem, sem corresponder aos enums da aplicação. */
-    course: z.string(),
+    /**
+     * TEXT livre na origem, sem corresponder aos enums da aplicação — exceto pela tradução
+     * de `TEC_COURSE_ALIASES` (`arq-urbanismo` -> `arquitetura`, ver acima).
+     */
+    course: z.string().transform(normalizeTecCourse),
     semester: z.number().int(),
 
     /**

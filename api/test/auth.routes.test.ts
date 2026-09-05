@@ -179,6 +179,27 @@ describe("POST /auth/register (HTTP)", () => {
         expect(response.status).toBe(201);
     });
 
+    // ERP novo (emenda 2026-09-05): a tec chama o curso de arquitetura de
+    // "arq-urbanismo" — slug diferente do nosso `CourseSchema`. A tradução é só
+    // de entrada (`TecMemberSchema`, `normalizeTecCourse`); nosso lado continua
+    // "arquitetura" em candidatos, member_profiles e front, sem renomear nada
+    // que já existe.
+    it("traduz o curso arq-urbanismo (ERP) para arquitetura (nosso slug) ao gravar o perfil", async () => {
+        const member = tecMember({ course: "arq-urbanismo" });
+        stubDirectory({ member });
+
+        const response = await call(
+            postJson("/auth/register", { email: member.email, password: "senha-de-teste" }),
+        );
+        const body = (await response.json()) as SessionBody;
+
+        expect(response.status).toBe(201);
+        const profile = await env.DB.prepare("SELECT course FROM member_profiles WHERE user_id = ?")
+            .bind(body.data.user.id)
+            .first<{ course: string }>();
+        expect(profile?.course).toBe("arquitetura");
+    });
+
     it.each([
         ["não-2xx", { status: 500 }],
         ["erro de rede", { reject: true }],
