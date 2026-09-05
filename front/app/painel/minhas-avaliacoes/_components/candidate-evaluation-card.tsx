@@ -32,8 +32,7 @@ export function CandidateEvaluationCard({ candidate }: CandidateEvaluationCardPr
             {evaluated && candidate.myEvaluation && (
               <span className={cn("size-2 shrink-0 rounded-full", COLOR_DOT[candidate.myEvaluation.overallColor])} aria-hidden />
             )}
-            {candidate.evaluationCount} avaliação{candidate.evaluationCount === 1 ? "" : "ões"} recebida
-            {candidate.evaluationCount === 1 ? "" : "s"}
+            {candidate.evaluationCount} {candidate.evaluationCount === 1 ? "avaliação recebida" : "avaliações recebidas"}
           </p>
         </div>
         <Button type="button" variant={evaluated ? "outline" : "default"} size="sm" onClick={() => setOpen((o) => !o)}>

@@ -20,6 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useSubmitEvaluationMutation } from "@/lib/evaluation/queries";
 
+import { ScoreSelector } from "./score-selector";
+
 const CRITERIA_ORDER: EvaluationCriterion[] = [
   "raciocinio_logico",
   "trabalho_equipe",
@@ -73,21 +75,29 @@ export function EvaluationForm({ candidate, onSaved }: EvaluationFormProps) {
   return (
     <form className="flex flex-col gap-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
       <FieldGroup className="gap-4">
-        {CRITERIA_ORDER.map((criterion) => (
-          <Field key={criterion} data-invalid={!!form.formState.errors.scores?.[criterion]}>
-            <FieldLabel htmlFor={`score-${criterion}`}>{CRITERION_LABELS[criterion]}</FieldLabel>
-            <input
-              id={`score-${criterion}`}
-              type="number"
-              min={0}
-              max={5}
-              className="border-input bg-background h-9 w-20 rounded-md border px-3 text-sm"
-              aria-invalid={!!form.formState.errors.scores?.[criterion]}
-              {...form.register(`scores.${criterion}`, { valueAsNumber: true })}
-            />
-            <FieldError errors={[form.formState.errors.scores?.[criterion]]} />
-          </Field>
-        ))}
+        {CRITERIA_ORDER.map((criterion) => {
+          const error = form.formState.errors.scores?.[criterion];
+
+          return (
+            <Field key={criterion} data-invalid={!!error}>
+              {/* Sem `htmlFor`: o alvo é um radiogroup, que se nomeia por `aria-labelledby`. */}
+              <FieldLabel id={`score-label-${criterion}`}>{CRITERION_LABELS[criterion]}</FieldLabel>
+              <Controller
+                control={form.control}
+                name={`scores.${criterion}`}
+                render={({ field }) => (
+                  <ScoreSelector
+                    value={field.value}
+                    onChange={field.onChange}
+                    labelledBy={`score-label-${criterion}`}
+                    invalid={!!error}
+                  />
+                )}
+              />
+              <FieldError errors={[error]} />
+            </Field>
+          );
+        })}
       </FieldGroup>
 
       <Field>
